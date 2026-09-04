@@ -1,130 +1,221 @@
-# Vision — fisheye
+# Vision — cttp
 
 **What this is:** why this project exists — its purpose and intent, written before anything is
 designed. It informs [`spec.md`](spec.md); it does not replace it.
 
-_Last updated: 2026-09-04._
+_Last updated: 2026-09-04. Supersedes the earlier "fisheye" vision entirely._
 
 ---
 
+## The name
+
+**cttp** — *code text transfer protocol*. The analogy is deliberate. HTTP did not replace any
+document format; it gave every document an address and let any document point at any other. cttp
+does the same for code: it does not replace any language, it gives every definition an address and
+lets code point at code.
+
 ## The problem
 
-Coding agents pay for every token they read, and the unit they are given to read is the file. The
-file is the wrong unit. It conflates five jobs that a database keeps apart: storage, reading,
-editing, naming scope, and review. A page is the right size for none of them. When files are long,
-an agent spends most of its context on code irrelevant to the change. When files are short, the
-change ripples across many of them and the agent cannot see the whole. Either way, most of what
-reaches the model's context is waste, and the fraction gets worse as the codebase grows.
+Code is organized as trees of files, and the tree has one axis. A definition lives in exactly one
+place, is referenced by importing a name from that place, and is shared only by packaging the whole
+place. Every consequence of that shape shows up when you look at a large codebase closely.
 
-The failures that follow are organizational, not syntactic. A capable model does not mistype a
-bracket. It edits a function without seeing a caller three files away, decides at the level of a
-summary that turns out to be wrong at the level of the body, or rewrites something that already
-existed under another name. We tested the syntactic hypothesis directly on 2026-09-04: a strict
-Python profile with a repair-instruction checker, run through a headless agent on eighteen small
-tasks, tied the plain version on correctness and cost about half again as many tokens. Syntax is not
-where the money is. Where the code is, and how much of it must be read to change it, is.
+We looked. Across 736 Linux driver files, about 408,000 lines, **37 percent of substantive lines are
+identical to a line in another file once identifiers are abstracted**, and 14 percent are identical
+verbatim. One temperature decoder is written four times across three subsystems; two of the copies
+are the same function in two files for the same silicon. A chip that is both a clock and a
+thermometer gets its thermometer written inside the clock driver, because a file can only be in one
+directory. A devicetree binding and the driver it describes disagree about which chips support an
+interrupt, because one fact was written twice in two languages and maintained by hand.
 
-The tools built to help all sit on top of the problem rather than inside it. Repo maps, code graphs,
-and hierarchical summaries are indexes over text: derived, read-only, and stale the moment the text
-changes. They help an agent navigate a mess. They do nothing about the mess, because writes never go
-through them. And the levels they offer are either bare signatures or unverified prose, so an agent
-that reasons at the summary level is reasoning over something nothing has checked.
+None of this is a syntax problem, and none of it is a stupidity problem. Anything shared across
+trees has no home, so it is copied. Anything copied drifts. And because references are names bound
+by imports rather than links to definitions, nothing can answer the questions that matter most:
+*who uses this*, *where did this come from*, *is this the same as that*.
+
+Coding agents make the cost visible. An agent pays for every token it reads, and it navigates by
+text search because that is all a file tree offers. It reads too much and still misses the caller in
+another repository. When it writes code, the result carries no provenance: no link to what it copied,
+adapted, or was derived from. We tested the alternative hypothesis first — that agents needed
+stricter syntax — and it failed: a strict language profile tied on correctness and cost half again
+as many tokens. The money is in how code is organized and referenced, not in how it is spelled.
+
+## The idea
+
+**Links, not imports.** A definition — a function, a type, a constant, a contract — has an address.
+A reference to it is a link to *that definition*, not a name resolved through a file path and a
+package manifest. The address carries where the definition can be found and at what version, and it
+carries a content identity, so the same definition in two places is recognizably one thing.
+
+Everything else follows from taking that seriously:
+
+- **Identity is not a name.** Names are labels attached to definitions. Renaming is editing a
+  label; every link still resolves. A definition moved to another file or another repository still
+  resolves, because the address survives the move.
+- **Backlinks come free.** Because links are explicit, an index can answer *who links here* across
+  every repository it has seen. For an agent, "what is the blast radius of changing this" becomes a
+  query instead of a guess.
+- **Sharing happens at the definition.** You link to one function, not a package. The smallest
+  unit of reuse today is a package with a manifest and a release process, which is why twenty-line
+  helpers get rewritten instead of shared.
+- **Provenance is built in.** A copy carries the link it came from, at the version it was taken,
+  with its license. That is the answer, missing today, to *where did this generated code come from*.
+- **Metadata attaches to identity.** Purpose, contract, tests, discussion, and effects can attach
+  to a definition's address, and anyone can publish them. Each field is marked as either *derived*
+  from the code by a tool or *asserted* by a person, so prose that can drift is never mistaken for
+  fact.
+- **Organization becomes a query.** When definitions have addresses and tags rather than a single
+  home, a file is a view — *everything tagged thermometer and transport I2C, in this order* — and
+  the one-axis problem dissolves rather than being solved.
+
+## What it is, concretely
+
+cttp is a **protocol that sits on top of existing languages**, plus the tooling that makes the
+protocol usable. It is layered the way the web is:
+
+| Layer | Web analogue | Job |
+|---|---|---|
+| Address | URL | Names one definition, at one version, in any language, with a content identity |
+| Resolver | HTTP GET | Fetches a definition's source, signature, and metadata |
+| Extractor per language | HTML parser | Decides what a definition is and where its boundaries are |
+| Link convention per language | the anchor tag | How a link is written in source without breaking the compiler |
+| Index | search engine | Crawls repositories, computes backlinks, importance, and duplicates |
+| Materializer | package manager, per definition | Turns a link into the host language's native plumbing, or a vendored copy with provenance |
+| Registry | DNS | Maps short, memorable names to addresses, and renders the page for a definition |
+
+The protocol proper is the first two rows plus the link convention. Everything above it — contracts,
+effects, tests, discussion — is optional metadata that rides on the addresses. HTTP won by being thin
+and permissive; cttp should be the same.
+
+In the host language, a link is an annotation the tooling acts on. The compiler, the editor, the
+test runner, and version control keep working on ordinary files, because files remain the rendered
+form. cttp adds addresses, links, and an index; it takes nothing away.
+
+Public code hosting is the default namespace, so that linking is an open, sharing exercise from the
+first day. The address format is origin-agnostic; a public host is the resolver most people use, not
+a dependency of the protocol.
+
+**A registry sits above the addresses, the way DNS sits above IP.** People register a name for
+their code for free and get a short form — `cttp:3d-objects` rather than a full location — that
+resolves to the address of the code, wherever it is hosted. The registry holds pointers, not code.
+It is also the natural home of the page for a definition: purpose, signature, source, license,
+history, and who links to it. The long form always works without it, so the registry is a
+convenience and a gathering place, never a requirement. Its exact shape — naming rules, how names
+pin to versions, how it stays trustworthy as a central point, whether other domains can federate
+with it — is deliberately unresolved here and belongs to the spec.
+
+The protocol is language-neutral by construction. Which languages get the full write side, and in
+what order, is a staged path — see **The path** below.
+
+## The path
+
+Three stages, each earning the next. The order is not negotiable: the value of links comes from how
+much there is to link to, so the protocol must start where the code already is.
+
+**Stage 1 — language-neutral read side, Python write side.** Addresses, the resolver, the index, and
+backlinks are language-neutral from the first commit and crawl the public corpus in every language
+an extractor can parse — the read side is cheap, and the corpus is where the network effect lives.
+The write side — the link convention in source, the materializer, the typed resolver, and the
+benchmark — is built to excellence in **one host language first, and that language is Python.**
+Python has the largest share of agent-written code, a precise cross-repository indexer already
+built on its type checker, a community that has accepted annotation-in-comments conventions, an
+import system that makes the materializer nearly trivial, and a culture where copying a function is
+already normal and package overhead is most resented. Stage 1 ends when the benchmark number exists:
+an agent with links against an agent with search, on real tasks, in Python.
+
+**Stage 2 — many existing languages.** With the write side proven once, add host languages one at a
+time, each with its own link convention and materializer, in order of agent usage and extractor
+quality. TypeScript is the likely second. This is where cttp becomes what its name says — a protocol
+that sits on top of languages rather than a Python tool — and where the cross-language graph,
+reference without invocation, becomes the thing no other tool has.
+
+**Stage 3 — the opportunity for a cttp-native language.** Once definitions have addresses and the
+graph is populated, a language whose *only* module system is the protocol becomes viable: no
+imports, no packages, links as the sole mechanism of reference, and the store rather than the file
+as the unit of organization. Two things make this plausible now that were not before. The
+ecosystem problem becomes a translation problem, and agents make translation cheap — existing code
+can be ported into the native language at scale, safely, because the addresses and provenance from
+Stages 1 and 2 already exist. And a native language can be a *dialect* of a host language rather
+than a fresh syntax, so most of the training prior survives. This stage is an opportunity, not a
+commitment. It is taken only if Stages 1 and 2 have produced users, and never before, because a
+language with nothing to link to has the network effect working against it.
 
 ## Who this is for
 
-Two users, and the second matters more than the first.
+**The agent.** It resolves a link instead of reading a file. It asks *who uses this* and gets an
+exact answer across repositories. It receives, for a task, the closure of definitions the task
+touches, computed rather than searched. It leaves provenance on everything it writes. cttp's
+interface is designed for this user first, because every other user's leverage is a function of how
+well the agent works.
 
-**The developer running agents on a TypeScript codebase**, alone or on a small team, who wants the
-agent to do more of the work at lower cost and with fewer regressions. They reach for fisheye when
-a codebase has grown past what an agent can hold in one read, or when they are starting something
-new and want it to stay legible to agents as it grows. They read the outline as the spec and rarely
-open a body.
+**The developer running agents.** Alone or on a small team, on a codebase that has grown past what
+an agent can hold in one read, or starting something new and wanting it to stay legible as it
+grows. They adopt cttp without rewriting anything, because the read side works on code that has
+done nothing to opt in.
 
-**The agent itself.** It orients with a budgeted view instead of reading files. It writes the plan
-as compiling code before any body exists. It receives, for each piece of work, a packet containing
-only what that piece needs. Fisheye's interface is designed for this user first, because the
-developer's leverage is entirely a function of how well the agent works.
-
-## What it does
-
-Fisheye is a toolchain, not a language and not a set of instructions. It makes an ordinary
-TypeScript codebase cheap to navigate and safe to extend by giving it level of detail, a focus, and
-holes.
-
-**Level of detail.** Every definition has four derived levels: a purpose line; the signature with
-its contract, declared effects, errors, and test coverage; the body as an outline of named steps
-with expressions elided; and the full body. Every level is derived from the code by the TypeScript
-compiler API and regenerated when the definition changes. Nothing at any level is hand-written prose
-that can drift.
-
-**Focus.** A view is built around the symbols a task touches, inside a token budget, using a
-degree-of-interest rule: intrinsic importance minus distance from the focus, over the call graph and
-containment. Definitions near the focus appear in full; distant ones as a line. Furnas described the
-rule in 1986. Nobody has applied it to filling an agent's context window.
-
-**Holes.** A typed placeholder that compiles, carries a contract and a purpose, and throws if it is
-reached at runtime. With holes an agent can write the composite functions first, prove the skeleton
-type-checks and the contracts compose, and only then fill the leaves. Each hole lists its expected
-type, its contract, and the interfaces of everything it may call. That listing is a complete, minimal
-work packet, and the packets are independent, so leaves can be filled in parallel by cheaper models.
-
-**The discipline that makes the levels exact.** A lint enforces that a function is either a leaf
-under a size limit or a composite that only sequences named steps, and that every public boundary
-carries a contract. This is Wirth's stepwise refinement, enforced by tooling rather than taste. It
-is what turns the outline level from an approximation into the code itself.
-
-The product ships as four layers. The primitives, in plain TypeScript, so there is no new syntax and
-no lost training prior. The command line, which is the product: `view`, `short`, `outline`, `holes`,
-`check`, and `fill`. A forkable scaffold that makes the discipline the default for one common app
-shape first. And an MCP server plus a skill, so any agent uses `view` instead of reading files and
-`fill` instead of writing bodies. The skill is the manual. The command line is the oracle. Only one
-of those is hard to copy.
+**The open-source author.** Who wants to share one good function without publishing a package, and
+who wants to know who depends on it.
 
 ## What "good" looks like
 
-**The north star: tokens of context per completed task, at equal pass rate, against an agent
-working on the same codebase with plain read and edit.** If fisheye does not cut that number by a
-large factor on a codebase too big to read whole, it has failed regardless of how elegant it is.
+The north star is the same as before, because the goal is the same: **tokens of context per
+completed task, at equal or better pass rate, against an agent working on the same codebase with
+plain read and search.** The first measurable claim is narrow and testable within weeks: an agent
+with a resolver and backlinks completes tasks at higher pass rate or lower cost than one with grep.
 
-The demo that proves it: one cheap model builds a real application from an outline written by a
-capable one, every hole filled in parallel and verified against its contract, with the token count
-shown next to the baseline. The outline is short enough that a person who does not write code can
-read it and say whether it is what they meant.
+Three concrete acceptance tests for the idea itself:
+
+- **The index rediscovers the duplicates.** Crawled over the 736 driver files we measured, it finds
+  the four temperature decoders and the two identical ones, unaided.
+- **A link survives a move.** A definition renamed and moved to another repository still resolves
+  from a link written before the move.
+- **Provenance is visible.** A function an agent copied from another repository carries its source
+  link, version, and license, and the index shows the copy as a backlink of the original.
+
+The demo that proves it: point at a function in someone else's repository, use it, and ask who else
+uses it — with the token count next to the baseline.
 
 ## Principles
 
-- **Oracles over instructions.** Agents follow checkers, not prose. Every rule fisheye cares about
-  has a tool that enforces it and prints a repair instruction with a location. A convention without
-  a checker is not part of the product.
-- **Derived, never authored.** Every view is computed from the code by the compiler. If a level can
-  drift from the body, it is not a level, it is documentation, and it is out.
-- **No new language.** TypeScript, unchanged. The compiler is the type oracle, the compiler API is
-  the view engine, and the training prior is on our side. The moment a design needs new syntax it
-  has to justify itself against everything that prior buys.
-- **Value in the artifact, not the tool.** Frontier labs will keep improving retrieval inside their
-  agents, and that erodes any read-only helper. They do not own how a codebase is written. Every
-  feature is judged by whether it changes the code that gets left behind.
-- **Write side first.** Reading better is commoditized. Writing the plan as compiling code, and
-  filling it in parallel with verification, is not. Build that before polishing the view.
-- **Measure before building.** The benchmark exists before the scaffold does. A structural idea that
-  pays off on small code and not on large code is overhead; we have already seen one.
-- **Honest levels.** A summary that might be wrong is worse than no summary. Levels carry only what
-  the compiler, the lint, and the tests can vouch for.
+- **Protocol over language.** No new syntax, no new compiler, no lost training prior. Every host
+  language keeps its tools. The moment a design needs a new language it has to justify itself
+  against everything that prior buys.
+- **Links over imports.** A reference is to a definition, not to a name in a place.
+- **Identity by content, discovery by location.** The address says where to look; the content
+  identity says what it is. Two copies of one thing are one thing.
+- **A link never means execution.** Linking is a reference. Materializing is a deliberate, pinned,
+  reviewed act. This is the supply-chain rule, and it is not negotiable.
+- **Derived and asserted are labelled.** Tooling-derived facts and human-asserted prose are both
+  welcome and never confused.
+- **Thin and permissive.** Fewer rules, more adoption. Anything that can be optional metadata is.
+- **Measure before building.** The benchmark exists before the resolver does. An idea that helps on
+  small code and not on large code is overhead; we have already seen one.
+- **Open by default.** The address space is public code hosting. The index is buildable by anyone.
 
 ## What this is not
 
-- **Not a new programming language.** We considered one and ruled it out: the training-data
-  penalty is paid by every user and the store never gets a fair trial. Unison is the cautionary
-  example.
-- **Not a context engine or code index competing with agent vendors.** Cursor, Claude Code, and
-  Augment all have retrieval. The fisheye view exists because when the structure is native it costs
-  a few hundred lines; it is not the product.
-- **Not a code graph over stale text.** Fisheye is not another read-only index. If it is not
-  derived from the compiler and enforced at write time, it is not fisheye.
-- **Not a store with files as views, yet.** The write-through store, definitions as rows and files
-  as generated projections, is the long-term direction. It is deferred until the toolchain has
-  earned it, because it is the Unison-shaped risk.
-- **Not Python first.** Python's dynamic features hide the structure the compiler API exposes in
-  TypeScript. Other languages follow only if the TypeScript result justifies them.
-- **Not a hosted service.** Local, open, and forkable from the start. Anything hosted comes later
-  and only if the local tool has users.
+- **Not a programming language first.** A cttp-native language is Stage 3 of the path and is taken
+  only if the protocol has earned it. Unison is the proof that the underlying mechanism works and the
+  proof of what a new language costs in ecosystem and prior when it comes first.
+- **Not a package manager,** though it may reduce the need for one. Packages remain the way to ship
+  releases; cttp is the way to point.
+- **Not a runtime or an FFI.** Cross-language *reference* works everywhere and is worth a great
+  deal. Cross-language *invocation* still needs the host languages' own mechanisms, and the protocol
+  does not pretend otherwise. cttp gives a global graph, not a global runtime.
+- **Not a read-only code index.** Sourcegraph, Kythe, and every agent vendor have those. cttp is
+  different because links are written in source: the write side goes through it.
+- **Not a Python tool.** Python is where the write side is built first, not what cttp is. The
+  read side is language-neutral from day one and Stage 2 is the point.
+- **Not tied to one host.** GitHub is the default namespace and the first resolver, not a dependency.
+- **Not a hosted service.** The protocol and the tooling are local and open. A public index is a
+  service someone can run, and the protocol works without it.
+
+## The horizon
+
+Beyond the path lie the things a link-structured codebase makes possible and a file tree does not:
+definitions computed from other definitions and regenerated when their inputs change; contracts and
+tests as the oracle that makes cheap models safe; a codebase organized like a wiki, where files are
+queries and a definition's page carries its purpose, contract, callers, tests, history, and the
+discussion of why it is the way it is. Most of these belong naturally to Stage 3, where the store
+rather than the file is the unit. None are in scope until the protocol has earned them. The protocol
+is the part that has to exist first, and the part that is hardest to copy.

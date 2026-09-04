@@ -1,4 +1,4 @@
-# The build arc — fisheye
+# The build arc — cttp
 
 **What this is:** the stage ladder from blank sheet to working product, and the rule for what comes
 next at each stage. Consulted at **session end**, when writing `PROGRESS.md`'s *Next session* block,
@@ -35,9 +35,9 @@ Do not design the interface here, and do not choose a stack. That is the spec's 
 **Exit:** Leo agrees the vision is right. Then, immediately:
 
 > **Re-check the folder name.** Projects sharpen between the idea and the vision, and the name
-> chosen at creation was explicitly provisional. Ask Leo whether `fisheye` still fits. If it
+> chosen at creation was explicitly provisional. Ask Leo whether `cttp` still fits. If it
 > does not, rename now, while it is nearly free — the folder, the `origin` remote
-> (`gh repo rename <new-name>`), the `fisheye` references in `CLAUDE.md`, `PROGRESS.md` and
+> (`gh repo rename <new-name>`), the `cttp` references in `CLAUDE.md`, `PROGRESS.md` and
 > these docs. Later it stops being free.
 
 ## Stage 1 — Write `docs/spec.md`

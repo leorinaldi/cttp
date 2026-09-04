@@ -1,4 +1,4 @@
-# Spec — fisheye
+# Spec — cttp
 
 > **Status: not written yet.** Write this after [`vision.md`](vision.md) is settled. See
 > [`project-start-sequence.md`](project-start-sequence.md) Stage 1. Delete this blockquote once

@@ -1,4 +1,4 @@
-# PLAN — fisheye
+# PLAN — cttp
 
 > **Status: not written yet.** Write this after [`spec.md`](spec.md) is settled. See
 > [`project-start-sequence.md`](project-start-sequence.md) Stage 2. Delete this blockquote once
@@ -50,7 +50,7 @@ have been two tasks — split it here first.
 ## Target layout
 
 ```text
-fisheye/
+cttp/
   CLAUDE.md  AGENTS.md  PROGRESS.md
   docs/
     vision.md  spec.md  plan.md  overview.md

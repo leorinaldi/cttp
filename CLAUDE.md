@@ -1,8 +1,8 @@
-# fisheye — Project Guidance for Claude
+# cttp — Project Guidance for Claude
 
-Fisheye is a TypeScript toolchain that makes a codebase cheap for coding agents to navigate and safe for them to
-extend: level-of-detail views around a focus, contracts at every public boundary, and outline-first authoring
-with typed holes that compile before their bodies exist. See [`docs/vision.md`](docs/vision.md).
+cttp — *code text transfer protocol* — is a protocol that sits on top of existing programming languages
+and lets code point at code: every definition gets an address, references are links rather than imports,
+and an index answers who links where. See [`docs/vision.md`](docs/vision.md).
 
 This file is the **session procedure**: how to start, how to finish, where things live, and the repo
 policy. It deliberately does *not* describe the project — [`docs/overview.md`](docs/overview.md) does.
@@ -60,8 +60,8 @@ Trigger: Leo says **"start session"**, **"begin session"**, **"where are we"**, 
    - If it is down, start the dev server in the background, wait for it to answer, then **state the
      URL plainly in chat**: *"The site is live — open **http://localhost:3120**."*
    - If it will not come up, say so and why. Never report success you did not verify.
-   - This project has **no API tier and no database tier**. The web port serves the local fisheye
-     viewer only; the product itself is a CLI and runs from the terminal.
+   - This project has **no API tier and no database tier**. The web port serves the local cttp
+     viewer only; the product itself is tooling and runs from the terminal.
 
 4. **Identify where we are.** From `PROGRESS.md` plus the actual git and filesystem state, work out
    what is **working**, what is **in progress**, and what is **deferred**. Summarize tightly — this
@@ -128,12 +128,12 @@ Trigger: Leo says **"end session"**, **"wrap up"**, **"done for today"**, or sim
 ## Repository
 
 - **`main` only.** No feature branches, no PRs — commit straight to `main`.
-- **Remote:** `origin` → `https://github.com/leorinaldi/fisheye.git` (**private**, GitHub account
+- **Remote:** `origin` → `https://github.com/leorinaldi/cttp.git` (**private**, GitHub account
   `leorinaldi`).
 - **If there is no remote yet**, offer to create one — don't do it unasked:
   ```bash
   gh auth status                        # confirm the leorinaldi account first
-  gh repo create leorinaldi/fisheye --private --source=. --remote=origin --push
+  gh repo create leorinaldi/cttp --private --source=. --remote=origin --push
   ```
   That creates the private repo, wires up `origin`, and pushes `main` in one step. Afterwards
   `git push origin main` is all any session needs. If `gh` is not authenticated, ask Leo to run

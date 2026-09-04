@@ -1,4 +1,4 @@
-# fisheye — Orientation
+# cttp — Orientation
 
 > **Status: not written yet.** Write this once the Phase 0 scaffold exists and runs — there is
 > nothing to describe before then. See [`project-start-sequence.md`](project-start-sequence.md)
