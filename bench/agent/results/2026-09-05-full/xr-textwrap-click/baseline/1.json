@@ -1,0 +1,450 @@
+{
+  "schema": 1,
+  "task": "xr-textwrap-click",
+  "family": "cross-repo",
+  "arm": "baseline",
+  "run": 1,
+  "system_prompt": "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the shell through Bash: grep, find, ls, cat, sed and the other usual readers; `Read` reads a file whose path you already know.",
+  "status": "pass",
+  "passed": true,
+  "model": "opus",
+  "model_used": "claude-opus-5",
+  "claude_code_version": "2.1.261",
+  "max_turns": 40,
+  "tokens": 201086,
+  "usage": {
+    "input_tokens": 24,
+    "cache_creation_input_tokens": 22979,
+    "cache_read_input_tokens": 171705,
+    "output_tokens": 6378,
+    "output_tokens_details": {
+      "thinking_tokens": 1293
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 22979,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 397,
+        "cache_read_input_tokens": 25748,
+        "cache_creation_input_tokens": 138,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 138
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "model_usage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 1266,
+      "outputTokens": 17,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001351,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-haiku-4-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    },
+    "claude-opus-5": {
+      "inputTokens": 24,
+      "outputTokens": 6378,
+      "cacheReadInputTokens": 171705,
+      "cacheCreationInputTokens": 22979,
+      "webSearchRequests": 0,
+      "costUSD": 0.4752125,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "thinkingTokens": 1293,
+      "canonicalModel": "claude-opus-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "stream_usage": {
+    "input_tokens": 24,
+    "cache_read_input_tokens": 171705,
+    "cache_creation_input_tokens": 22979
+  },
+  "requests": 12,
+  "total_cost_usd": 0.4765635,
+  "num_turns": 16,
+  "duration_ms": 80379,
+  "duration_api_ms": 81068,
+  "wall_seconds": 81.408,
+  "returncode": 0,
+  "timed_out": false,
+  "subtype": "success",
+  "is_error": false,
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01MjdvzChyG6cVftmPtAJnnW",
+      "tool_input": {
+        "command": "ls /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click; echo \"---\"; grep -rn \"class TextWrapper\" /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click",
+        "description": "Locate TextWrapper in click"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01BoFWB8LTKBAyfcAYy6fNSS",
+      "tool_input": {
+        "command": "ls /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click",
+        "description": "List click checkout"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01SWqZ5m4BoCgTqna3kH6P6f",
+      "tool_input": {
+        "command": "grep -rn \"class TextWrapper\" /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click --include=*.py",
+        "description": "Find TextWrapper class"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01PiJTUQrazphvbeU93za54A",
+      "tool_input": {
+        "command": "ls ../deps/click",
+        "description": "List click checkout relatively"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01EnSGnEf2twiSPw114XCK3m",
+      "tool_input": {
+        "command": "grep -n \"term_len\\|strip_ansi\\|_ansi_re\" /home/leo/.claude/nonexistent 2>/dev/null; true",
+        "description": "noop"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01HyHWkYR7YEEKtQnhfanYrf",
+      "tool_input": {
+        "command": "grep -rn \"term_len\\|_ansi_re\\|strip_ansi\" /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click/src/click/_compat.py",
+        "description": "Find term_len definition"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01MAkk4yHxWYkXWGLKTmMAog",
+      "tool_input": {
+        "command": "which cttp; ls -a; python -c \"import cttp\" 2>&1 | head -2",
+        "description": "Check for cttp tooling"
+      }
+    }
+  ],
+  "tool_counts": {
+    "Bash": 9,
+    "Read": 5,
+    "Write": 1
+  },
+  "tool_calls": [
+    {
+      "id": "toolu_018EfYkicNrDkLRb9WrYJsPQ",
+      "name": "Bash",
+      "input": {
+        "command": "ls -la /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/repo && echo \"---\" && cat app.py && echo \"---\" && ls tests/",
+        "description": "Inspect repo layout"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 567
+    },
+    {
+      "id": "toolu_01MjdvzChyG6cVftmPtAJnnW",
+      "name": "Bash",
+      "input": {
+        "command": "ls /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click; echo \"---\"; grep -rn \"class TextWrapper\" /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click",
+        "description": "Locate TextWrapper in click"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_01BoFWB8LTKBAyfcAYy6fNSS",
+      "name": "Bash",
+      "input": {
+        "command": "ls /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click",
+        "description": "List click checkout"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_01SWqZ5m4BoCgTqna3kH6P6f",
+      "name": "Bash",
+      "input": {
+        "command": "grep -rn \"class TextWrapper\" /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click --include=*.py",
+        "description": "Find TextWrapper class"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_01AFtZCSiQAMnCAA2V7nGFWX",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/repo/tests/test_app.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 248
+    },
+    {
+      "id": "toolu_01PiJTUQrazphvbeU93za54A",
+      "name": "Bash",
+      "input": {
+        "command": "ls ../deps/click",
+        "description": "List click checkout relatively"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_017xjXV84DR9wUQNAfcJKVdf",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click/src/click/formatting.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 11620
+    },
+    {
+      "id": "toolu_016oWNK5n94V6WrjKBYUhZAm",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click/src/click/_textwrap.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 6918
+    },
+    {
+      "id": "toolu_01EnSGnEf2twiSPw114XCK3m",
+      "name": "Bash",
+      "input": {
+        "command": "grep -n \"term_len\\|strip_ansi\\|_ansi_re\" /home/leo/.claude/nonexistent 2>/dev/null; true",
+        "description": "noop"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_01HyHWkYR7YEEKtQnhfanYrf",
+      "name": "Bash",
+      "input": {
+        "command": "grep -rn \"term_len\\|_ansi_re\\|strip_ansi\" /tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click/src/click/_compat.py",
+        "description": "Find term_len definition"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_01K8B7bzybrGBecGqAQ1xEAB",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click/src/click/_compat.py",
+        "limit": 80
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 2420
+    },
+    {
+      "id": "toolu_01S2S7SSwMnx5ZQw6QnDSnyB",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/deps/click/src/click/_compat.py",
+        "offset": 400,
+        "limit": 200
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 6314
+    },
+    {
+      "id": "toolu_01MAkk4yHxWYkXWGLKTmMAog",
+      "name": "Bash",
+      "input": {
+        "command": "which cttp; ls -a; python -c \"import cttp\" 2>&1 | head -2",
+        "description": "Check for cttp tooling"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_014odZDQCcQTvxhVwkxRiRvc",
+      "name": "Write",
+      "input": {
+        "file_path": "/tmp/cttp-bench-xr-textwrap-click-baseline-vvsr7gv8/w/repo/app.py",
+        "content": "\"\"\"Help-text rendering for a small command-line tool whose output may carry colour codes.\"\"\"\n\nfrom __future__ import annotations\n\nimport collections.abc as cabc\nimport re\nimport textwrap\nfrom contextlib import contextmanager\n\n# One CSI escape sequence per the ECMA-48 grammar: parameter bytes (0x30-0x3F),\n# intermediate bytes (0x20-0x2F), then a final byte (0x40-0x7E). Broader than the\n# SGR codes Click emits, so foreign sequences (colon-delimited true-color, mouse\n# reporting) are stripped too.\n# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#_ansi_re\n_ansi_re = re.compile(r\"\\033\\[[0-?]*[ -/]*[@-~]\")\n\n\n# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#strip_ansi\ndef strip_ansi(value: str) -> str:\n    return _ansi_re.sub(\"\", value)\n\n\n# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#term_len\ndef term_len(x: str) -> int:\n    return len(strip_ansi(x))\n\n\n# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_textwrap.py#_truncate_visible\ndef _truncate_visible(text: str, n: int) -> str:\n    \"\"\"Return the longest prefix of ``text`` containing at most ``n`` visible\n    characters.\n\n    ANSI escape sequences inside the prefix are kept intact and do not count\n    toward the visible width. A cut is never placed inside an escape sequence.\n    \"\"\"\n    if n <= 0:\n        return \"\"\n\n    visible = 0\n    i = 0\n    cut = 0\n    end = len(text)\n    while i < end:\n        m = _ansi_re.match(text, i)\n        if m is not None:\n            i = m.end()\n            continue\n        visible += 1\n        i += 1\n        cut = i\n        if visible >= n:\n            break\n    return text[:cut]\n\n\n# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_textwrap.py#TextWrapper\nclass TextWrapper(textwrap.TextWrapper):\n    \"\"\"``textwrap.TextWrapper`` variant that measures widths by visible\n    character count.\n\n    ANSI escape sequences embedded in chunks, indents, or the placeholder are\n    excluded from the width budget. Without this, styled help text (a styled\n    ``Usage:`` prefix, a colorized option name, ...) would be wrapped earlier\n    than its visible length warrants and tokens would split mid-word.\n    \"\"\"\n\n    def _handle_long_word(\n        self,\n        reversed_chunks: list[str],\n        cur_line: list[str],\n        cur_len: int,\n        width: int,\n    ) -> None:\n        space_left = max(width - cur_len, 1)\n\n        if self.break_long_words:\n            last = reversed_chunks[-1]\n            cut = _truncate_visible(last, space_left)\n            res = last[len(cut) :]\n            cur_line.append(cut)\n            reversed_chunks[-1] = res\n        elif not cur_line:\n            cur_line.append(reversed_chunks.pop())\n\n    def _wrap_chunks(self, chunks: list[str]) -> list[str]:\n        \"\"\"Wrap chunks counting widths in visible characters.\n\n        Mirrors the algorithm of :meth:`textwrap.TextWrapper._wrap_chunks`\n        with every width measurement routed through :func:`term_len` instead\n        of :func:`len`, so ANSI escape bytes in chunks, indents, or the\n        placeholder do not inflate the count.\n\n        .. seealso::\n            :class:`textwrap.TextWrapper` in the Python standard library documentation:\n            https://docs.python.org/3/library/textwrap.html#textwrap.TextWrapper\n\n            Reference implementation in CPython:\n            https://github.com/python/cpython/blob/main/Lib/textwrap.py\n        \"\"\"\n        lines: list[str] = []\n        if self.width <= 0:\n            raise ValueError(f\"invalid width {self.width!r} (must be > 0)\")\n        if self.max_lines is not None:\n            if self.max_lines > 1:\n                indent = self.subsequent_indent\n            else:\n                indent = self.initial_indent\n            if term_len(indent) + term_len(self.placeholder.lstrip()) > self.width:\n                raise ValueError(\"placeholder too large for max width\")\n\n        chunks.reverse()\n\n        while chunks:\n            cur_line: list[str] = []\n            cur_len = 0\n\n            if lines:\n                indent = self.subsequent_indent\n            else:\n                indent = self.initial_indent\n\n            width = self.width - term_len(indent)\n\n            if self.drop_whitespace and chunks[-1].strip() == \"\" and lines:\n                del chunks[-1]\n\n            while chunks:\n                n = term_len(chunks[-1])\n\n                if cur_len + n <= width:\n                    cur_line.append(chunks.pop())\n                    cur_len += n\n\n                else:\n                    break\n\n            if chunks and term_len(chunks[-1]) > width:\n                self._handle_long_word(chunks, cur_line, cur_len, width)\n                cur_len = sum(map(term_len, cur_line))\n\n            if self.drop_whitespace and cur_line and cur_line[-1].strip() == \"\":\n                cur_len -= term_len(cur_line[-1])\n                del cur_line[-1]\n\n            if cur_line:\n                if (\n                    self.max_lines is None\n                    or len(lines) + 1 < self.max_lines\n                    or (\n                        not chunks\n                        or self.drop_whitespace\n                        and len(chunks) == 1\n                        and not chunks[0].strip()\n                    )\n                    and cur_len <= width\n                ):\n                    lines.append(indent + \"\".join(cur_line))\n                else:\n                    while cur_line:\n                        if (\n                            cur_line[-1].strip()\n                            and cur_len + term_len(self.placeholder) <= width\n                        ):\n                            cur_line.append(self.placeholder)\n                            lines.append(indent + \"\".join(cur_line))\n                            break\n                        cur_len -= term_len(cur_line[-1])\n                        del cur_line[-1]\n                    else:\n                        if lines:\n                            prev_line = lines[-1].rstrip()\n                            if (\n                                term_len(prev_line) + term_len(self.placeholder)\n                                <= self.width\n                            ):\n                                lines[-1] = prev_line + self.placeholder\n                                break\n                        lines.append(indent + self.placeholder.lstrip())\n                    break\n\n        return lines\n\n    @contextmanager\n    def extra_indent(self, indent: str) -> cabc.Iterator[None]:\n        old_initial_indent = self.initial_indent\n        old_subsequent_indent = self.subsequent_indent\n        self.initial_indent += indent\n        self.subsequent_indent += indent\n\n        try:\n            yield\n        finally:\n            self.initial_indent = old_initial_indent\n            self.subsequent_indent = old_subsequent_indent\n\n    def indent_only(self, text: str) -> str:\n        rv = []\n\n        for idx, line in enumerate(text.splitlines()):\n            indent = self.initial_indent\n\n            if idx > 0:\n                indent = self.subsequent_indent\n\n            rv.append(f\"{indent}{line}\")\n\n        return \"\\n\".join(rv)\n\n\ndef wrap(text: str, width: int, indent: str = \"\") -> str:\n    \"\"\"Wrap `text` to at most `width` visible columns, prefixing every line with `indent`.\n\n    ANSI escape sequences do not count toward the width and are never split.\n    \"\"\"\n    wrapper = TextWrapper(\n        width,\n        initial_indent=indent,\n        subsequent_indent=indent,\n        replace_whitespace=False,\n    )\n    return wrapper.fill(text)\n\n\ndef render_help(name: str, description: str, width: int = 60) -> str:\n    \"\"\"The name on its own line, then the description wrapped beneath it, indented by two.\"\"\"\n    return f\"{name}\\n{wrap(description, width, indent='  ')}\"\n"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 171
+    },
+    {
+      "id": "toolu_01FHrHCk4ZR265WLPKnN1kuW",
+      "name": "Bash",
+      "input": {
+        "command": "python -m pytest -q tests/test_app.py",
+        "description": "Run the test suite"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 97
+    }
+  ],
+  "mcp_servers": [],
+  "cttp_connected": false,
+  "tools_available": [
+    "Bash",
+    "Edit",
+    "Read",
+    "Write"
+  ],
+  "rate_limit": {
+    "status": "allowed",
+    "resetsAt": 1788652800,
+    "rateLimitType": "five_hour",
+    "overageStatus": "rejected",
+    "overageDisabledReason": "out_of_credits",
+    "isUsingOverage": false,
+    "unifiedWindows": {
+      "five_hour": {
+        "utilization": 0.28,
+        "resetsAt": 1788652800
+      },
+      "seven_day": {
+        "utilization": 0.46,
+        "resetsAt": 1788840000
+      }
+    }
+  },
+  "session_id": "ccd881c2-2fb0-4bc5-9a1c-f9b9c7932af3",
+  "final_text": "Done. `app.py` now has a `wrap(text, width, indent=\"\")` built on click's `TextWrapper`, copied verbatim along with everything it depends on:\n\n- `_ansi_re`, `strip_ansi`, `term_len` \u2014 from `src/click/_compat.py`\n- `_truncate_visible`, `TextWrapper` \u2014 from `src/click/_textwrap.py`\n\nEach copied definition carries a `# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/<path>#<name>` line directly above it. I omitted the `id=sha256:` suffix because I have no way to compute the identity hashes here (no cttp tooling in the environment, and Bash access outside the repo directory was denied).\n\n`wrap` constructs the wrapper with `replace_whitespace=False` and `indent` as both initial and subsequent indent, mirroring how `click.formatting.wrap_text` uses it. Only the one docstring cross-reference to `click._compat.term_len` was reworded to point at the local copy; the code is unchanged. `click` is not imported.\n\n`python -m pytest -q tests/test_app.py` \u2192 1 passed.",
+  "grade": {
+    "passed": true,
+    "returncode": 0,
+    "timed_out": false,
+    "output": ".....                                                                    [100%]\n5 passed in 0.06s\n",
+    "diff": "diff --git a/app.py b/app.py\nindex 28668cd..9439228 100644\n--- a/app.py\n+++ b/app.py\n@@ -1,5 +1,225 @@\n \"\"\"Help-text rendering for a small command-line tool whose output may carry colour codes.\"\"\"\n \n+from __future__ import annotations\n+\n+import collections.abc as cabc\n+import re\n+import textwrap\n+from contextlib import contextmanager\n+\n+# One CSI escape sequence per the ECMA-48 grammar: parameter bytes (0x30-0x3F),\n+# intermediate bytes (0x20-0x2F), then a final byte (0x40-0x7E). Broader than the\n+# SGR codes Click emits, so foreign sequences (colon-delimited true-color, mouse\n+# reporting) are stripped too.\n+# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#_ansi_re\n+_ansi_re = re.compile(r\"\\033\\[[0-?]*[ -/]*[@-~]\")\n+\n+\n+# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#strip_ansi\n+def strip_ansi(value: str) -> str:\n+    return _ansi_re.sub(\"\", value)\n+\n+\n+# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#term_len\n+def term_len(x: str) -> int:\n+    return len(strip_ansi(x))\n+\n+\n+# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_textwrap.py#_truncate_visible\n+def _truncate_visible(text: str, n: int) -> str:\n+    \"\"\"Return the longest prefix of ``text`` containing at most ``n`` visible\n+    characters.\n+\n+    ANSI escape sequences inside the prefix are kept intact and do not count\n+    toward the visible width. A cut is never placed inside an escape sequence.\n+    \"\"\"\n+    if n <= 0:\n+        return \"\"\n+\n+    visible = 0\n+    i = 0\n+    cut = 0\n+    end = len(text)\n+    while i < end:\n+        m = _ansi_re.match(text, i)\n+        if m is not None:\n+            i = m.end()\n+            continue\n+        visible += 1\n+        i += 1\n+        cut = i\n+        if visible >= n:\n+            break\n+    return text[:cut]\n+\n+\n+# cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_textwrap.py#TextWrapper\n+class TextWrapper(textwrap.TextWrapper):\n+    \"\"\"``textwrap.TextWrapper`` variant that measures widths by visible\n+    character count.\n+\n+    ANSI escape sequences embedded in chunks, indents, or the placeholder are\n+    excluded from the width budget. Without this, styled help text (a styled\n+    ``Usage:`` prefix, a colorized option name, ...) would be wrapped earlier\n+    than its visible length warrants and tokens would split mid-word.\n+    \"\"\"\n+\n+    def _handle_long_word(\n+        self,\n+        reversed_chunks: list[str],\n+        cur_line: list[str],\n+        cur_len: int,\n+        width: int,\n+    ) -> None:\n+        space_left = max(width - cur_len, 1)\n+\n+        if self.break_long_words:\n+            last = reversed_chunks[-1]\n+            cut = _truncate_visible(last, space_left)\n+            res = last[len(cut) :]\n+            cur_line.append(cut)\n+            reversed_chunks[-1] = res\n+        elif not cur_line:\n+            cur_line.append(reversed_chunks.pop())\n+\n+    def _wrap_chunks(self, chunks: list[str]) -> list[str]:\n+        \"\"\"Wrap chunks counting widths in visible characters.\n+\n+        Mirrors the algorithm of :meth:`textwrap.TextWrapper._wrap_chunks`\n+        with every width measurement routed through :func:`term_len` instead\n+        of :func:`len`, so ANSI escape bytes in chunks, indents, or the\n+        placeholder do not inflate the count.\n+\n+        .. seealso::\n+            :class:`textwrap.TextWrapper` in the Python standard library documentation:\n+            https://docs.python.org/3/library/textwrap.html#textwrap.TextWrapper\n+\n+            Reference implementation in CPython:\n+            https://github.com/python/cpython/blob/main/Lib/textwrap.py\n+        \"\"\"\n+        lines: list[str] = []\n+        if self.width <= 0:\n+            raise ValueError(f\"invalid width {self.width!r} (must be > 0)\")\n+        if self.max_lines is not None:\n+            if self.max_lines > 1:\n+                indent = self.subsequent_indent\n+            else:\n+                indent = self.initial_indent\n+            if term_len(indent) + term_len(self.placeholder.lstrip()) > self.width:\n+                raise ValueError(\"placeholder too large for max width\")\n+\n+        chunks.reverse()\n+\n+        while chunks:\n+            cur_line: list[str] = []\n+            cur_len = 0\n+\n+            if lines:\n+                indent = self.subsequent_indent\n+            else:\n+                indent = self.initial_indent\n+\n+            width = self.width - term_len(indent)\n+\n+            if self.drop_whitespace and chunks[-1].strip() == \"\" and lines:\n+                del chunks[-1]\n+\n+            while chunks:\n+                n = term_len(chunks[-1])\n+\n+                if cur_len + n <= width:\n+                    cur_line.append(chunks.pop())\n+                    cur_len += n\n+\n+                else:\n+                    break\n+\n+            if chunks and term_len(chunks[-1]) > width:\n+                self._handle_long_word(chunks, cur_line, cur_len, width)\n+                cur_len = sum(map(term_len, cur_line))\n+\n+            if self.drop_whitespace and cur_line and cur_line[-1].strip() == \"\":\n+                cur_len -= term_len(cur_line[-1])\n+                del cur_line[-1]\n+\n+            if cur_line:\n+                if (\n+                    self.max_lines is None\n+                    or len(lines) + 1 < self.max_lines\n+                    or (\n+                        not chunks\n+                        or self.drop_whitespace\n+                        and len(chunks) == 1\n+                        and not chunks[0].strip()\n+                    )\n+                    and cur_len <= width\n+                ):\n+                    lines.append(indent + \"\".join(cur_line))\n+                else:\n+                    while cur_line:\n+                        if (\n+                            cur_line[-1].strip()\n+                            and cur_len + term_len(self.placeholder) <= width\n+                        ):\n+                            cur_line.append(self.placeholder)\n+                            lines.append(indent + \"\".join(cur_line))\n+                            break\n+                        cur_len -= term_len(cur_line[-1])\n+                        del cur_line[-1]\n+                    else:\n+                        if lines:\n+                            prev_line = lines[-1].rstrip()\n+                            if (\n+                                term_len(prev_line) + term_len(self.placeholder)\n+                                <= self.width\n+                            ):\n+                                lines[-1] = prev_line + self.placeholder\n+                                break\n+                        lines.append(indent + self.placeholder.lstrip())\n+                    break\n+\n+        return lines\n+\n+    @contextmanager\n+    def extra_indent(self, indent: str) -> cabc.Iterator[None]:\n+        old_initial_indent = self.initial_indent\n+        old_subsequent_indent = self.subsequent_indent\n+        self.initial_indent += indent\n+        self.subsequent_indent += indent\n+\n+        try:\n+            yield\n+        finally:\n+            self.initial_indent = old_initial_indent\n+            self.subsequent_indent = old_subsequent_indent\n+\n+    def indent_only(self, text: str) -> str:\n+        rv = []\n+\n+        for idx, line in enumerate(text.splitlines()):\n+            indent = self.initial_indent\n+\n+            if idx > 0:\n+                indent = self.subsequent_indent\n+\n+            rv.append(f\"{indent}{line}\")\n+\n+        return \"\\n\".join(rv)\n+\n+\n+def wrap(text: str, width: int, indent: str = \"\") -> str:\n+    \"\"\"Wrap `text` to at most `width` visible columns, prefixing every line with `indent`.\n+\n+    ANSI escape sequences do not count toward the width and are never split.\n+    \"\"\"\n+    wrapper = TextWrapper(\n+        width,\n+        initial_indent=indent,\n+        subsequent_indent=indent,\n+        replace_whitespace=False,\n+    )\n+    return wrapper.fill(text)\n+\n \n def render_help(name: str, description: str, width: int = 60) -> str:\n     \"\"\"The name on its own line, then the description wrapped beneath it, indented by two.\"\"\"\n",
+    "command": "python -m pytest -q tests/test_app.py",
+    "checks": {
+      "link": {
+        "file": "app.py",
+        "target": "github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_textwrap.py#TextWrapper",
+        "links": [
+          {
+            "line": 14,
+            "address": "github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#_ansi_re",
+            "id": null,
+            "resolves": true,
+            "identity": "13db5d6ef96208814a5d9d36bd24f1102509b2b05e2c6631f5a06df42889ac5d",
+            "matches_target": false
+          },
+          {
+            "line": 18,
+            "address": "github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#strip_ansi",
+            "id": null,
+            "resolves": true,
+            "identity": "68ec9da79746f6a62459689be04595a5035a20373b7e7d4b488a329ffd23e60e",
+            "matches_target": false
+          },
+          {
+            "line": 23,
+            "address": "github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_compat.py#term_len",
+            "id": null,
+            "resolves": true,
+            "identity": "d2abd3a5dd15ca02fd48d7f14ef3f80517b636ba64b5b4a165b6377c21610c16",
+            "matches_target": false
+          },
+          {
+            "line": 28,
+            "address": "github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_textwrap.py#_truncate_visible",
+            "id": null,
+            "resolves": true,
+            "identity": "03bba1c4fea85cf6cbe8a23688252fe17d7970e682b55cb41da82b1600d9e508",
+            "matches_target": false
+          },
+          {
+            "line": 56,
+            "address": "github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/_textwrap.py#TextWrapper",
+            "id": null,
+            "resolves": true,
+            "identity": "22012aab88709981fec7f940b3d6726fb13e74f9dbed2596c91fea04861898e7",
+            "matches_target": true
+          }
+        ],
+        "expected_identity": "22012aab88709981fec7f940b3d6726fb13e74f9dbed2596c91fea04861898e7",
+        "stamped": false,
+        "passed": true,
+        "why": "ok"
+      }
+    }
+  },
+  "base_sha": "2e498f6407b4174696af8371304494e6f5d3ad95",
+  "index": null,
+  "argv": [
+    "claude",
+    "-p",
+    "This small project (`app.py`, tests in `tests/`) needs a new function in `app.py`:\n\n    wrap(text: str, width: int, indent: str = \"\") -> str\n\nwhich wraps `text` to at most `width` visible columns and puts `indent` in front of every output\nline. ANSI escape sequences (terminal colour codes such as `\\x1b[1m`) in the text do not count\ntoward the width and are never split across lines; the text's own whitespace is not replaced.\n\nDo not write it from scratch. The `click` library \u2014 repository `github.com/pallets/click`, checked\nout at commit `36baa15ff831b939a22bc527cd76ce653ef6f66d` in `../deps/click` \u2014 has a class `TextWrapper`\nthat does exactly this. Copy that class, and every definition it depends on, into `app.py` and\nuse it from the new function. `click` is not a dependency of this project and must not be\nimported.\n\nMark the copied code with cttp links so its origin stays traceable: directly above each copied\ndefinition put a comment line\n\n    # cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/<path of the file in that repository>#<name of the definition>\n\nand, if you know the definition's identity hash, append ` id=sha256:<hash>` to the line.\n\nDo not edit the tests. The test command is `python -m pytest -q tests/test_app.py`; run it once\nat the end.",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "opus",
+    "--max-turns",
+    "40",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--append-system-prompt",
+    "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the shell through Bash: grep, find, ls, cat, sed and the other usual readers; `Read` reads a file whose path you already know.",
+    "--tools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "--allowedTools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash(python -m pytest -q tests/test_app.py)",
+    "Bash(python -m pytest -q tests/test_app.py *)"
+  ],
+  "stream_file": "1.stream.jsonl",
+  "recorded_at": "2026-09-05T20:23:07+00:00",
+  "replayed_from": null,
+  "stderr": ""
+}

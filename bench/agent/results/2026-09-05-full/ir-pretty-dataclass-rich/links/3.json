@@ -1,0 +1,426 @@
+{
+  "schema": 1,
+  "task": "ir-pretty-dataclass-rich",
+  "family": "in-repo",
+  "arm": "links",
+  "run": 3,
+  "system_prompt": "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the cttp MCP tools, not the shell: `search` finds a definition by name or docstring, `resolve` returns one definition's text by address, `who` lists what links to a definition, `closure` what a definition needs to run, `fold` reads a file as its links, `dups` finds copies. The shell's file readers (grep, cat, find, ls, sed) are denied; `Read` reads a file whose path you already know.",
+  "status": "pass",
+  "passed": true,
+  "model": "opus",
+  "model_used": "claude-opus-5",
+  "claude_code_version": "2.1.261",
+  "max_turns": 40,
+  "tokens": 109324,
+  "usage": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 13482,
+    "cache_read_input_tokens": 94700,
+    "output_tokens": 1126,
+    "output_tokens_details": {
+      "thinking_tokens": 62
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 13482,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 154,
+        "cache_read_input_tokens": 17609,
+        "cache_creation_input_tokens": 151,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 151
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "model_usage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 1081,
+      "outputTokens": 19,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001176,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-haiku-4-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    },
+    "claude-opus-5": {
+      "inputTokens": 16,
+      "outputTokens": 1126,
+      "cacheReadInputTokens": 94700,
+      "cacheCreationInputTokens": 13482,
+      "webSearchRequests": 0,
+      "costUSD": 0.2104,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "thinkingTokens": 62,
+      "canonicalModel": "claude-opus-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "stream_usage": {
+    "input_tokens": 16,
+    "cache_read_input_tokens": 94700,
+    "cache_creation_input_tokens": 13482
+  },
+  "requests": 8,
+  "total_cost_usd": 0.21157600000000001,
+  "num_turns": 10,
+  "duration_ms": 23195,
+  "duration_api_ms": 16968,
+  "wall_seconds": 25.255,
+  "returncode": 0,
+  "timed_out": false,
+  "subtype": "success",
+  "is_error": false,
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "tool_counts": {
+    "mcp__cttp__search": 5,
+    "mcp__cttp__resolve": 1,
+    "Read": 1,
+    "Edit": 1,
+    "Bash": 1
+  },
+  "tool_calls": [
+    {
+      "id": "toolu_016CEtccFPMnbEskkPiW7yDe",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "dataclass fields repr iterate"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 126
+    },
+    {
+      "id": "toolu_01TtQgYB6fZBzGTSyJ2fxiPK",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "is_dataclass pretty node"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 121
+    },
+    {
+      "id": "toolu_01KQ32KdDSkbD6mVjiek7cnA",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "dataclass"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 3064
+    },
+    {
+      "id": "toolu_01JEJHpfkSE4U5ADDpX7Bct1",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "traverse pretty repr"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 117
+    },
+    {
+      "id": "toolu_012uWgvXsYFHSdpNBUsKYYFv",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "traverse"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 737
+    },
+    {
+      "id": "toolu_01UHbses76Y7kcgBzrqAkphk",
+      "name": "mcp__cttp__resolve",
+      "input": {
+        "address": "github.com/textualize/rich@b6f2f7aa5b27/rich/pretty.py#traverse"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 15434
+    },
+    {
+      "id": "toolu_01LcTYZofM2UEL3xHZyjJ3Ys",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-ir-pretty-dataclass-rich-links-2sxm9ngw/w/repo/rich/pretty.py",
+        "offset": 755,
+        "limit": 30
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 1235
+    },
+    {
+      "id": "toolu_01L12tJmN72EERypqDcwjvf1",
+      "name": "Edit",
+      "input": {
+        "replace_all": false,
+        "file_path": "/tmp/cttp-bench-ir-pretty-dataclass-rich-links-2sxm9ngw/w/repo/rich/pretty.py",
+        "old_string": "                for last, field in loop_last(\n                    field for field in fields(obj) if field.repr\n                ):",
+        "new_string": "                for last, field in loop_last(\n                    field\n                    for field in fields(obj)\n                    if field.repr and hasattr(obj, field.name)\n                ):"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 183
+    },
+    {
+      "id": "toolu_01Jrex2CyedTFsNUfapnkQUK",
+      "name": "Bash",
+      "input": {
+        "command": "python -m pytest -q tests/test_pretty.py",
+        "description": "Run pretty printer tests"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 109
+    }
+  ],
+  "mcp_servers": [
+    {
+      "name": "cttp",
+      "status": "connected"
+    }
+  ],
+  "cttp_connected": true,
+  "tools_available": [
+    "Bash",
+    "Edit",
+    "Read",
+    "Write",
+    "mcp__cttp__closure",
+    "mcp__cttp__dups",
+    "mcp__cttp__fold",
+    "mcp__cttp__resolve",
+    "mcp__cttp__search",
+    "mcp__cttp__who"
+  ],
+  "rate_limit": {
+    "status": "allowed",
+    "resetsAt": 1788652800,
+    "rateLimitType": "five_hour",
+    "overageStatus": "rejected",
+    "overageDisabledReason": "out_of_credits",
+    "isUsingOverage": false,
+    "unifiedWindows": {
+      "five_hour": {
+        "utilization": 0.24,
+        "resetsAt": 1788652800
+      },
+      "seven_day": {
+        "utilization": 0.46,
+        "resetsAt": 1788840000
+      }
+    }
+  },
+  "session_id": "9f305642-4cd5-48ee-ba51-831d35d96323",
+  "final_text": "Fixed in `rich/pretty.py:783` \u2014 the dataclass branch of `traverse` now skips `repr=True` fields the instance doesn't actually have (`hasattr(obj, field.name)`), so an unassigned `field(init=False)` no longer raises `AttributeError` and `BadDataclass()` prints via the node's `empty` repr.\n\n`python -m pytest -q tests/test_pretty.py`: 50 passed, 1 skipped.",
+  "grade": {
+    "passed": true,
+    "returncode": 0,
+    "timed_out": false,
+    "output": "............................................s.......                     [100%]\n51 passed, 1 skipped in 0.29s\n",
+    "diff": "diff --git a/rich/pretty.py b/rich/pretty.py\nindex e0c78f62..5c725c0c 100644\n--- a/rich/pretty.py\n+++ b/rich/pretty.py\n@@ -781,7 +781,9 @@ def traverse(\n                 )\n \n                 for last, field in loop_last(\n-                    field for field in fields(obj) if field.repr\n+                    field\n+                    for field in fields(obj)\n+                    if field.repr and hasattr(obj, field.name)\n                 ):\n                     child_node = _traverse(getattr(obj, field.name), depth=depth + 1)\n                     child_node.key_repr = field.name\n",
+    "command": "python -m pytest -q tests/test_pretty.py",
+    "checks": {}
+  },
+  "base_sha": "b6f2f7aa5b27f612f391cd28212aff51ad0d42d1",
+  "index": {
+    "add": [
+      {
+        "schema_version": 3,
+        "repo": "github.com/textualize/rich",
+        "local_path": "/tmp/cttp-bench-ir-pretty-dataclass-rich-links-2sxm9ngw/w/repo",
+        "default_branch": "main",
+        "status": "added"
+      }
+    ],
+    "crawl": {
+      "schema_version": 3,
+      "crawled": [
+        {
+          "repo": "github.com/textualize/rich",
+          "sha": "b6f2f7aa5b27f612f391cd28212aff51ad0d42d1",
+          "status": "crawled",
+          "files": 526,
+          "pages": 2449,
+          "definitions": 2383,
+          "links": 5084,
+          "skipped": [
+            "assets/logo.ai: 'utf-8' codec can't decode byte 0xe2 in position 10: invalid continuation byte",
+            "assets/logo.svg: larger than 1000000 bytes",
+            "imgs/columns.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/downloader.gif: 'utf-8' codec can't decode byte 0xf7 in position 10: invalid start byte",
+            "imgs/features.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/hello_world.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/inspect.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/log.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/logging.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/markdown.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/print.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/progress.gif: 'utf-8' codec can't decode byte 0xae in position 6: invalid start byte",
+            "imgs/progress.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/repl.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/spinners.gif: 'utf-8' codec can't decode byte 0xac in position 6: invalid start byte",
+            "imgs/status.gif: 'utf-8' codec can't decode byte 0xe0 in position 8: invalid continuation byte",
+            "imgs/syntax.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/table.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/table2.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/table_movie.gif: 'utf-8' codec can't decode byte 0x9c in position 8: invalid start byte",
+            "imgs/traceback.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/tree.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "imgs/where_there_is_a_will.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte"
+          ]
+        }
+      ]
+    }
+  },
+  "argv": [
+    "claude",
+    "-p",
+    "Bug report for this repository (rich):\n\nPrinting a dataclass instance with `Console().print(obj)` (or `pretty_repr`) raises\n`AttributeError` when one of its fields was declared with `field(init=False)` and never\nassigned, e.g.\n\n    @dataclass(eq=False)\n    class BadDataclass:\n        item: int = field(init=False)\n\n    console.print(BadDataclass())\n\nThe pretty printer walks every field with `repr=True` and reads it off the instance. A field\nthe instance does not actually have should simply be skipped, so the example prints\n`BadDataclass()`.\n\nChange as little as possible and do not edit the tests. The test command is\n`python -m pytest -q tests/test_pretty.py`; run it once at the end.",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "opus",
+    "--max-turns",
+    "40",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--append-system-prompt",
+    "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the cttp MCP tools, not the shell: `search` finds a definition by name or docstring, `resolve` returns one definition's text by address, `who` lists what links to a definition, `closure` what a definition needs to run, `fold` reads a file as its links, `dups` finds copies. The shell's file readers (grep, cat, find, ls, sed) are denied; `Read` reads a file whose path you already know.",
+    "--tools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "--allowedTools",
+    "mcp__cttp__resolve",
+    "mcp__cttp__who",
+    "mcp__cttp__closure",
+    "mcp__cttp__search",
+    "mcp__cttp__dups",
+    "mcp__cttp__fold",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash(python -m pytest -q tests/test_pretty.py)",
+    "Bash(python -m pytest -q tests/test_pretty.py *)",
+    "--disallowedTools",
+    "Bash(cat)",
+    "Bash(cat *)",
+    "Bash(head)",
+    "Bash(head *)",
+    "Bash(tail)",
+    "Bash(tail *)",
+    "Bash(less)",
+    "Bash(less *)",
+    "Bash(more)",
+    "Bash(more *)",
+    "Bash(grep)",
+    "Bash(grep *)",
+    "Bash(egrep)",
+    "Bash(egrep *)",
+    "Bash(fgrep)",
+    "Bash(fgrep *)",
+    "Bash(rg)",
+    "Bash(rg *)",
+    "Bash(ag)",
+    "Bash(ag *)",
+    "Bash(find)",
+    "Bash(find *)",
+    "Bash(ls)",
+    "Bash(ls *)",
+    "Bash(tree)",
+    "Bash(tree *)",
+    "Bash(sed)",
+    "Bash(sed *)",
+    "Bash(awk)",
+    "Bash(awk *)",
+    "Bash(wc)",
+    "Bash(wc *)",
+    "Bash(stat)",
+    "Bash(stat *)",
+    "Bash(file)",
+    "Bash(file *)",
+    "Bash(diff)",
+    "Bash(diff *)",
+    "Bash(git)",
+    "Bash(git *)",
+    "Bash(od)",
+    "Bash(od *)",
+    "Bash(xxd)",
+    "Bash(xxd *)",
+    "Bash(strings)",
+    "Bash(strings *)",
+    "Bash(nl)",
+    "Bash(nl *)",
+    "Bash(cut)",
+    "Bash(cut *)",
+    "Bash(sort)",
+    "Bash(sort *)",
+    "Bash(uniq)",
+    "Bash(uniq *)",
+    "Bash(tac)",
+    "Bash(tac *)",
+    "Bash(rev)",
+    "Bash(rev *)",
+    "Bash(column)",
+    "Bash(column *)",
+    "Bash(paste)",
+    "Bash(paste *)",
+    "Bash(fold)",
+    "Bash(fold *)",
+    "Bash(pr)",
+    "Bash(pr *)",
+    "Bash(fmt)",
+    "Bash(fmt *)",
+    "Bash(look)",
+    "Bash(look *)",
+    "Bash(locate)",
+    "Bash(locate *)",
+    "Bash(which)",
+    "Bash(which *)",
+    "Bash(type)",
+    "Bash(type *)",
+    "Bash(printf)",
+    "Bash(printf *)",
+    "Bash(echo)",
+    "Bash(echo *)",
+    "--mcp-config",
+    "/tmp/cttp-bench-ir-pretty-dataclass-rich-links-2sxm9ngw/mcp.json"
+  ],
+  "stream_file": "3.stream.jsonl",
+  "recorded_at": "2026-09-05T20:10:46+00:00",
+  "replayed_from": null,
+  "stderr": ""
+}

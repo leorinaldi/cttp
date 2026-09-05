@@ -1,0 +1,298 @@
+{
+  "schema": 1,
+  "task": "ir-write-usage-click",
+  "family": "in-repo",
+  "arm": "baseline",
+  "run": 1,
+  "system_prompt": "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the shell through Bash: grep, find, ls, cat, sed and the other usual readers; `Read` reads a file whose path you already know.",
+  "status": "pass",
+  "passed": true,
+  "model": "opus",
+  "model_used": "claude-opus-5",
+  "claude_code_version": "2.1.261",
+  "max_turns": 40,
+  "tokens": 114909,
+  "usage": {
+    "input_tokens": 20,
+    "cache_creation_input_tokens": 11136,
+    "cache_read_input_tokens": 100792,
+    "output_tokens": 2961,
+    "output_tokens_details": {
+      "thinking_tokens": 885
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 11136,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 278,
+        "cache_read_input_tokens": 13813,
+        "cache_creation_input_tokens": 230,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 230
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "model_usage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 1101,
+      "outputTokens": 17,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001186,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-haiku-4-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    },
+    "claude-opus-5": {
+      "inputTokens": 20,
+      "outputTokens": 2961,
+      "cacheReadInputTokens": 100792,
+      "cacheCreationInputTokens": 11136,
+      "webSearchRequests": 0,
+      "costUSD": 0.235881,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "thinkingTokens": 885,
+      "canonicalModel": "claude-opus-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "stream_usage": {
+    "input_tokens": 20,
+    "cache_read_input_tokens": 100792,
+    "cache_creation_input_tokens": 11136
+  },
+  "requests": 10,
+  "total_cost_usd": 0.23706700000000003,
+  "num_turns": 11,
+  "duration_ms": 40536,
+  "duration_api_ms": 40782,
+  "wall_seconds": 41.255,
+  "returncode": 0,
+  "timed_out": false,
+  "subtype": "success",
+  "is_error": false,
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01SW23XSQ1o4tzEdwbxYmB5Q",
+      "tool_input": {
+        "command": "sed -n 150,200p src/click/formatting.py && PYTHONPATH=src python -c \"\nimport click\nf=click.HelpFormatter(); f.write_usage('cli'); print(repr(f.getvalue()))\nf=click.HelpFormatter(); f.current_indent=2; f.write_usage('cli'); print(repr(f.getvalue()))\nf=click.HelpFormatter(); f.write_usage('cli', prefix='\\x1b[1mUsage:\\x1b[0m '); print(repr(f.getvalue()))\n@click.command(options_metavar='', add_help_option=False)\ndef cli(): pass\nprint(repr(cli.get_help(click.Context(cli, info_name='cli'))))\n\""
+      }
+    }
+  ],
+  "tool_counts": {
+    "Bash": 6,
+    "Edit": 3,
+    "Read": 1
+  },
+  "tool_calls": [
+    {
+      "id": "toolu_0121jyTpgpGFMKL1z2wUuhhg",
+      "name": "Bash",
+      "input": {
+        "command": "grep -n \"def write_usage\" -A 45 /tmp/cttp-bench-ir-write-usage-click-baseline-jc93maqj/w/repo/src/click/formatting.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 1870
+    },
+    {
+      "id": "toolu_012Kxtg6NTduckau6FUeDgAR",
+      "name": "Bash",
+      "input": {
+        "command": "grep -rn \"write_usage\" /tmp/cttp-bench-ir-write-usage-click-baseline-jc93maqj/w/repo/tests/test_formatting.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 481
+    },
+    {
+      "id": "toolu_017cBLu2enRgdRkABbY3yzxW",
+      "name": "Bash",
+      "input": {
+        "command": "sed -n 430,510p /tmp/cttp-bench-ir-write-usage-click-baseline-jc93maqj/w/repo/tests/test_formatting.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 2795
+    },
+    {
+      "id": "toolu_01TsoFM8JZ4fXooHYMLZjGPN",
+      "name": "Edit",
+      "input": {
+        "replace_all": false,
+        "file_path": "/tmp/cttp-bench-ir-write-usage-click-baseline-jc93maqj/w/repo/src/click/formatting.py",
+        "old_string": "        usage_prefix = f\"{prefix:>{self.current_indent}}{prog} \"\n        text_width = self.width - self.current_indent",
+        "new_string": "        usage_prefix = f\"{prefix:>{self.current_indent}}{prog} \"\n        text_width = self.width - self.current_indent\n\n        if not args:\n            # Without arguments there is nothing to wrap, and wrapping an\n            # empty string would drop the prefix entirely. Write the prefix\n            # and program name without the trailing separator space.\n            self.write(f\"{usage_prefix.rstrip(' ')}\\n\")\n            return"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 191
+    },
+    {
+      "id": "toolu_01Q4KxJcGbL6qKRpcsUoVqE7",
+      "name": "Bash",
+      "input": {
+        "command": "grep -n \"format_usage\\|collect_usage_pieces\" -A 8 /tmp/cttp-bench-ir-write-usage-click-baseline-jc93maqj/w/repo/src/click/core.py | head -60"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 2338
+    },
+    {
+      "id": "toolu_012HqTcRm7XcU9B7yiqrZC6r",
+      "name": "Edit",
+      "input": {
+        "replace_all": false,
+        "file_path": "/tmp/cttp-bench-ir-write-usage-click-baseline-jc93maqj/w/repo/src/click/formatting.py",
+        "old_string": "        usage_prefix = f\"{prefix:>{self.current_indent}}{prog} \"\n        text_width = self.width - self.current_indent\n\n        if not args:",
+        "new_string": "        usage_prefix = f\"{prefix:>{self.current_indent}}{prog} \"\n\n        if not args.strip():"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 191
+    },
+    {
+      "id": "toolu_01W1gR6t5BQzZPzfebSp5Tme",
+      "name": "Edit",
+      "input": {
+        "replace_all": false,
+        "file_path": "/tmp/cttp-bench-ir-write-usage-click-baseline-jc93maqj/w/repo/src/click/formatting.py",
+        "old_string": "            self.write(f\"{usage_prefix.rstrip(' ')}\\n\")\n            return\n",
+        "new_string": "            self.write(f\"{usage_prefix.rstrip(' ')}\\n\")\n            return\n\n        text_width = self.width - self.current_indent\n"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 191
+    },
+    {
+      "id": "toolu_01SW23XSQ1o4tzEdwbxYmB5Q",
+      "name": "Bash",
+      "input": {
+        "command": "sed -n 150,200p src/click/formatting.py && PYTHONPATH=src python -c \"\nimport click\nf=click.HelpFormatter(); f.write_usage('cli'); print(repr(f.getvalue()))\nf=click.HelpFormatter(); f.current_indent=2; f.write_usage('cli'); print(repr(f.getvalue()))\nf=click.HelpFormatter(); f.write_usage('cli', prefix='\\x1b[1mUsage:\\x1b[0m '); print(repr(f.getvalue()))\n@click.command(options_metavar='', add_help_option=False)\ndef cli(): pass\nprint(repr(cli.get_help(click.Context(cli, info_name='cli'))))\n\""
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_01Q26A7doNtxSNpFCssjdf3h",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-ir-write-usage-click-baseline-jc93maqj/w/repo/src/click/formatting.py",
+        "offset": 150,
+        "limit": 45
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 1940
+    },
+    {
+      "id": "toolu_01LSYqPKrmPaAHS4w6ik2LNo",
+      "name": "Bash",
+      "input": {
+        "command": "python -m pytest -q -o pythonpath=src tests/test_formatting.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 98
+    }
+  ],
+  "mcp_servers": [],
+  "cttp_connected": false,
+  "tools_available": [
+    "Bash",
+    "Edit",
+    "Read",
+    "Write"
+  ],
+  "rate_limit": {
+    "status": "allowed",
+    "resetsAt": 1788652800,
+    "rateLimitType": "five_hour",
+    "overageStatus": "rejected",
+    "overageDisabledReason": "out_of_credits",
+    "isUsingOverage": false,
+    "unifiedWindows": {
+      "five_hour": {
+        "utilization": 0.26,
+        "resetsAt": 1788652800
+      },
+      "seven_day": {
+        "utilization": 0.46,
+        "resetsAt": 1788840000
+      }
+    }
+  },
+  "session_id": "f7be814c-bf9e-4481-ac2f-951371b1946a",
+  "final_text": "Fixed in `src/click/formatting.py:166` \u2014 `write_usage` now short-circuits when `args` is empty (or whitespace-only): it writes `f\"{prefix:>{current_indent}}{prog}\"` with only the trailing separator space stripped, plus a newline. Previously `wrap_text(\"\")` discarded the `initial_indent`, leaving just a blank line.\n\n- `current_indent` is honoured via the same right-alignment format used on the wrapping path.\n- A caller-supplied prefix (including ANSI-styled ones) is written verbatim; `rstrip(' ')` only removes the separator space added after `prog`.\n- The non-empty-args paths are untouched; `text_width` is now computed after the early return.\n\n`python -m pytest -q -o pythonpath=src tests/test_formatting.py` \u2192 27 passed.",
+  "grade": {
+    "passed": true,
+    "returncode": 0,
+    "timed_out": false,
+    "output": "...................................                                      [100%]\n35 passed in 0.11s\n",
+    "diff": "diff --git a/src/click/formatting.py b/src/click/formatting.py\nindex d9075ca..d6c1f35 100644\n--- a/src/click/formatting.py\n+++ b/src/click/formatting.py\n@@ -162,6 +162,14 @@ class HelpFormatter:\n             prefix = \"{usage} \".format(usage=_(\"Usage:\"))\n \n         usage_prefix = f\"{prefix:>{self.current_indent}}{prog} \"\n+\n+        if not args.strip():\n+            # Without arguments there is nothing to wrap, and wrapping an\n+            # empty string would drop the prefix entirely. Write the prefix\n+            # and program name without the trailing separator space.\n+            self.write(f\"{usage_prefix.rstrip(' ')}\\n\")\n+            return\n+\n         text_width = self.width - self.current_indent\n \n         if text_width >= (term_len(usage_prefix) + 20):\n",
+    "command": "python -m pytest -q -o pythonpath=src tests/test_formatting.py",
+    "checks": {}
+  },
+  "base_sha": "7c99ebe23b931f27562d926814423cce85fd9766",
+  "index": null,
+  "argv": [
+    "claude",
+    "-p",
+    "Bug report for this repository (click):\n\nCalling `HelpFormatter.write_usage(prog, args)` with empty `args` writes only a blank line. The\nsame shows end to end: a command with no parameters and `options_metavar=\"\"` (or\n`options_metavar=None`) renders its `--help` with an empty first line where `Usage: cli` should\nbe.\n\nFix it so that, with no args, the usage prefix and the program name are still written \u2014 as a\nsingle line with no trailing space, honouring `current_indent` and keeping a caller-supplied\n(possibly ANSI-styled) `prefix` verbatim. Behaviour with non-empty args must not change.\n\nChange as little as possible and do not edit the tests. The test command is\n`python -m pytest -q -o pythonpath=src tests/test_formatting.py`; run it once at the end.",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "opus",
+    "--max-turns",
+    "40",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--append-system-prompt",
+    "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the shell through Bash: grep, find, ls, cat, sed and the other usual readers; `Read` reads a file whose path you already know.",
+    "--tools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "--allowedTools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash(python -m pytest -q -o pythonpath=src tests/test_formatting.py)",
+    "Bash(python -m pytest -q -o pythonpath=src tests/test_formatting.py *)"
+  ],
+  "stream_file": "1.stream.jsonl",
+  "recorded_at": "2026-09-05T20:15:26+00:00",
+  "replayed_from": null,
+  "stderr": ""
+}

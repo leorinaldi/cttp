@@ -1,3 +1,4 @@
+import ast
 import inspect
 
 import app
@@ -25,5 +26,14 @@ def test_plus_and_bare_names():
 
 
 def test_click_is_not_imported():
-    source = inspect.getsource(app)
-    assert "import click" not in source and "from click" not in source
+    """The library must not be imported — the point is to reuse the code, not depend
+    on it. Parsed rather than grepped: a substring check also matches an attribution
+    comment naming the library, which is exactly what a cttp link block carries."""
+    banned = {"click"}
+    tree = ast.parse(inspect.getsource(app))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert alias.name.split(".")[0] not in banned, alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            assert node.module.split(".")[0] not in banned, node.module

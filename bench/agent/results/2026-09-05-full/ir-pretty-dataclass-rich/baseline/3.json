@@ -1,0 +1,221 @@
+{
+  "schema": 1,
+  "task": "ir-pretty-dataclass-rich",
+  "family": "in-repo",
+  "arm": "baseline",
+  "run": 3,
+  "system_prompt": "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the shell through Bash: grep, find, ls, cat, sed and the other usual readers; `Read` reads a file whose path you already know.",
+  "status": "pass",
+  "passed": true,
+  "model": "opus",
+  "model_used": "claude-opus-5",
+  "claude_code_version": "2.1.261",
+  "max_turns": 40,
+  "tokens": 39094,
+  "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 5428,
+    "cache_read_input_tokens": 32966,
+    "output_tokens": 690,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 5428,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 136,
+        "cache_read_input_tokens": 8213,
+        "cache_creation_input_tokens": 122,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 122
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "model_usage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 1081,
+      "outputTokens": 17,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001166,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-haiku-4-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    },
+    "claude-opus-5": {
+      "inputTokens": 10,
+      "outputTokens": 690,
+      "cacheReadInputTokens": 32966,
+      "cacheCreationInputTokens": 5428,
+      "webSearchRequests": 0,
+      "costUSD": 0.08806299999999999,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-opus-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "stream_usage": {
+    "input_tokens": 10,
+    "cache_read_input_tokens": 32966,
+    "cache_creation_input_tokens": 5428
+  },
+  "requests": 5,
+  "total_cost_usd": 0.08922899999999999,
+  "num_turns": 5,
+  "duration_ms": 10728,
+  "duration_api_ms": 10413,
+  "wall_seconds": 12.113,
+  "returncode": 0,
+  "timed_out": false,
+  "subtype": "success",
+  "is_error": false,
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "tool_counts": {
+    "Bash": 3,
+    "Edit": 1
+  },
+  "tool_calls": [
+    {
+      "id": "toolu_0162H7DLsGp99Vb84Jb3aLhw",
+      "name": "Bash",
+      "input": {
+        "command": "grep -n \"dataclass\" /tmp/cttp-bench-ir-pretty-dataclass-rich-baseline-30hx3x0p/w/repo/rich/pretty.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 427
+    },
+    {
+      "id": "toolu_01NbN79c5Qe6Bi4ZNZrz1vUS",
+      "name": "Bash",
+      "input": {
+        "command": "sed -n 755,800p /tmp/cttp-bench-ir-pretty-dataclass-rich-baseline-30hx3x0p/w/repo/rich/pretty.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 1827
+    },
+    {
+      "id": "toolu_019hRqH76dEKkmAD4G3DRB32",
+      "name": "Edit",
+      "input": {
+        "replace_all": false,
+        "file_path": "/tmp/cttp-bench-ir-pretty-dataclass-rich-baseline-30hx3x0p/w/repo/rich/pretty.py",
+        "old_string": "                for last, field in loop_last(\n                    field for field in fields(obj) if field.repr\n                ):",
+        "new_string": "                for last, field in loop_last(\n                    field\n                    for field in fields(obj)\n                    if field.repr and hasattr(obj, field.name)\n                ):"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 186
+    },
+    {
+      "id": "toolu_014v7txijchjNDFQCrG73kSc",
+      "name": "Bash",
+      "input": {
+        "command": "python -m pytest -q tests/test_pretty.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 109
+    }
+  ],
+  "mcp_servers": [],
+  "cttp_connected": false,
+  "tools_available": [
+    "Bash",
+    "Edit",
+    "Read",
+    "Write"
+  ],
+  "rate_limit": {
+    "status": "allowed",
+    "resetsAt": 1788652800,
+    "rateLimitType": "five_hour",
+    "overageStatus": "rejected",
+    "overageDisabledReason": "out_of_credits",
+    "isUsingOverage": false,
+    "unifiedWindows": {
+      "five_hour": {
+        "utilization": 0.25,
+        "resetsAt": 1788652800
+      },
+      "seven_day": {
+        "utilization": 0.46,
+        "resetsAt": 1788840000
+      }
+    }
+  },
+  "session_id": "e1830cc8-a8a4-484a-86c1-ce4bfc520326",
+  "final_text": "Fixed in `rich/pretty.py:783`: the dataclass field loop now also requires `hasattr(obj, field.name)`, so a `field(init=False)` that was never assigned is skipped instead of raising `AttributeError` (empty case then renders as `BadDataclass()`).\n\nTests: `python -m pytest -q tests/test_pretty.py` \u2014 50 passed, 1 skipped.",
+  "grade": {
+    "passed": true,
+    "returncode": 0,
+    "timed_out": false,
+    "output": "............................................s.......                     [100%]\n51 passed, 1 skipped in 0.21s\n",
+    "diff": "diff --git a/rich/pretty.py b/rich/pretty.py\nindex e0c78f62..5c725c0c 100644\n--- a/rich/pretty.py\n+++ b/rich/pretty.py\n@@ -781,7 +781,9 @@ def traverse(\n                 )\n \n                 for last, field in loop_last(\n-                    field for field in fields(obj) if field.repr\n+                    field\n+                    for field in fields(obj)\n+                    if field.repr and hasattr(obj, field.name)\n                 ):\n                     child_node = _traverse(getattr(obj, field.name), depth=depth + 1)\n                     child_node.key_repr = field.name\n",
+    "command": "python -m pytest -q tests/test_pretty.py",
+    "checks": {}
+  },
+  "base_sha": "b6f2f7aa5b27f612f391cd28212aff51ad0d42d1",
+  "index": null,
+  "argv": [
+    "claude",
+    "-p",
+    "Bug report for this repository (rich):\n\nPrinting a dataclass instance with `Console().print(obj)` (or `pretty_repr`) raises\n`AttributeError` when one of its fields was declared with `field(init=False)` and never\nassigned, e.g.\n\n    @dataclass(eq=False)\n    class BadDataclass:\n        item: int = field(init=False)\n\n    console.print(BadDataclass())\n\nThe pretty printer walks every field with `repr=True` and reads it off the instance. A field\nthe instance does not actually have should simply be skipped, so the example prints\n`BadDataclass()`.\n\nChange as little as possible and do not edit the tests. The test command is\n`python -m pytest -q tests/test_pretty.py`; run it once at the end.",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "opus",
+    "--max-turns",
+    "40",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--append-system-prompt",
+    "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the shell through Bash: grep, find, ls, cat, sed and the other usual readers; `Read` reads a file whose path you already know.",
+    "--tools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "--allowedTools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash(python -m pytest -q tests/test_pretty.py)",
+    "Bash(python -m pytest -q tests/test_pretty.py *)"
+  ],
+  "stream_file": "3.stream.jsonl",
+  "recorded_at": "2026-09-05T20:11:38+00:00",
+  "replayed_from": null,
+  "stderr": ""
+}

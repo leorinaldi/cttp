@@ -1,3 +1,4 @@
+import ast
 import inspect
 
 import pytest
@@ -36,6 +37,14 @@ def test_anything_else_is_an_error(monkeypatch):
 
 
 def test_attrs_is_not_imported():
-    source = inspect.getsource(app)
-    for module in ("attr", "attrs"):
-        assert f"import {module}" not in source and f"from {module}" not in source
+    """The library must not be imported — the point is to reuse the code, not depend
+    on it. Parsed rather than grepped: a substring check also matches an attribution
+    comment naming the library, which is exactly what a cttp link block carries."""
+    banned = {"attr", "attrs"}
+    tree = ast.parse(inspect.getsource(app))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert alias.name.split(".")[0] not in banned, alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            assert node.module.split(".")[0] not in banned, node.module
