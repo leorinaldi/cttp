@@ -17,10 +17,11 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 FINGERPRINTS = {
     1: "95c46a2dbc0766c1",
     2: "14c8b9e5c6d17b96",
+    3: "cc99e1dcc837f541",
 }  # schema version → fingerprint(); a schema change bumps both
 
 # --- the schema language -----------------------------------------------------------------------
@@ -473,6 +474,30 @@ DEFS["closure"] = obj(
     },
 )  # fmt: skip
 
+DEFS["entry"] = obj(
+    "a registry entry: `names/<name>.toml` (spec §8) — asserted by its author, except `owner`, which `name claim` derives from the target",
+    {
+        "name": string().asserted(),
+        "description": string("one line, copied onto link lines; `null` when the entry has none").null().asserted(),
+        "owner": string("`host/owner`: the account that proved control of the target").null().derived(),
+        "target": string("`host/owner/repo[/path]`").asserted(),
+        "default": string("the label the short form resolves to").asserted(),
+        "versions": mapping(string(), "label → ref of the target repository").asserted(),
+    },
+)  # fmt: skip
+
+DEFS["check"] = obj(
+    "one of the registry's checks on an entry (spec §8, plan P7-T2)",
+    {
+        "check": enum(
+            "declaration", "owner", "target", "labels", "resolves",
+            doc="the target's `cttp.toml` declares the name at its default branch; the owner is the target's account; the target path exists; every label is well formed and its ref is a revision; the name resolves",
+        ),
+        "ok": boolean(),
+        "detail": string("what was found, or what is wrong and what to do"),
+    },
+)  # fmt: skip
+
 # --- the commands ------------------------------------------------------------------------------
 
 
@@ -767,6 +792,74 @@ COMMANDS: dict[str, Command] = {
                 "count": integer(),
                 "origin": obj("", {"backlinks": DERIVED, "rank": DERIVED}),
             },
+        ),
+    ),
+    "name show": Command(
+        "cttp name show <name> --json",
+        "A registry entry and what the name resolves to.",
+        obj(
+            "",
+            {
+                "name": string(),
+                "registry": string("the local registry the entry came from"),
+                "entry": ref("entry").asserted(),
+                "resolution": ref("page", "what `cttp resolve <name>` prints").derived(),
+                "origin": obj("", {"entry": ASSERTED, "resolution": DERIVED}),
+            },
+        ),
+        "To see who owns a name, where it points, and its labels, before linking to it.",
+        (
+            "An HTTP registry answers resolutions, not entries; the entry comes from a local registry repository.",
+        ),
+    ),
+    "name claim": Command(
+        "cttp name claim <name> --target <host/owner/repo[/path]> [--description …] [--version label=ref]… [--default label] [--transfer] [--no-pr] --json",
+        "The entry written for the name, the checks it passed, and the pull request opened for it.",
+        obj(
+            "",
+            {
+                "name": string(),
+                "action": enum(
+                    "claimed",
+                    "updated",
+                    "transferred",
+                    doc="a new name; the same owner's entry rewritten; another owner's name taken over (`--transfer`)",
+                ),
+                "owner": string("`host/owner` of the target").derived(),
+                "previous_owner": string("the owner the entry had before, when it existed").null(),
+                "target": string(),
+                "declared_at": obj(
+                    "where the target declared the name",
+                    {
+                        "file": string("`cttp.toml`"),
+                        "branch": string("the target's default branch"),
+                        "rev": string("its head, full SHA"),
+                    },
+                ).derived(),
+                "entry": ref("entry"),
+                "checks": arr(
+                    ref("check"),
+                    "the checks run before writing (`resolves` is left to `name verify`)",
+                ),
+                "path": string("`names/<name>.toml`"),
+                "text": string("the file's text"),
+                "written_to": string(
+                    "the file in the registry clone's working tree (`--no-pr`); `null` when it went into a pull request"
+                ).null(),
+                "branch": string(
+                    "`claim/<name>`, pushed to the registry's origin; `null` with `--no-pr`"
+                ).null(),
+                "pr": string("the pull request's URL; `null` with `--no-pr`").null(),
+                "registry": string("the local registry repository the claim is against"),
+                "origin": obj(
+                    "", {"owner": DERIVED, "declaration": DERIVED, "description": ASSERTED}
+                ),
+            },
+        ),  # fmt: skip
+        "",
+        (
+            "Refused (exit 1) when the target's `cttp.toml` does not declare the name, when the name is another owner's and `--transfer` was not given, or when a label or ref is not valid.",
+            "The pull request needs `gh` and an `origin` remote on the registry clone; `--no-pr` needs neither.",
         ),
     ),
     "mcp install": Command(

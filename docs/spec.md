@@ -413,9 +413,16 @@ free. A name may point at a repository, a file (a script), or a single definitio
 
 **Decision — proof of control, not accounts.** To claim a name, the target repository must contain
 a `cttp.toml` at its root declaring `name = "hello-world"`, the way a DNS TXT record proves domain
-ownership. The claim is a pull request against the registry repository (`cttp name claim` opens
-it); the registry's own checks verify the declaration at the target before merging. Transfer is the
-same act by the new owner with the old owner's approval. No accounts, no passwords.
+ownership. The declaration is read at the head of the repository's default branch; a repository
+that is the target of several names lists the others under `names = ["…", "…"]` beside its own
+`name`. The claim is a pull request against the registry repository (`cttp name claim <name>
+--target <host/owner/repo[/path]>` opens it with `gh`, or writes the file for you with `--no-pr`);
+the entry's `owner` is the target's account, `host/owner` of its locator, derived and never
+asked for. The registry's own checks (`cttp name verify`) verify the declaration at the target,
+the owner, the target path, every label and its ref, and the resolution before merging. A name
+that exists with another owner is refused unless `--transfer`, which opens the same pull request
+for the old owner's approval. `cttp name show <name>` prints an entry and its resolution. No
+accounts, no passwords.
 
 **Trust as a central point.** Because every expansion writes a pinned address into the file, a
 hijacked or repointed name cannot change code that is already expanded; it can only affect the

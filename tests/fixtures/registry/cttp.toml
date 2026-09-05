@@ -1,2 +1,3 @@
-name = "cttp-registry"
-repo = "github.com/leorinaldi/cttp-registry"
+name  = "cttp-registry"
+repo  = "github.com/leorinaldi/cttp-registry"
+names = ["hello-world"]  # the names this repository is the target of (spec §8: proof of control)

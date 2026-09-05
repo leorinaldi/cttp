@@ -2,7 +2,7 @@
 
 **Generated from `src/cttp/schemas.py` — do not edit.** `python -m cttp.schemas` rewrites it; `tests/test_schemas.py` fails when it is stale.
 
-Schema version **2**, fingerprint `14c8b9e5c6d17b96`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
+Schema version **3**, fingerprint `cc99e1dcc837f541`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
 
 ## Conventions
 
@@ -402,6 +402,61 @@ Pages ordered by how many distinct pages link to them.
 | `origin.backlinks` | `derived` |  | computed by the tool from the repository |
 | `origin.rank` | `derived` |  | computed by the tool from the repository |
 
+### name show
+
+`cttp name show <name> --json`
+
+A registry entry and what the name resolves to.
+
+**When:** To see who owns a name, where it points, and its labels, before linking to it.
+
+- An HTTP registry answers resolutions, not entries; the entry comes from a local registry repository.
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `schema_version` | integer |  |  |
+| `name` | string |  |  |
+| `registry` | string |  | the local registry the entry came from |
+| `entry` | → [entry](#entry) | asserted |  |
+| `resolution` | → [page](#page) | derived | what `cttp resolve <name>` prints |
+| `origin` | object |  |  |
+| `origin.entry` | `asserted` |  | stated by a person: a link line or a registry entry |
+| `origin.resolution` | `derived` |  | computed by the tool from the repository |
+
+### name claim
+
+`cttp name claim <name> --target <host/owner/repo[/path]> [--description …] [--version label=ref]… [--default label] [--transfer] [--no-pr] --json`
+
+The entry written for the name, the checks it passed, and the pull request opened for it.
+
+- Refused (exit 1) when the target's `cttp.toml` does not declare the name, when the name is another owner's and `--transfer` was not given, or when a label or ref is not valid.
+- The pull request needs `gh` and an `origin` remote on the registry clone; `--no-pr` needs neither.
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `schema_version` | integer |  |  |
+| `name` | string |  |  |
+| `action` | `claimed` \| `updated` \| `transferred` |  | a new name; the same owner's entry rewritten; another owner's name taken over (`--transfer`) |
+| `owner` | string | derived | `host/owner` of the target |
+| `previous_owner` | string? |  | the owner the entry had before, when it existed |
+| `target` | string |  |  |
+| `declared_at` | object | derived | where the target declared the name |
+| `declared_at.file` | string |  | `cttp.toml` |
+| `declared_at.branch` | string |  | the target's default branch |
+| `declared_at.rev` | string |  | its head, full SHA |
+| `entry` | → [entry](#entry) |  |  |
+| `checks` | [→ [check](#check)] |  | the checks run before writing (`resolves` is left to `name verify`) |
+| `path` | string |  | `names/<name>.toml` |
+| `text` | string |  | the file's text |
+| `written_to` | string? |  | the file in the registry clone's working tree (`--no-pr`); `null` when it went into a pull request |
+| `branch` | string? |  | `claim/<name>`, pushed to the registry's origin; `null` with `--no-pr` |
+| `pr` | string? |  | the pull request's URL; `null` with `--no-pr` |
+| `registry` | string |  | the local registry repository the claim is against |
+| `origin` | object |  |  |
+| `origin.owner` | `derived` |  | computed by the tool from the repository |
+| `origin.declaration` | `derived` |  | computed by the tool from the repository |
+| `origin.description` | `asserted` |  | stated by a person: a link line or a registry entry |
+
 ### mcp install
 
 `cttp mcp install [--claude-code] --json`
@@ -775,3 +830,26 @@ the pages a page needs to run inline, dependencies before dependents, the root l
 | `origin.order` | `derived` |  | computed by the tool from the repository |
 | `origin.imports` | `derived` |  | computed by the tool from the repository |
 | `origin.requires` | `derived` |  | computed by the tool from the repository |
+
+### entry
+
+a registry entry: `names/<name>.toml` (spec §8) — asserted by its author, except `owner`, which `name claim` derives from the target
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `name` | string | asserted |  |
+| `description` | string? | asserted | one line, copied onto link lines; `null` when the entry has none |
+| `owner` | string? | derived | `host/owner`: the account that proved control of the target |
+| `target` | string | asserted | `host/owner/repo[/path]` |
+| `default` | string | asserted | the label the short form resolves to |
+| `versions` | {string: string} | asserted | label → ref of the target repository |
+
+### check
+
+one of the registry's checks on an entry (spec §8, plan P7-T2)
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `check` | `declaration` \| `owner` \| `target` \| `labels` \| `resolves` |  | the target's `cttp.toml` declares the name at its default branch; the owner is the target's account; the target path exists; every label is well formed and its ref is a revision; the name resolves |
+| `ok` | boolean |  |  |
+| `detail` | string |  | what was found, or what is wrong and what to do |

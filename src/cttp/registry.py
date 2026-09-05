@@ -6,12 +6,14 @@ repository** (`cttp.toml` + `names/*.toml`) or an **HTTP registry** serving the 
 is a miss, and the next one is asked; the last miss names them all.
 """
 
+import re
 import subprocess
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
+import tomli_w
 
 from cttp.config import Config, is_url, load_config
 
@@ -239,3 +241,398 @@ def git_repo_from(dest: Path, files: Path, message: str = "Contents") -> Path:
     ):
         run("tag", "v1")
     return dest
+
+
+# --- names: show, claim, verify (plan P7-T1, P7-T2; spec §8) -----------------------------------
+
+# A name: labels of `[a-z0-9]+(-[a-z0-9]+)*`, namespaced by dots (spec §8).
+NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*$")
+LABEL_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+DECLARATION = "cttp.toml"  # at the target repository's root, on its default branch
+
+
+def is_name(text: str) -> bool:
+    return bool(NAME_RE.match(text))
+
+
+def owner_of(locator: str) -> str:
+    """The account that controls a target: `host/owner` of its locator (spec §8's `owner`)."""
+    return "/".join(locator.split("/")[:2])
+
+
+@dataclass(frozen=True)
+class Declaration:
+    """What a target repository's `cttp.toml` declares at the head of its default branch."""
+
+    locator: str
+    branch: str
+    sha: str
+    names: tuple[str, ...]  # `name = "x"` and `names = ["y", …]`, in that order
+    file: str = DECLARATION
+
+
+def declaration_at(locator: str, registries: Registries) -> Declaration:
+    """Read the target's `cttp.toml` at its default branch; a RegistryError when there is none."""
+    from cttp import gitcache
+
+    try:
+        repo = gitcache.ensure_repo(locator, registries.url_for(locator))
+        branch = gitcache.default_branch(repo)
+        sha = gitcache.rev_parse(repo, branch)
+    except gitcache.GitError as e:
+        raise RegistryError(f"{locator} cannot be read: {e}") from e
+    try:
+        text = gitcache.show(repo, sha, DECLARATION)
+    except gitcache.GitError as e:
+        raise RegistryError(
+            f"{locator} has no {DECLARATION} at {branch} ({sha[:12]}); a claim needs one at the "
+            f"repository's root declaring the name (spec §8)"
+        ) from e
+    try:
+        d = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise RegistryError(f"{locator}: {DECLARATION} at {branch} is not TOML: {e}") from e
+    names: list[str] = []
+    if isinstance(d.get("name"), str):
+        names.append(d["name"])
+    if isinstance(d.get("names"), list):
+        names += [n for n in d["names"] if isinstance(n, str)]
+    return Declaration(locator, branch, sha, tuple(names))
+
+
+def entry_text(entry: Entry) -> str:
+    """`names/<name>.toml` for an entry, in the registry's file format (spec §8)."""
+    d: dict = {"name": entry.name}
+    if entry.description:
+        d["description"] = entry.description
+    if entry.owner:
+        d["owner"] = entry.owner
+    d["target"] = entry.target
+    d["default"] = entry.default
+    body = tomli_w.dumps(d)
+    if entry.versions:
+        body += "\n" + tomli_w.dumps({"versions": dict(entry.versions)})
+    return body
+
+
+def entry_json(entry: Entry) -> dict:
+    return {
+        "name": entry.name,
+        "description": entry.description,
+        "owner": entry.owner,
+        "target": entry.target,
+        "default": entry.default,
+        "versions": dict(entry.versions),
+    }
+
+
+@dataclass(frozen=True)
+class Check:
+    check: str  # declaration | owner | target | labels | resolves
+    ok: bool
+    detail: str
+
+    def to_json(self) -> dict:
+        return {"check": self.check, "ok": self.ok, "detail": self.detail}
+
+
+def check_entry(entry: Entry, registries: Registries, resolve: bool = True) -> list[Check]:
+    """The registry's checks on one entry (spec §8, plan P7-T2): the target declares the name
+    at its default branch, the entry's owner is the target's account, the target path exists,
+    every label is well formed and its ref is a revision of the target, and — with `resolve` —
+    the name resolves through the configured registries."""
+    from cttp import gitcache
+
+    checks: list[Check] = []
+    try:
+        locator, path = split_target(entry.target)
+    except RegistryError as e:
+        return [Check("target", False, str(e))]
+    try:
+        decl = declaration_at(locator, registries)
+    except RegistryError as e:
+        checks.append(Check("declaration", False, str(e)))
+        return checks
+    where = f"{decl.file} at {decl.branch} ({decl.sha[:12]})"
+    if entry.name in decl.names:
+        checks.append(Check("declaration", True, f"{locator} declares {entry.name!r} in {where}"))
+    else:
+        declared = ", ".join(repr(n) for n in decl.names) or "no name"
+        checks.append(
+            Check(
+                "declaration",
+                False,
+                f"{locator} declares {declared} in {where}, not {entry.name!r}; add it to the "
+                f"file's `name` (or `names`) and push",
+            )
+        )
+    owner = owner_of(locator)
+    if entry.owner == owner:
+        checks.append(Check("owner", True, f"{owner}, the target's account"))
+    else:
+        checks.append(
+            Check(
+                "owner", False, f"the entry says {entry.owner!r}; the target's account is {owner}"
+            )
+        )
+    repo = gitcache.repos_dir() / locator
+    if path is None:
+        checks.append(Check("target", True, f"{locator}, the whole repository"))
+    elif path in gitcache.ls_tree(repo, decl.sha):
+        checks.append(Check("target", True, f"{path} exists at {decl.branch}"))
+    else:
+        checks.append(Check("target", False, f"{path} is not in {locator} at {decl.branch}"))
+    problems: list[str] = []
+    notes: list[str] = []
+    for label, ref in entry.versions.items():
+        if not LABEL_RE.match(label):
+            problems.append(f"{label!r} is not a label ([a-z0-9]+(-[a-z0-9]+)*)")
+            continue
+        try:
+            sha = gitcache.rev_parse(repo, ref)
+        except gitcache.GitError:
+            problems.append(f"{label} = {ref!r} is not a revision of {locator}")
+            continue
+        notes.append(f"{label} = {ref} ({sha[:12]})")
+    try:
+        gitcache.rev_parse(repo, ref_for(entry))
+    except gitcache.GitError:
+        problems.append(f"default {entry.default!r} is neither a label nor a revision")
+    labels_ok = not problems
+    checks.append(Check("labels", labels_ok, "; ".join(problems or notes) or "no labels"))
+    if resolve and all(c.ok for c in checks):
+        checks.append(_resolves(entry, registries))
+    return checks
+
+
+def _resolves(entry: Entry, registries: Registries) -> Check:
+    from cttp.resolve import ResolveError
+    from cttp.resolve import resolve as _resolve
+
+    try:
+        r = _resolve(entry.name, registries)
+    except (RegistryError, ResolveError) as e:
+        return Check("resolves", False, str(e))
+    return Check("resolves", True, f"{r.address}  {r.identity}  {r.kind}/{r.language}")
+
+
+@dataclass(frozen=True)
+class Claimed:
+    entry: Entry
+    action: str  # claimed | updated | transferred
+    previous_owner: str | None
+    declaration: Declaration
+    registry: LocalRegistry
+    checks: list[Check]
+    text: str
+    written_to: Path | None  # the file in the registry's working tree (`--no-pr`)
+    branch: str | None  # the branch the claim was pushed on
+    pr: str | None  # the pull request's URL
+
+    def to_json(self) -> dict:
+        return {
+            "name": self.entry.name,
+            "action": self.action,
+            "owner": self.entry.owner,
+            "previous_owner": self.previous_owner,
+            "target": self.entry.target,
+            "declared_at": {
+                "file": self.declaration.file,
+                "branch": self.declaration.branch,
+                "rev": self.declaration.sha,
+            },
+            "entry": entry_json(self.entry),
+            "checks": [c.to_json() for c in self.checks],
+            "path": f"names/{self.entry.name}.toml",
+            "text": self.text,
+            "written_to": str(self.written_to) if self.written_to else None,
+            "branch": self.branch,
+            "pr": self.pr,
+            "registry": self.registry.describe(),
+            "origin": {"owner": "derived", "declaration": "derived", "description": "asserted"},
+        }
+
+
+def claim(
+    name: str,
+    target: str,
+    registries: Registries,
+    description: str | None = None,
+    default: str | None = None,
+    versions: dict[str, str] | None = None,
+    transfer: bool = False,
+    pr: bool = True,
+) -> Claimed:
+    """Claim `name` for `target` in the first local registry (spec §8: proof of control).
+
+    The target repository must declare the name in its `cttp.toml` at its default branch; the
+    owner is the target's account. A name that exists with another owner is refused unless
+    `transfer`. With `pr`, the entry is committed on a `claim/<name>` branch of the registry
+    clone, pushed to its origin and opened as a pull request with `gh`; otherwise the file is
+    written into the registry's working tree.
+    """
+    if not is_name(name):
+        raise RegistryError(
+            f"{name!r} is not a name: labels are [a-z0-9]+(-[a-z0-9]+)*, namespaced by dots"
+        )
+    locator, path = split_target(target)
+    _check_locator(locator, path)
+    registry = next((r for r in registries.items if isinstance(r, LocalRegistry)), None)
+    if registry is None:
+        raise RegistryError(
+            f"no local registry repository to write to: {registries.describe()}; "
+            "clone one and list it in the config, or pass --registry"
+        )
+    decl = declaration_at(locator, registries)
+    if name not in decl.names:
+        declared = ", ".join(repr(n) for n in decl.names) or "no name"
+        raise RegistryError(
+            f"{locator} declares {declared} in {decl.file} at {decl.branch} ({decl.sha[:12]}), "
+            f'not {name!r}; add `name = "{name}"` (or list it under `names`) to {decl.file} and '
+            "push to prove control of the target"
+        )
+    owner = owner_of(locator)
+    previous: Entry | None = None
+    try:
+        previous = registry.lookup(name)
+    except RegistryError:
+        pass
+    action = "claimed"
+    if previous is not None:
+        if previous.owner == owner:
+            action = "updated"
+        elif transfer:
+            action = "transferred"
+        else:
+            raise RegistryError(
+                f"{name!r} is owned by {previous.owner or 'nobody named'} (target "
+                f"{previous.target}); pass --transfer to open the pull request for their approval"
+            )
+    versions = dict(versions or {})
+    if not versions:
+        versions = {"latest": decl.branch}
+    if default is None:
+        default = "latest" if "latest" in versions else next(iter(versions))
+    entry = Entry(name, description or None, owner, target, default, versions)
+    checks = check_entry(entry, registries, resolve=False)
+    failed = [c for c in checks if not c.ok]
+    if failed:
+        raise RegistryError("; ".join(f"{c.check}: {c.detail}" for c in failed))
+    text = entry_text(entry)
+    rel = Path("names") / f"{name}.toml"
+    if not pr:
+        out = registry.path / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        return Claimed(entry, action, previous.owner if previous else None, decl, registry,
+                       checks, text, out, None, None)  # fmt: skip
+    branch, url = open_claim_pr(registry.path, rel, text, entry, action, previous)
+    return Claimed(entry, action, previous.owner if previous else None, decl, registry, checks,
+                   text, None, branch, url)  # fmt: skip
+
+
+def _check_locator(locator: str, path: str | None) -> None:
+    from cttp.address import AddressError, parse
+
+    try:  # the locator grammar, with a placeholder path for a whole-repository target
+        parse(f"{locator}@main/{path or 'cttp.toml'}")
+    except AddressError as e:
+        raise RegistryError(f"target {locator}{'/' + path if path else ''}: {e}") from e
+
+
+def _git(*args: str, cwd: Path) -> str:
+    """git in the registry clone; a failure is a RegistryError naming the command."""
+    git = ["git", "-c", "user.name=cttp", "-c", "user.email=cttp@localhost"]
+    proc = subprocess.run([*git, *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8")
+    if proc.returncode != 0:
+        raise RegistryError(f"git {' '.join(args)} failed in {cwd}: {proc.stderr.strip()}")
+    return proc.stdout
+
+
+def _gh(args: list[str], cwd: Path) -> str:
+    """`gh …` in the clone; tests patch this. A missing `gh` or a failure is a RegistryError."""
+    try:
+        proc = subprocess.run(
+            ["gh", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8"
+        )
+    except FileNotFoundError as e:
+        raise RegistryError(
+            "`gh` is not on PATH; install the GitHub CLI, or pass --no-pr and open the pull "
+            "request by hand"
+        ) from e
+    if proc.returncode != 0:
+        raise RegistryError(f"gh {' '.join(args)} failed: {(proc.stderr or proc.stdout).strip()}")
+    return proc.stdout
+
+
+def open_claim_pr(
+    clone: Path, rel: Path, text: str, entry: Entry, action: str, previous: Entry | None
+) -> tuple[str, str]:
+    """Commit `rel` with `text` on a fresh `claim/<name>` branch of the registry clone — in a
+    temporary worktree, so the person's checkout is untouched — push it to `origin`, open the
+    pull request with `gh`, and remove the worktree and branch. Returns (branch, PR URL)."""
+    import shutil
+    import tempfile
+
+    try:
+        _git("remote", "get-url", "origin", cwd=clone)
+    except RegistryError as e:
+        raise RegistryError(
+            f"the registry clone at {clone} has no `origin` remote to push the claim to; "
+            "pass --no-pr to write the file and commit it by hand"
+        ) from e
+    _git("fetch", "--quiet", "origin", cwd=clone)
+    head = _git("ls-remote", "--symref", "origin", "HEAD", cwd=clone)
+    base = next(
+        (line.split()[1].removeprefix("refs/heads/") for line in head.splitlines()
+         if line.startswith("ref:")),
+        "main",
+    )  # fmt: skip
+    branch = f"claim/{entry.name}"
+    work = Path(tempfile.mkdtemp(prefix="cttp-claim-"))
+    try:
+        _git("worktree", "add", "--quiet", "--detach", str(work), f"origin/{base}", cwd=clone)
+        _git("checkout", "--quiet", "-B", branch, cwd=work)
+        (work / rel).parent.mkdir(parents=True, exist_ok=True)
+        (work / rel).write_text(text, encoding="utf-8")
+        _git("add", str(rel), cwd=work)
+        title = f"{action}: {entry.name} -> {entry.target}"
+        body = _pr_body(entry, action, previous)
+        _git("commit", "--quiet", "-m", title, "-m", body, cwd=work)
+        _git("push", "--quiet", "--force", "-u", "origin", branch, cwd=work)
+        url = _gh(["pr", "create", "--head", branch, "--base", base, "--title", title,
+                   "--body", body], cwd=work).strip()  # fmt: skip
+    finally:
+        try:
+            _git("worktree", "remove", "--force", str(work), cwd=clone)
+        except RegistryError:
+            shutil.rmtree(work, ignore_errors=True)
+            try:
+                _git("worktree", "prune", cwd=clone)
+            except RegistryError:
+                pass
+        try:
+            _git("branch", "-D", branch, cwd=clone)
+        except RegistryError:
+            pass
+    return branch, url
+
+
+def _pr_body(entry: Entry, action: str, previous: Entry | None) -> str:
+    lines = [
+        f"`{entry.name}` -> `{entry.target}`, owner `{entry.owner}`.",
+        "",
+        f"The target declares the name in its `{DECLARATION}` at its default branch "
+        "(spec §8: proof of control); the registry's checks verify it again before merging.",
+    ]
+    if action == "transferred" and previous is not None:
+        handle = (previous.owner or "").split("/")[-1]
+        lines += [
+            "",
+            f"**Transfer** from `{previous.owner}` (target was `{previous.target}`). "
+            + (f"@{handle}, please approve this pull request to hand the name over." if handle
+               else "The previous owner's approval is needed to merge."),
+        ]  # fmt: skip
+    elif action == "updated":
+        lines += ["", "The name exists with this owner; this updates its entry."]
+    return "\n".join(lines)

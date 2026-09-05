@@ -24,6 +24,8 @@ index_app = typer.Typer(no_args_is_help=True, rich_markup_mode=None)
 app.add_typer(index_app, name="index", help="The index: register repositories and crawl them.")
 mcp_app = typer.Typer(invoke_without_command=True, rich_markup_mode=None)
 app.add_typer(mcp_app, name="mcp", help="The MCP server (stdio): the agent interface.")
+name_app = typer.Typer(no_args_is_help=True, rich_markup_mode=None)
+app.add_typer(name_app, name="name", help="Registry names: show an entry, claim one, verify.")
 state = {"json": False}
 
 RegistryOpt = Annotated[
@@ -738,6 +740,122 @@ def rank(
     ]
     lines.append(f"{out['count']} ranked")
     emit(out, "\n".join(lines))
+
+
+# --- names (spec §8) ---------------------------------------------------------------------------
+
+
+def _entry_lines(entry) -> list[str]:
+    lines = []
+    if entry.description:
+        lines.append(f"  description: {entry.description}")
+    lines.append(f"  owner: {entry.owner or 'not available'}")
+    lines.append(f"  target: {entry.target}")
+    lines.append(f"  default: {entry.default}")
+    versions = ", ".join(f"{k} = {v}" for k, v in entry.versions.items()) or "(none)"
+    lines.append(f"  versions: {versions}")
+    return lines
+
+
+@name_app.command("show")
+def name_show(name: str, registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
+    """A registry entry — target, owner, labels — and what the name resolves to."""
+    want_json(json_)
+    from cttp.address import parse
+    from cttp.registry import entry_json
+    from cttp.resolve import resolve as _resolve
+
+    try:
+        a = parse(name)
+        if a.form != "name":
+            raise AddressError(f"{name!r} is not a name; `name show` takes a registry name")
+        reg = open_registries(registry)
+        entry, which = reg.lookup(a.name)
+        r = _resolve(str(a), reg)
+    except ERRORS as e:
+        fail(str(e))
+    lic = r.license or "not available"
+    lines = [f"{entry.name}  (registry {which.describe()})", *_entry_lines(entry)]
+    lines.append(f"resolves to {r.address}  {r.identity}  {r.kind}/{r.language}  license={lic}")
+    if r.signature:
+        lines.append(f"# {r.signature}" + (f" — {r.docstring}" if r.docstring else ""))
+    emit(
+        {
+            "name": entry.name,
+            "registry": which.describe(),
+            "entry": entry_json(entry),
+            "resolution": r.to_json(),
+            "origin": {"entry": "asserted", "resolution": "derived"},
+        },
+        "\n".join(lines),
+    )
+
+
+@name_app.command("claim")
+def name_claim(
+    name: str,
+    target: Annotated[
+        str, typer.Option("--target", help="host/owner/repo[/path]: what the name points at.")
+    ],
+    description: Annotated[
+        str | None, typer.Option("--description", help="One line, copied onto link lines.")
+    ] = None,
+    version: Annotated[
+        list[str] | None,
+        typer.Option("--version", help="label=ref (repeatable); default: latest=<branch>."),
+    ] = None,
+    default: Annotated[
+        str | None, typer.Option("--default", help="The label the short form resolves to.")
+    ] = None,
+    transfer: Annotated[
+        bool,
+        typer.Option("--transfer", help="Take over another owner's name (a PR they approve)."),
+    ] = False,
+    no_pr: Annotated[
+        bool,
+        typer.Option("--no-pr", help="Write names/<name>.toml into the clone; no pull request."),
+    ] = False,
+    registry: RegistryOpt = None,
+    json_: JsonOpt = False,
+) -> None:  # fmt: skip
+    """Claim a name for a target that declares it in its cttp.toml (spec §8: proof of control).
+
+    Writes names/<name>.toml and opens a pull request against the registry repository with `gh`
+    (the entry is committed on a claim/<name> branch in a temporary worktree; the clone's checkout
+    is untouched). With --no-pr the file is written into the clone for you to commit.
+    """
+    want_json(json_)
+    from cttp.registry import claim as _claim
+
+    versions: dict[str, str] = {}
+    for item in version or []:
+        label, sep, ref = item.partition("=")
+        if not sep or not label or not ref:
+            fail(f"--version takes label=ref, not {item!r}")
+        versions[label] = ref
+    try:
+        c = _claim(
+            name, target, open_registries(registry), description, default, versions or None,
+            transfer=transfer, pr=not no_pr,
+        )  # fmt: skip
+    except ERRORS as e:
+        fail(str(e))
+    head = f"{c.action} {c.entry.name} -> {c.entry.target}  owner={c.entry.owner}"
+    if c.previous_owner and c.previous_owner != c.entry.owner:
+        head += f"  (was {c.previous_owner})"
+    lines = [
+        head,
+        f"declared in {c.declaration.file} at {c.declaration.branch} "
+        f"({c.declaration.sha[:12]}) of {c.declaration.locator}",
+    ]
+    lines += [f"  {k.check}: {k.detail}" for k in c.checks]
+    if c.written_to:
+        lines.append(f"wrote {c.written_to}:")
+        lines += [f"  {line}" for line in c.text.rstrip("\n").split("\n")]
+        lines.append("commit it to the registry repository, or open a pull request")
+    else:
+        lines.append(f"pushed {c.branch}; pull request: {c.pr}")
+    emit(c.to_json(), "\n".join(lines))
 
 
 # --- the MCP server (spec §9) ------------------------------------------------------------------

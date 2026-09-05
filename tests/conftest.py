@@ -41,6 +41,7 @@ def config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """
     monkeypatch.setenv("CTTP_HOME", str(tmp_path / "cache"))
     monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))  # never the real index
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")  # git itself may only read local paths
     monkeypatch.delenv("CTTP_REGISTRY", raising=False)
     reg = create_local_registry(tmp_path / "registry", FIXTURES / "registry")
     thermo = git_repo_from(tmp_path / "thermo", FIXTURES / "thermo", "thermo package")
