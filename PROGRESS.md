@@ -4,8 +4,9 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: STAGE 3 — PHASE 0 UNDER WAY. P0-T1 (THE SPIKE) IS DONE: HELLO WORLD RUNS END TO END.**
-On 2026-09-04 Leo confirmed the spec and agreed the plan; the spike was built the same evening.
+**Status: STAGE 3 — PHASE 0 UNDER WAY. P0-T1 (THE SPIKE) AND P0-T2 (THE PUBLIC REGISTRY) ARE DONE.**
+On 2026-09-04 Leo confirmed the spec and agreed the plan; the spike was built the same evening, and
+the public registry repository `github.com/leorinaldi/cttp-registry` was published and tagged `v1`.
 `cttp serve` answers on 3120, `cttp expand` turns `# cttp: hello-world` into a stamped line plus
 `print("hello world!")`, plain `python3 -I` runs it, `cttp run hello-world` runs it with no file,
 and `cttp check` passes and then catches drift. 21 tests green, ruff clean.
@@ -19,13 +20,13 @@ _Last updated: 2026-09-04._
 
 ## Next session — suggested next steps
 
-**Start here: P0-T2 — create the public registry repository `github.com/leorinaldi/cttp-registry`.**
-Read its entry in [`docs/plan.md`](docs/plan.md) in full. Its contents are already written and
-committed here under `tests/fixtures/registry/` (that is exactly what the spike serves locally);
-the task is to publish them, tag `v1`, and verify an anonymous clone. **Ask Leo before creating
-it — it is public.** After that: P0-T3 (config file, `[remotes]`, proper resolver), P0-T4 (HTTP
-registry backend), P0-T5 (acceptance test 4 as a full test suite with first-run confirmation),
-then **write `docs/overview.md` (Stage 4)** before Phase 1.
+**Start here: P0-T3 — resolve a name, properly.** Read its entry in
+[`docs/plan.md`](docs/plan.md) in full: the XDG config file, `[remotes]`, and a resolver that
+reaches any locator rather than only the registry repo's own. The public registry now exists
+(`github.com/leorinaldi/cttp-registry`, tag `v1`), so T3 can resolve `hello-world` from the real
+remote instead of the local fixture. After that: P0-T4 (HTTP registry backend), P0-T5 (acceptance
+test 4 as a full test suite with first-run confirmation), then **write `docs/overview.md`
+(Stage 4)** before Phase 1.
 
 If Leo wants to play with the spike first, the demo is in **How to run** below.
 
@@ -71,6 +72,9 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
 
 **Environment**
 - Git on `main`, remote `origin` → `github.com/leorinaldi/cttp` (**private**).
+- **Registry repo:** `github.com/leorinaldi/cttp-registry` (**public**), first commit tagged `v1`,
+  contents identical to `tests/fixtures/registry/` (verified by anonymous clone, 2026-09-04). The
+  README links to spec §8 in this private repo — a dead link for the public until cttp is opened.
 - `uv` 0.12.10 installed at `~/.local/bin/uv` (2026-09-04). Python 3.12.3 system interpreter at
   `/usr/bin/python3` has no cttp, which the tests rely on.
 - Domain `cttp.ai` registered by Leo; nothing points at it yet.
@@ -91,6 +95,8 @@ trigger that would schedule it.
 - Name collision check on PyPI and npm before the first package is published → **unscheduled**;
   trigger: deciding to publish `cttp` to PyPI (not in the plan)
 - Point `cttp.ai` at the static export → **P7-T3**
+- The registry README links to spec §8 in the private `cttp` repo → **unscheduled**; trigger:
+  making `cttp` public, or publishing the spec on `cttp.ai` (P7-T3), whichever first
 - Editor extension that folds cttp blocks on open and shows a link's page on hover →
   **unscheduled**; trigger: first real use of expanded files by a person in an editor
 - Starlette warns that `httpx` with its test client is deprecated in favour of `httpx2` →
@@ -101,6 +107,12 @@ trigger that would schedule it.
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-04 (fifth session) — P0-T2: the public registry repository.** Created
+  `github.com/leorinaldi/cttp-registry` (public) from `tests/fixtures/registry/`, one commit
+  tagged `v1`, and ran the acceptance check: anonymous clone from a credential-free shell, files
+  identical to the fixture, `git tag` lists `v1`. The only content change was the README gaining
+  the link to spec §8 the plan asked for; the fixture was updated to stay identical. Leo also
+  asked how to see a file both expanded and folded; `cttp fold` is P3-T4 and was left there.
 - **2026-09-04 (fourth session) — Spec confirmed; plan written and agreed; P0-T1 spike built.**
   Leo confirmed the spec as written. The plan was drafted (nine phases, 32 tasks, decisions the
   spec delegated: public registry repo at `leorinaldi/cttp-registry`, 12-hex stamps, XDG config
