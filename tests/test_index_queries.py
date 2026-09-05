@@ -65,7 +65,8 @@ def test_who_lists_the_asserted_copy_and_the_derived_sibling(world, registry):
     copy, sibling = out["backlinks"]
     assert copy["relation"] == "is" and copy["origin"] == "asserted"
     assert copy["source"]["repo"] == consumer and copy["source"]["path"] == "main.py"
-    assert copy["source"]["symbol"] is None and copy["source"]["kind"] == "script"
+    assert copy["source"]["symbol"] == "deep" and copy["source"]["kind"] == "function"
+    assert copy["source"]["identity"] == copy["target_identity"]  # a verbatim copy
     assert copy["source"]["license"] == "MIT" and copy["line"] == 1
     assert copy["target"].startswith(f"{PYREPO}@") and copy["target"].endswith("/lib.py#deep")
     assert sibling["relation"] == "ref" and sibling["origin"] == "derived"

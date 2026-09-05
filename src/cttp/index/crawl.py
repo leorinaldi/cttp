@@ -243,13 +243,16 @@ class _Writer:
         ids = {None: self.page(path, None, whole)}
         for sym, page in defs:
             ids[sym] = self.page(path, sym, page)
-        # every asserted link in the file, against the innermost page holding its line
-        spans = sorted(
-            ((p.span[1] - p.span[0], p.span[0], p.span[1], s) for s, p in defs),
-        )
+        # every asserted link in the file: its source is the definition its block is (the
+        # block begins right after the link's stack — spec §4), else the innermost definition
+        # holding the link line, else the file itself
+        spans = sorted((p.span[1] - p.span[0], p.span[0], p.span[1], s) for s, p in defs)
+        starts = {p.span[0]: s for s, p in defs}
         for k in whole.links:
             line = k.line + 1
-            owner = next((s for _, a, b, s in spans if a <= line <= b), None)
+            owner = starts.get(k.start + 1)
+            if owner is None:
+                owner = next((s for _, a, b, s in spans if a <= line <= b), None)
             self.link(ids[owner], path, line, k)
         for sym, page in ((None, whole), *defs):
             for r in page.refs:

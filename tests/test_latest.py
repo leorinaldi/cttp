@@ -32,7 +32,8 @@ def test_an_edit_is_found_at_the_same_path_with_a_changed_identity(registry, tmp
     assert found.to.source == V2 and found.to.identity != found.pinned.identity
     assert found.pinned.address == pinned
     j = found.to_json()
-    assert j["origin"] == {"rule": "derived", "head": "derived"} and j["to"]["source"] == V2
+    assert j["origin"] == {"rule": "derived", "head": "derived", "via": "derived"}
+    assert j["to"]["source"] == V2 and j["via"] is None
     # nothing changed: rule 1 still, unchanged
     again = latest(found.to.address, registry)
     assert again.rule == "same-path" and again.changed is False and "unchanged" in again.message

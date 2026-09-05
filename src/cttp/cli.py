@@ -92,6 +92,7 @@ def resolve(
             help="Follow a pinned address forward to the repository's head; exit 1 when not found.",
         ),
     ] = False,
+    index: IndexOpt = None,
     json_: JsonOpt = False,
 ) -> None:
     """Resolve an address to the page it names."""
@@ -99,7 +100,7 @@ def resolve(
     from cttp.resolve import resolve as _resolve
 
     if latest:
-        return _resolve_latest(address, registry)
+        return _resolve_latest(address, registry, index)
     try:
         r = _resolve(address, open_registries(registry), expect=id_)
     except ERRORS as e:
@@ -116,17 +117,19 @@ def resolve(
     emit(r.to_json(), f"{head}\n{r.source}".rstrip())
 
 
-def _resolve_latest(address: str, registry: Path | None) -> None:
+def _resolve_latest(address: str, registry: Path | None, index: Path | None) -> None:
     from cttp.resolve import latest as _latest
 
     try:
-        found = _latest(address, open_registries(registry))
+        found = _latest(address, open_registries(registry), index)
     except ERRORS as e:
         fail(str(e))
     lines = [f"{found.pinned.address}  {found.pinned.identity}"]
     if found.to:
         lines.append(
-            f"-> {found.to.address}  {found.to.identity}  rule={found.rule}  {found.message}"
+            f"-> {found.to.address}  {found.to.identity}  rule={found.rule}"
+            + (f" via {found.via}" if found.via else "")
+            + f"  {found.message}"
         )
         lines += [
             "",

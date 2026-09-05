@@ -733,12 +733,17 @@ def history(conn: sqlite3.Connection, text: str, registries=None) -> dict:
 
 
 def rank(conn: sqlite3.Connection, limit: int = 20) -> dict:
-    """Pages by how many distinct pages link to them (any relation, any crawled revision)."""
+    """Pages by how many distinct pages link to them — a page being a (identity, repository,
+    file), so a verbatim copy that links back to its original counts, at any relation and any
+    crawled revision. A definition's derived reference to itself (recursion) does not."""
+    where = (
+        "target_identity IS NOT NULL "
+        "AND NOT (origin = 'derived' AND target_identity = source_identity)"
+    )
     rows = conn.execute(
-        "SELECT target_identity AS identity, relation, origin, "
-        "count(DISTINCT source_identity) AS n FROM links "
-        "WHERE target_identity IS NOT NULL AND target_identity != source_identity "
-        "GROUP BY target_identity, relation, origin"
+        f"SELECT target_identity AS identity, relation, origin, "
+        f"count(DISTINCT source_identity || ' ' || repo || ' ' || file) AS n FROM links "
+        f"WHERE {where} GROUP BY target_identity, relation, origin"
     ).fetchall()
     totals: dict[str, dict] = {}
     for r in rows:
@@ -746,8 +751,8 @@ def rank(conn: sqlite3.Connection, limit: int = 20) -> dict:
         t["by"].setdefault(r["relation"], {})[r["origin"]] = r["n"]
     for ident, t in totals.items():
         t["n"] = conn.execute(
-            "SELECT count(DISTINCT source_identity) FROM links WHERE target_identity = ? "
-            "AND target_identity != source_identity",
+            f"SELECT count(DISTINCT source_identity || ' ' || repo || ' ' || file) FROM links "
+            f"WHERE target_identity = ? AND {where}",
             (ident,),
         ).fetchone()[0]
     ranked = sorted(totals.items(), key=lambda kv: (-kv[1]["n"], kv[0]))[:limit]
@@ -768,3 +773,42 @@ def rank(conn: sqlite3.Connection, limit: int = 20) -> dict:
             }
         )
     return {"ranked": out, "count": len(out), "origin": {"backlinks": "derived", "rank": "derived"}}
+
+
+# --- `--latest`, rule 3 -----------------------------------------------------------------------
+
+
+def forward(conn: sqlite3.Connection, pinned, a) -> tuple[str, dict, str] | None:
+    """Where a pinned page (a `Resolved`, parsed as `a`) is now, as far as the index knows, once
+    the repository's head has been searched: the same identity at another repository's current
+    revision (`same-identity`), else the page beneath an `is` or `from` link back to the address
+    (`backlink`), the `is` links first, then the most recent commit. Returns (rule, location,
+    how) or None."""
+    from cttp.registry import split_target
+
+    locator, _ = split_target(pinned.target)
+    place = (locator, pinned.path, pinned.symbol)
+    for x in reversed(locations_of(conn, pinned.identity_full, current=True)):
+        if x["repo"] != locator:
+            x = {**x, "identity": pinned.identity_full}
+            return "same-identity", x, f"the same identity is at {x['address']} (from the index)"
+    rows = conn.execute(
+        "SELECT k.* FROM links k JOIN revisions v ON v.repo = k.repo AND v.sha = k.sha "
+        "WHERE k.relation IN ('is', 'from') AND (k.target_identity = ? "
+        "OR (k.target_identity IS NULL AND ((k.target_form = 'locator' "
+        "AND k.target_locator = ? AND k.target_path = ? AND k.target_symbol IS ?) "
+        "OR (k.target_form = 'name' AND k.target_name = ? AND k.target_symbol IS ?)))) "
+        "ORDER BY CASE k.relation WHEN 'is' THEN 0 ELSE 1 END, v.committed_at DESC, v.rowid DESC",
+        (pinned.identity_full, *place, a.name, a.symbol),
+    ).fetchall()
+    for r in rows:
+        src = _source_location(conn, r["source_identity"], r["repo"], r["sha"], r["file"])
+        if src is None or (src["repo"], src["path"], src["symbol"]) == place:
+            continue
+        src = {**src, "identity": r["source_identity"]}
+        return (
+            "backlink",
+            src,
+            f"{src['address']} links back to it with `{r['relation']}` (from the index)",
+        )
+    return None

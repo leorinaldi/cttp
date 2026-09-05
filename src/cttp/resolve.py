@@ -9,10 +9,12 @@ resolved is stored in the object cache on the way out.
 
 `latest()` is the forward direction: from a pinned address, the same definition at the
 repository's current head — same path and symbol (rule 1), else the same identity anywhere at
-head (rule 2). Rule 3, across repositories through the index, is Phase 4.
+head (rule 2), else through the index: the same identity in any crawled repository, or a page
+anywhere crawled carrying a `# cttp:` or `# cttp-from:` link back to the address (rule 3).
 """
 
 from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
 
 from cttp import gitcache, objects
 from cttp.address import Address, parse
@@ -343,10 +345,11 @@ class Latest:
     pinned: Resolved
     head: str  # the full SHA of the head that was searched
     found: bool
-    rule: str | None  # "same-path" | "same-identity" | None — derived
+    rule: str | None  # "same-path" | "same-identity" | "backlink" | None — derived
     to: Resolved | None
     changed: bool | None  # the identity differs from the pinned one (rule 1 only)
     message: str
+    via: str | None = None  # "index" when the index found it, in another repository
 
     def to_json(self) -> dict:
         return {
@@ -354,20 +357,23 @@ class Latest:
             "head": self.head,
             "found": self.found,
             "rule": self.rule,
+            "via": self.via,
             "to": self.to.to_json() if self.to else None,
             "changed": self.changed,
             "message": self.message,
-            "origin": {"rule": "derived", "head": "derived"},
+            "origin": {"rule": "derived", "head": "derived", "via": "derived"},
         }
 
 
-def latest(text: str, registries: Registries) -> Latest:
+def latest(text: str, registries: Registries, index: Path | None = None) -> Latest:
     """Spec §5's `--latest`: follow a pinned address forward to the repository's current head.
 
     A name goes to the ref its registry entry calls default; a locator to the repository's
     default branch. Rule 1: the same path and symbol still exist there (the identity may have
     changed — a normal edit). Rule 2: the same identity is somewhere else at head (a move within
-    the repository). Neither: rule 3 needs the index.
+    the repository). Neither: the index (`index`, default the global one) — the same identity
+    at another crawled repository's current revision, else a page anywhere crawled that links
+    back here with `is` or `from` (rule 3: a move across repositories, or a fork).
     """
     a = parse(text)
     if not a.is_pinned or a.form == "identity":
@@ -419,12 +425,40 @@ def latest(text: str, registries: Registries) -> Latest:
             f"{found_path}{'#' + found_symbol if found_symbol else ''}",
         )  # fmt: skip
 
-    return Latest(
-        pinned, head, False, None, None, None,
-        f"{path}{'#' + a.symbol if a.symbol else ''} is not at {locator}@{short(head)} by path "
-        "or by identity; rule 3 (a move across repositories, or a fork) needs the index, which "
-        "arrives in Phase 4",
-    )  # fmt: skip
+    where = f"{path}{'#' + a.symbol if a.symbol else ''}"
+    not_here = f"{where} is not at {locator}@{short(head)} by path or by identity"
+    from cttp.index.queries import forward
+    from cttp.index.schema import default_index_path, open_index
+
+    index_path = index or default_index_path()
+    if not index_path.exists():
+        return Latest(
+            pinned, head, False, None, None, None,
+            f"{not_here}; there is no index at {index_path} to ask (rule 3: a move across "
+            "repositories, or a fork): `cttp index add <repo>` and `cttp index crawl`",
+        )  # fmt: skip
+    hit = forward(open_index(index_path, create=False), pinned, a)
+    if hit is None:
+        return Latest(
+            pinned, head, False, None, None, None,
+            f"{not_here}; the index at {index_path} has it nowhere else and nothing crawled "
+            "links back to it",
+        )  # fmt: skip
+    rule, at, how = hit
+    try:
+        to = resolve(at["address"], registries)
+    except ResolveError:
+        to = Resolved.from_json(page_json_at(index_path, at), at["registry"] or "")
+    return Latest(pinned, head, True, rule, to, False, f"{not_here}; {how}", via="index")
+
+
+def page_json_at(index_path: Path, at: dict) -> dict:
+    """The index's own object for a location, when its repository cannot be reached."""
+    from cttp.index.queries import definition, page_json
+    from cttp.index.schema import open_index
+
+    conn = open_index(index_path, create=False)
+    return page_json(conn, definition(conn, at["identity"]), at)
 
 
 def _page_at(repo, sha: str, locator: str, path: str, symbol: str | None) -> Page:

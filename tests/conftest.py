@@ -133,3 +133,25 @@ def commit_to_remote(
     return subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=src, check=True, capture_output=True, text=True
     ).stdout.strip()
+
+
+def clone_remote(tmp_path: Path, name: str, into: str = "work") -> Path:
+    """A working clone of the bare remote `github.com/leorinaldi/<name>` at
+    tmp_path/<into>/<name>, its origin the bare repository — what `cttp index add <path>` reads."""
+    bare = tmp_path / "remotes" / LOCATOR_PREFIX / name
+    dest = tmp_path / into / name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "clone", "--quiet", str(bare), str(dest)], check=True)
+    return dest
+
+
+def commit_in(path: Path, message: str, push: bool = False) -> str:
+    """Commit everything in a working clone (and push to its origin when asked); the new SHA."""
+    git = ["git", "-c", "user.name=cttp", "-c", "user.email=cttp@localhost"]
+    subprocess.run([*git, "add", "-A"], cwd=path, check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-q", "-m", message], cwd=path, check=True)
+    if push:
+        subprocess.run(["git", "push", "-q", "origin", "HEAD"], cwd=path, check=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=path, check=True, capture_output=True, text=True
+    ).stdout.strip()

@@ -95,11 +95,7 @@ def test_crawl_counts_and_links(registry, index, consumer, tmp_path):
         and is_link["description"] == "def deep(x: int) -> int — The bottom of the chain."
     )
     assert is_link["derived"] == 1 and json.loads(is_link["fields"])["id"].startswith("sha256:")
-    main_page = conn.execute(
-        "SELECT identity FROM locations WHERE repo = ? AND path = 'main.py' AND symbol IS NULL",
-        (locator,),
-    ).fetchone()["identity"]
-    assert is_link["source_identity"] == main_page  # the link is the file's, not deep's
+    assert is_link["source_identity"] == deep.identity_full  # the copy of deep is the source
     see = links[("see", "asserted", "notes.py")]
     top = resolve(f"{PYREPO}@v1/lib.py#top", registry)
     assert see["target_identity"] == top.identity_full  # a pinned locator the index has seen
