@@ -26,9 +26,12 @@ name through a registry, a locator through git, an identity from the object cach
 (`github.com/leorinaldi/cttp-registry`) or an HTTP server speaking the registry contract;
 identity and shape hashes; a Python extractor that is exact (`ast`) and derives references; the
 three link markers in any comment syntax, with the block beneath a link defined; a license
-matcher; `resolve --latest` following a pinned address to the repository's head; `expand`,
-`check` and `run` over one link at a time; and a viewer on port 3120. Closure expansion, `fold`,
-`update`, the index and the benchmark are still ahead — [`plan.md`](plan.md) lays out the phases.
+matcher; `resolve --latest` following a pinned address to the repository's head; the
+**materializer in full** — the closure of a page, expansion with the closure beneath the link
+(dependencies above, imports hoisted, each beneath its own stamp), `add`, `check --fix`,
+`update`, `fold`, `run` confirming every page, and `expand --package` as the vendored fallback;
+and a viewer on port 3120. The index, the viewer over it, the MCP server, other languages and
+the benchmark are still ahead — [`plan.md`](plan.md) lays out the phases.
 
 ## 2. Architecture
 
@@ -69,11 +72,13 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   seen at. An identity address is answered from here; the index (Phase 4) is the second place
   to ask, and its hook says "not indexed" until it exists.
 - **Extractor** (`extract/`) — `extract(path, source, symbol, files)` turns a file at a rev,
-  or one definition of it, into a `Page`: kind, language, normalized source, span, and for a
+  or one definition of it, into a `Page`: kind, language, **its own text** (§4), span, and for a
   definition its symbol, signature, first docstring paragraph, **derived references** (`Ref`s
-  to files and definitions in the same repository, resolved against the rev's file list) and
-  the stdlib / third-party modules it needs. The Python extractor is exact, via `ast`; any other
-  file is a `text` script page with no shape and no references.
+  to files and definitions in the same repository, resolved against the rev's file list, each
+  with the `name` the page reaches it by), the stdlib / third-party modules it needs and the
+  **import statements** that bind them, its **free names** (`unresolved`), and the **link
+  lines** found in its text (`links`, asserted). The Python extractor is exact, via `ast`; any
+  other file is a `text` script page with no shape and no references.
 - **Resolver** (`resolve.py`) — address → `Resolved`: pinned address (symbol kept), full rev,
   identity, shape, kind, symbol, signature, docstring, span, source, description, license,
   target, refs (as pinned locator addresses at the same rev, `origin: derived`), imports, and
@@ -84,17 +89,38 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   candidates. `resolve(…, expect=id)` raises `Mismatch` with both hashes when the page's identity
   is not the one a link claims. `latest()` follows a pinned address forward — rule 1 same path
   and symbol, rule 2 same identity anywhere at head, and a plain "rule 3 needs the index".
-- **Materializer** (`expand.py`) — `expand` (write source beneath the link's stack, then a blank
-  line so the block is delimited; derive a `~"…"` description when the registry has none),
+  `Resolved` also carries the page's `links`, `unresolved` names, `refs[].name` and
+  `imports.statements`; `from_json` defaults the fields newer than the first contract.
+- **Closure** (`closure.py`) — `closure(address)` → `Closure`: the pages a page needs to run
+  inline, dependencies before dependents, root last. A depth-first walk through the page's
+  inner `is` links (asserted; a stamped one is checked against its `id=`) and its derived refs,
+  each resolved in its own repository at the pinned rev. It **refuses** — `ClosureError`, naming
+  the page and the cause — anything it cannot inline honestly: a reference reached through a
+  module or an alias (inlining binds a definition only by its own name), a module used as a
+  whole, a free name nothing in the closure binds, a link nested inside a definition, two pages
+  binding one name, and a closure over budget (50 definitions / 2,000 lines) with the
+  `--package` suggestion. It also decides each stamp's description: the entry's (asserted) or
+  one derived from signature and docstring (`~"…"`).
+- **Materializer** (`expand.py`) — `expand` writes a link's closure: the import statements the
+  pages need (once per file) and each dependency beneath its own stamp go **above the link's
+  stack**; the root's stamp keeps the person's fields and description; the root's own text goes
+  beneath, then a blank line so the block is delimited. `add` writes the link and expands.
   `check` (`is` links: stamped? block hashes to its id? origin page hashes to it too — else
-  `mismatch`? `from` and `see` links: resolvable only), `run` (materialize into a run cache and
-  execute with the host interpreter).
+  `mismatch`? `from` and `see` links: resolvable only; `--fix` turns a drifted `is` into `from`).
+  `update` plans first — `--latest` or `--to <rev>`, a unified diff — and rewrites stamp, block
+  and missing dependencies on confirmation; a `from` link is only shown its upstream diff.
+  `fold` is a view: stamped blocks collapsed to their link lines. `run` materializes into a run
+  cache after confirming the whole closure. `--package` writes the closure into
+  `cttp_vendor/<module>.py`, stamps the user's link with `vendor=<path>` and puts an import
+  beneath it; `check` follows `vendor=` into the module.
 - **Server** (`server/app.py`) — FastAPI on **3120**, Jinja2 templates. Serves the contract
   (`/<name>.json`, `/<name>@<version>.json`) and the human pages (`/`, `/<name>`) over the
   configured **local** registries only.
-- **CLI** (`cli.py`) — Typer. `cttp --version | config | resolve [--id] [--latest] | serve |
-  expand | check | run | cache status | cache clear`. Every subcommand takes `--json`, before or
-  after the subcommand name.
+- **CLI** (`cli.py`) — Typer. `cttp --version | config | resolve [--id] [--latest] | closure |
+  serve | expand [--package] [--write-deps] | add [--at] | check [--fix] | update [--all] [--to]
+  [--yes] | fold [--open] | run [--yes] | cache status | cache clear`. Every subcommand takes
+  `--json`, before or after the subcommand name. Prompts (`run`, `update`) go through
+  `_interactive()`, which tests patch; without a terminal they decline and exit 2.
 
 Data an address needs lives in three places on disk, all of them derivable:
 
@@ -111,10 +137,11 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `src/cttp/` | the package; see §2 | authored |
 | `src/cttp/extract/` | `__init__.py` (`Page`, `Ref`, `extract()` dispatch by suffix), `python.py` (the `ast` extractor) | authored |
 | `src/cttp/server/templates/` | `base.html`, `index.html`, `name.html` | authored |
-| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_expand`, `_check`, `_run`, `_server`, `_cli`); `conftest.py` builds the offline world and forbids sockets | authored |
+| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`); `conftest.py` builds the offline world and forbids sockets | authored |
 | `tests/fixtures/registry/` | the registry repository's contents — **identical to the public repo at `v1`**; keep them in sync | authored |
 | `tests/fixtures/hello/hello.py` | one line, `# cttp: hello-world` | authored |
 | `tests/fixtures/thermo/` | a fake sensor package (`src/thermo/{__init__,decode,lm75}.py`) with every definition kind the extractor must handle; served in tests as `github.com/leorinaldi/thermo` | authored |
+| `tests/fixtures/pyrepo/` | the closure fixture: `lib.py` (siblings in a chain, a `requests` import, a stdlib import, a missing name, mutual recursion) and `many.py` (51 tiny definitions, over budget); served as `github.com/leorinaldi/pyrepo` | authored |
 | `docs/` | vision, spec, plan, this file; excluded from ruff | authored |
 | `scripts/make_local_registry.py` | builds an offline registry repo from the fixture | authored |
 | `bench/drivers/corpus/`, `bench/drivers/lm75-teardown/` | the benchmark corpus (736 Linux driver `.c` files) and the LM75 teardown; fetched by script, never committed | gitignored |
@@ -134,6 +161,26 @@ links to spec §8 in this private repo.
 - **Identity hashes the definition's own source, nothing it references.** So an address is
   computable from one file offline, and `check` needs no network to detect drift. The shape is
   derived metadata beside it, never part of an address.
+- **A page's `source` is its own text.** A link line inside a page is a reference, not code —
+  and a link line always ends a block — so the extractor takes every link line out of a script
+  page's text, and beneath a stamped `is` link the block and its separator too, and reports them
+  as the page's asserted `links`. What remains is what the identity hashes and what `expand`
+  writes beneath the stamp; that is why the spec §7 example (`# cttp: greet` above
+  `print(greet("world"))`) expands to two blocks that both check clean. A definition's text is
+  its span, verbatim; a definition with a link inside it cannot be expanded and the closure says
+  so. Pages without links are untouched, so no identity moved.
+- **Inline expansion binds a definition only by its own name.** A page may reach a dependency
+  as `REG_BITS`, as a from-import of `reg_to_millicelsius`, or as `LM75.read_temp` through its
+  class (the closure lifts the reference to `LM75`); reaching it as `decode.STEP_MILLICELSIUS`
+  or through `as r2m` cannot be satisfied by inlining, and the closure refuses rather than write
+  a file that would not run. `Ref.name` records how each reference is reached so this can be
+  decided. Free names are checked the same way: whatever the page uses must be bound by a
+  dependency, an import statement, a builtin or the page itself.
+- **A definition's outside imports travel as statements.** The extractor keeps the module-level
+  `import struct` / `from asyncio import sleep` that bind the names a definition uses;
+  expansion hoists them once, above everything it writes. Scripts keep their imports in their
+  own text. Third-party packages are reported as `requires` and written into `pyproject.toml`
+  only with `--write-deps`.
 - **A definition's references are the names it uses; a script's are every import it makes.**
   Reference resolution is static and repository-local: an import or attribute chain becomes a
   `Ref` only when the longest module prefix names a file at that rev; anything else is a
@@ -153,7 +200,13 @@ links to spec §8 in this private repo.
 - **The identity includes the name.** A renamed definition is a new identity; only its shape
   survives a rename. `--latest` therefore finds edits and moves, not renames.
 - **No lockfile.** The document alone says what runs — web subresource-integrity, not pip. A link
-  moves only when asked (`track=latest` and `cttp update` are in the plan, not yet built).
+  moves only when asked: `cttp update` selects `track=latest` links (or all, under a project
+  `cttp.toml` with `track = "latest"`, or named ones, or `--all`), shows the diff, and rewrites
+  on confirmation. A `from` link is never rewritten.
+- **`vendor=<path>` marks a link expanded with `--package`.** The block beneath it is an import;
+  the page's code lives in `cttp_vendor/<module>.py` beneath the same stamped links, and `check`
+  follows the field there. The module is written next to the user's file so a plain
+  `python main.py` finds it.
 - **Derived versus asserted.** `rev`, `identity`, `license` are derived by the tool from the
   repository; `description` is asserted by the entry's author. `to_json()` says which is which
   under `origin`, and the viewer tags them.
@@ -202,7 +255,21 @@ links to spec §8 in this private repo.
 - **location** — one place a page was seen: a pinned locator address plus name, registry,
   description, license and when. The object cache keeps every location per identity.
 - **rule** — which of spec §5's `--latest` rules found a definition at head: `same-path`,
-  `same-identity`, or none (rule 3 needs the index). Derived metadata.
+  `same-identity`, or none (rule 3 needs the index); `to` when `update --to <rev>` chose the
+  rev. Derived metadata.
+- **closure** — the pages a page needs to run inline, in dependency order, root last; each is a
+  **node** with the page, its stamp description, `via` (`root` / `link` / `ref`), `needs` and
+  `defines`. `cttp closure` prints it; `expand` writes it.
+- **own text** — a page's source with its link lines (and stamped `is` blocks) taken out; what
+  the identity hashes. **inner link** — a link line found in a page's text: an `is` one is a
+  dependency, a `from`/`see` one is hoisted into the stack when the page is expanded.
+- **free name** — a name a page uses that nothing in it binds: not local, not imported, not a
+  sibling definition, not a builtin. Reported as `unresolved`; the closure must bind each one.
+- **vendored** — expanded with `--package`: the closure in `cttp_vendor/<module>.py`, an import
+  beneath the link, `vendor=` on the stamp.
+- **fixed** — a drifted `is` link that `check --fix` turned into a `from` link.
+- **upstream** — `update`'s answer for a `from` link: the diff between the pinned page and its
+  head, shown and not applied.
 - **derived / asserted** — computed by the tool from the repository versus stated by a person.
 
 ## 6. Invariants — never violate
@@ -237,8 +304,21 @@ links to spec §8 in this private repo.
   listing route; an HTTP registry only answers `fetch()`. `Registries.lookup()` skips HTTP
   registries on purpose.
 - **A declined `run` leaves nothing in the run cache.** The cache entry is the confirmation marker.
-- **`expand` refuses a page that itself contains `# cttp:` lines.** Closure expansion is P3-T1;
-  until then the refusal is correct behaviour, not a bug.
+- **The closure refuses rather than guesses.** A reference through a module or an alias, a
+  whole-module use, a free name nothing binds, a link inside a definition, a name clash, an
+  over-budget closure — each stops `expand` with a message saying what to do. Writing a file
+  that would not run is the bug; the refusal is the feature.
+- **Two `is` links in one stack are refused.** They would share one block, which can hold one
+  page. Separate them with a blank line.
+- **A dependency already stamped above in the file is not written again.** Expanding a second
+  link that needs `deep` when `deep` is already expanded above reuses it (by identity).
+- **`update` never rewrites a `from` link, and skips drifted and unexpanded ones.** It shows the
+  upstream diff, or says `check --fix` / `expand` first.
+- **`fold` folds `from` blocks too.** Any stamped block collapses; `--open` shows one.
+- **An empty `description = ""` in a registry entry is no description.** A derived `~"…"` one is
+  written instead; the stamp never carries `""`.
+- **A script page without a signature gets no derived description.** `# cttp: hello-world@… id=…`
+  with nothing after it is complete — that is what spec §7's example shows.
 - **A non-Python file resolves with `shape: null` and `language: "text"`.** Not an error: only
   Python has an extractor today. Asking for a `#symbol` in such a file is the error.
 - **LGPL, AGPL and Unlicense files give `license: null`.** The matcher knows nine ids (the
@@ -270,6 +350,12 @@ links to spec §8 in this private repo.
   command — otherwise the shell dies (exit 144) and the server survives.
 - **Port 3120 is usually already up.** Leo leaves the server running between sessions. Probe
   before starting; a second `cttp serve` fails to bind.
+- **Code appended right after an expanded block without a blank line becomes part of the
+  block.** `echo 'print(top(3))' >> main.py` after `cttp add` makes `check` report drift on
+  `top` — correctly, by the block rule. Leave a blank line (or use `add --at`).
+- **`python3 -I` implies `-P` since 3.11**: the script's directory is not on `sys.path`, so a
+  `cttp_vendor` import — like any local package — fails under it. `-E -s` still runs with no
+  environment and no user site; `test_package.py` uses that. Plain `python main.py` works.
 - **The system `python3` has no cttp**, and the tests rely on that: `/usr/bin/python3 -I` is how
   the no-runtime rule is checked. Do not install cttp system-wide.
 - **`uv` is at `~/.local/bin/uv`**, not on the default `PATH`; export it first.
@@ -296,6 +382,8 @@ curl -s localhost:3120/hello-world.json        # the contract; /hello-world is t
 uv run cttp resolve hello-world --json
 uv run cttp resolve sha256:75a27070015e   # from the object cache, once resolved by name
 uv run cttp cache status                  # what ~/.cache/cttp holds
+uv run cttp closure <address>             # what expand would write, dependencies first
+uv run cttp add <address> main.py         # link + expansion; then fold / check / update main.py
 ```
 
 Site: **http://localhost:3120** — the viewer and the registry contract, nothing else. The product
