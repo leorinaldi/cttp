@@ -102,7 +102,7 @@ errors should be read as *did not converge*, not as a gap in the data.
 
 ## What the number does not mean
 
-Six things a reader should hold against any ratio in the table.
+Seven things a reader should hold against any ratio in the table.
 
 1. **Both arms run inside Claude Code.** The comparison is between tool sets under Claude Code's
    system prompt and agent loop, not between "an agent with cttp" and "an agent without" in
@@ -128,7 +128,21 @@ Six things a reader should hold against any ratio in the table.
    tool availability rather than the work. So a correct pinned address passes in either arm, and
    how often each arm wrote a full stamp is *reported* rather than graded — see the stamps table.
 
-6. **The impact grader is the extractor's notion of a use.** `cttp who` is the derived reference
+6. **The impact grader's naming convention quietly favours the links arm.** The prompt asks for
+   "the innermost definition containing the use". `cttp who` cannot address a nested function —
+   nested definitions are outside the address grammar — so it attributes such a use to the
+   *enclosing addressable* definition, and the reference answer is generated from `who`. An agent
+   reading the raw source instead names the nested function, which is the more literal reading of
+   the prompt and is marked wrong. The links arm sees `who`'s output and inherits the grader's
+   convention for free; the baseline has to guess it. This is not hypothetical: every baseline
+   impact failure recorded so far is of exactly this form, entries like `Class.method.nested`
+   where the reference wanted `Class.method`, and under a folded comparison the baseline's impact
+   score is clean. The report therefore prints **both** — see *Impact grading: strict and
+   folded*, where folding walks an unmatched answer up its dotted name until it meets the
+   expected set. The sweep was already running under the strict rule, so the grader was not
+   changed mid-measurement; the folded column is the one to believe.
+
+7. **The impact grader is the extractor's notion of a use.** `cttp who` is the derived reference
    graph of `extract/python.py`: a use inside a nested function is attributed to the enclosing
    addressable definition, a name reached through a re-export is not a backlink, and in a `src/`
    layout the tests' absolute imports do not resolve into `src/`, so click's and attrs' tests are

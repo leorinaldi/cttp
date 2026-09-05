@@ -1,0 +1,474 @@
+{
+  "schema": 1,
+  "task": "ir-choice-metavar-click",
+  "family": "in-repo",
+  "arm": "links",
+  "run": 1,
+  "system_prompt": "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the cttp MCP tools, not the shell: `search` finds a definition by name or docstring, `resolve` returns one definition's text by address, `who` lists what links to a definition, `closure` what a definition needs to run, `fold` reads a file as its links, `dups` finds copies. The shell's file readers (grep, cat, find, ls, sed) are denied; `Read` reads a file whose path you already know.",
+  "status": "pass",
+  "passed": true,
+  "model": "opus",
+  "model_used": "claude-opus-5",
+  "claude_code_version": "2.1.261",
+  "max_turns": 40,
+  "tokens": 212990,
+  "usage": {
+    "input_tokens": 22,
+    "cache_creation_input_tokens": 27399,
+    "cache_read_input_tokens": 182964,
+    "output_tokens": 2605,
+    "output_tokens_details": {
+      "thinking_tokens": 889
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 27399,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 224,
+        "cache_read_input_tokens": 31543,
+        "cache_creation_input_tokens": 134,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 134
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "model_usage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 1127,
+      "outputTokens": 19,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001222,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-haiku-4-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    },
+    "claude-opus-5": {
+      "inputTokens": 22,
+      "outputTokens": 2605,
+      "cacheReadInputTokens": 182964,
+      "cacheCreationInputTokens": 27399,
+      "webSearchRequests": 0,
+      "costUSD": 0.430707,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "thinkingTokens": 889,
+      "canonicalModel": "claude-opus-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "stream_usage": {
+    "input_tokens": 22,
+    "cache_read_input_tokens": 182964,
+    "cache_creation_input_tokens": 27399
+  },
+  "requests": 11,
+  "total_cost_usd": 0.43192900000000006,
+  "num_turns": 15,
+  "duration_ms": 37478,
+  "duration_api_ms": 37611,
+  "wall_seconds": 38.501,
+  "returncode": 0,
+  "timed_out": false,
+  "subtype": "success",
+  "is_error": false,
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_012BusJ44gz7mvo3DGu7iZSV",
+      "tool_input": {
+        "command": "git log --oneline -1 && python -m pytest -q -o pythonpath=src tests/test_options.py -k \"choice\" 2>&1 | tail -30"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01TNDNetWpX9nyDn1CsQfwAA",
+      "tool_input": {
+        "command": "python - <<'EOF'\nimport re\ns=open('tests/test_options.py').read()\nfor m in re.finditer(r'(?m)^def (test_\\w*(?:choice|metavar)\\w*)', s):\n    print(m.start(), m.group(1), s[:m.start()].count('\\n')+1)\nEOF"
+      }
+    }
+  ],
+  "tool_counts": {
+    "mcp__cttp__search": 4,
+    "mcp__cttp__resolve": 3,
+    "mcp__cttp__who": 1,
+    "Bash": 3,
+    "mcp__cttp__fold": 1,
+    "Read": 1,
+    "Edit": 1
+  },
+  "tool_calls": [
+    {
+      "id": "toolu_019GvEWyrVTbvHuuJgsRCoiV",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "show_choices"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 2640
+    },
+    {
+      "id": "toolu_01CgTGknT4FirGRRYeg9P3xH",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "Choice get_metavar"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 669
+    },
+    {
+      "id": "toolu_01JxvFyBz4FrRLikpLQKcC86",
+      "name": "mcp__cttp__resolve",
+      "input": {
+        "address": "github.com/pallets/click@02046e7a1948/src/click/types.py#Choice.get_metavar"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 1409
+    },
+    {
+      "id": "toolu_01RZ2as27PxY64LycQV5yWn5",
+      "name": "mcp__cttp__who",
+      "input": {
+        "address": "github.com/pallets/click@02046e7a1948/src/click/types.py#Choice.get_metavar"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 401
+    },
+    {
+      "id": "toolu_015cuFUiKjrTBwCGgbtEaDz4",
+      "name": "mcp__cttp__resolve",
+      "input": {
+        "address": "github.com/pallets/click@02046e7a1948/src/click/types.py#Choice"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 5600
+    },
+    {
+      "id": "toolu_012BusJ44gz7mvo3DGu7iZSV",
+      "name": "Bash",
+      "input": {
+        "command": "git log --oneline -1 && python -m pytest -q -o pythonpath=src tests/test_options.py -k \"choice\" 2>&1 | tail -30"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 153
+    },
+    {
+      "id": "toolu_01B3NcsBwwp4s6MrnmEDkF8c",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "show_choices metavar type names",
+        "limit": 10
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 128
+    },
+    {
+      "id": "toolu_01L2rx9WCmyyPGJnKz1DcM5W",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "test_show_choices",
+        "limit": 10
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 114
+    },
+    {
+      "id": "toolu_01Y3CajiUeUHPemZRXkZozcQ",
+      "name": "mcp__cttp__fold",
+      "input": {
+        "file": "tests/test_options.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 57
+    },
+    {
+      "id": "toolu_01TNDNetWpX9nyDn1CsQfwAA",
+      "name": "Bash",
+      "input": {
+        "command": "python - <<'EOF'\nimport re\ns=open('tests/test_options.py').read()\nfor m in re.finditer(r'(?m)^def (test_\\w*(?:choice|metavar)\\w*)', s):\n    print(m.start(), m.group(1), s[:m.start()].count('\\n')+1)\nEOF"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_01Mfwnn9ZLXhLbKtpsdZ2Zg4",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-ir-choice-metavar-click-links-7j5bp0we/w/repo/tests/test_options.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 32458
+    },
+    {
+      "id": "toolu_019yoJjUG4fosvrqyfx3hR4u",
+      "name": "mcp__cttp__resolve",
+      "input": {
+        "address": "github.com/pallets/click@02046e7a1948/src/click/types.py#convert_type"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 3828
+    },
+    {
+      "id": "toolu_01E8ZQ2293bF3V6RuXBGRrfh",
+      "name": "Edit",
+      "input": {
+        "replace_all": false,
+        "file_path": "/tmp/cttp-bench-ir-choice-metavar-click-links-7j5bp0we/w/repo/src/click/types.py",
+        "old_string": "    def get_metavar(self, param: Parameter) -> str:\n        choices_str = \"|\".join(self.choices)",
+        "new_string": "    def get_metavar(self, param: Parameter) -> str:\n        if param.param_type_name == \"option\" and not param.show_choices:  # type: ignore\n            choice_metavars = [\n                convert_type(type(choice)).name.upper() for choice in self.choices\n            ]\n            choices_str = \"|\".join([*dict.fromkeys(choice_metavars)])\n        else:\n            choices_str = \"|\".join([str(i) for i in self.choices])"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 186
+    },
+    {
+      "id": "toolu_01DsD2jazcv8V7LYgZrYC9sj",
+      "name": "Bash",
+      "input": {
+        "command": "python -m pytest -q -o pythonpath=src tests/test_options.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 179
+    }
+  ],
+  "mcp_servers": [
+    {
+      "name": "cttp",
+      "status": "connected"
+    }
+  ],
+  "cttp_connected": true,
+  "tools_available": [
+    "Bash",
+    "Edit",
+    "Read",
+    "Write",
+    "mcp__cttp__closure",
+    "mcp__cttp__dups",
+    "mcp__cttp__fold",
+    "mcp__cttp__resolve",
+    "mcp__cttp__search",
+    "mcp__cttp__who"
+  ],
+  "rate_limit": {
+    "status": "allowed",
+    "resetsAt": 1788652800,
+    "rateLimitType": "five_hour",
+    "overageStatus": "rejected",
+    "overageDisabledReason": "out_of_credits",
+    "isUsingOverage": false,
+    "unifiedWindows": {
+      "five_hour": {
+        "utilization": 0.2,
+        "resetsAt": 1788652800
+      },
+      "seven_day": {
+        "utilization": 0.45,
+        "resetsAt": 1788840000
+      }
+    }
+  },
+  "session_id": "de75d9dc-5712-4b67-b3c8-196932ce749c",
+  "final_text": "`Choice.get_metavar` in `src/click/types.py:261` now checks the parameter: for options with `show_choices=False`, it maps each choice value through `convert_type(type(choice))` and joins the upper-cased type names, de-duplicated in first-seen order via `dict.fromkeys` (`[TEXT]`, `[INTEGER]`, `[TEXT|INTEGER]`). Options with `show_choices=True` and arguments take the unchanged branch, which now stringifies values before joining so non-string choices don't break the join. Nothing else changed.\n\n`python -m pytest -q -o pythonpath=src tests/test_options.py` \u2192 113 passed.",
+  "grade": {
+    "passed": true,
+    "returncode": 0,
+    "timed_out": false,
+    "output": "........................................................................ [ 61%]\n..............................................                           [100%]\n118 passed in 0.14s\n",
+    "diff": "diff --git a/src/click/types.py b/src/click/types.py\nindex 8d9750b..595443b 100644\n--- a/src/click/types.py\n+++ b/src/click/types.py\n@@ -259,7 +259,13 @@ class Choice(ParamType):\n         return info_dict\n \n     def get_metavar(self, param: Parameter) -> str:\n-        choices_str = \"|\".join(self.choices)\n+        if param.param_type_name == \"option\" and not param.show_choices:  # type: ignore\n+            choice_metavars = [\n+                convert_type(type(choice)).name.upper() for choice in self.choices\n+            ]\n+            choices_str = \"|\".join([*dict.fromkeys(choice_metavars)])\n+        else:\n+            choices_str = \"|\".join([str(i) for i in self.choices])\n \n         # Use curly braces to indicate a required argument.\n         if param.required and param.param_type_name == \"argument\":\n",
+    "command": "python -m pytest -q -o pythonpath=src tests/test_options.py",
+    "checks": {}
+  },
+  "base_sha": "02046e7a19480f85fff7e4577486518abe47e401",
+  "index": {
+    "add": [
+      {
+        "schema_version": 3,
+        "repo": "github.com/pallets/click",
+        "local_path": "/tmp/cttp-bench-ir-choice-metavar-click-links-7j5bp0we/w/repo",
+        "default_branch": "main",
+        "status": "added"
+      }
+    ],
+    "crawl": {
+      "schema_version": 3,
+      "crawled": [
+        {
+          "repo": "github.com/pallets/click",
+          "sha": "02046e7a19480f85fff7e4577486518abe47e401",
+          "status": "crawled",
+          "files": 145,
+          "pages": 1147,
+          "definitions": 1138,
+          "links": 1094,
+          "skipped": [
+            "docs/_static/click-icon.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "docs/_static/click-logo-sidebar.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "docs/_static/click-logo.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "examples/imagepipe/example01.jpg: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte",
+            "examples/imagepipe/example02.jpg: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+          ]
+        }
+      ]
+    }
+  },
+  "argv": [
+    "claude",
+    "-p",
+    "Bug report for this repository (click):\n\nAn option declared with `type=click.Choice([...])` and `show_choices=False` still shows the\nchoice values in the `--help` metavar, e.g. `-g [foo|bar]`. With `show_choices=False` the\nmetavar should show the *type names* of the choices instead \u2014 the `name` of the param type each\nchoice value converts to, upper-cased, de-duplicated in first-seen order, joined with `|`:\n`[TEXT]` for string choices, `[INTEGER]` for ints, `[FLOAT]`, `[BOOLEAN]`, and `[TEXT|INTEGER]`\nfor `[\"foo\", 1]`. Options with `show_choices=True` (the default) and arguments keep showing the\nvalues.\n\nChange as little as possible and do not edit the tests. The test command is\n`python -m pytest -q -o pythonpath=src tests/test_options.py`; run it once at the end.",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "opus",
+    "--max-turns",
+    "40",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--append-system-prompt",
+    "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the cttp MCP tools, not the shell: `search` finds a definition by name or docstring, `resolve` returns one definition's text by address, `who` lists what links to a definition, `closure` what a definition needs to run, `fold` reads a file as its links, `dups` finds copies. The shell's file readers (grep, cat, find, ls, sed) are denied; `Read` reads a file whose path you already know.",
+    "--tools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "--allowedTools",
+    "mcp__cttp__resolve",
+    "mcp__cttp__who",
+    "mcp__cttp__closure",
+    "mcp__cttp__search",
+    "mcp__cttp__dups",
+    "mcp__cttp__fold",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash(python -m pytest -q -o pythonpath=src tests/test_options.py)",
+    "Bash(python -m pytest -q -o pythonpath=src tests/test_options.py *)",
+    "--disallowedTools",
+    "Bash(cat)",
+    "Bash(cat *)",
+    "Bash(head)",
+    "Bash(head *)",
+    "Bash(tail)",
+    "Bash(tail *)",
+    "Bash(less)",
+    "Bash(less *)",
+    "Bash(more)",
+    "Bash(more *)",
+    "Bash(grep)",
+    "Bash(grep *)",
+    "Bash(egrep)",
+    "Bash(egrep *)",
+    "Bash(fgrep)",
+    "Bash(fgrep *)",
+    "Bash(rg)",
+    "Bash(rg *)",
+    "Bash(ag)",
+    "Bash(ag *)",
+    "Bash(find)",
+    "Bash(find *)",
+    "Bash(ls)",
+    "Bash(ls *)",
+    "Bash(tree)",
+    "Bash(tree *)",
+    "Bash(sed)",
+    "Bash(sed *)",
+    "Bash(awk)",
+    "Bash(awk *)",
+    "Bash(wc)",
+    "Bash(wc *)",
+    "Bash(stat)",
+    "Bash(stat *)",
+    "Bash(file)",
+    "Bash(file *)",
+    "Bash(diff)",
+    "Bash(diff *)",
+    "Bash(git)",
+    "Bash(git *)",
+    "Bash(od)",
+    "Bash(od *)",
+    "Bash(xxd)",
+    "Bash(xxd *)",
+    "Bash(strings)",
+    "Bash(strings *)",
+    "Bash(nl)",
+    "Bash(nl *)",
+    "Bash(cut)",
+    "Bash(cut *)",
+    "Bash(sort)",
+    "Bash(sort *)",
+    "Bash(uniq)",
+    "Bash(uniq *)",
+    "Bash(tac)",
+    "Bash(tac *)",
+    "Bash(rev)",
+    "Bash(rev *)",
+    "Bash(column)",
+    "Bash(column *)",
+    "Bash(paste)",
+    "Bash(paste *)",
+    "Bash(fold)",
+    "Bash(fold *)",
+    "Bash(pr)",
+    "Bash(pr *)",
+    "Bash(fmt)",
+    "Bash(fmt *)",
+    "Bash(look)",
+    "Bash(look *)",
+    "Bash(locate)",
+    "Bash(locate *)",
+    "Bash(which)",
+    "Bash(which *)",
+    "Bash(type)",
+    "Bash(type *)",
+    "Bash(printf)",
+    "Bash(printf *)",
+    "Bash(echo)",
+    "Bash(echo *)",
+    "--mcp-config",
+    "/tmp/cttp-bench-ir-choice-metavar-click-links-7j5bp0we/mcp.json"
+  ],
+  "stream_file": "1.stream.jsonl",
+  "recorded_at": "2026-09-05T20:04:38+00:00",
+  "replayed_from": null,
+  "stderr": ""
+}

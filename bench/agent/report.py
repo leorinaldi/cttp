@@ -66,6 +66,47 @@ def _merge_statuses(dicts) -> dict[str, int]:
     return dict(merged)
 
 
+def fold_nested(answer: list[str], expected: list[str]) -> set[str]:
+    """An impact answer with nested names folded onto their enclosing addressable definition.
+
+    The prompt asks for "the innermost definition containing the use", but `cttp who` cannot
+    address a nested function, so the reference answer credits the enclosing method. An agent
+    reading raw source names the nested function and is marked wrong under the strict rule,
+    which hands the links arm the grader's own convention for free. Folding removes that bias:
+    an entry not in the expected set is walked up its dotted name until it matches one.
+    """
+    exp = set(expected)
+    out: set[str] = set()
+    for entry in answer:
+        if entry in exp:
+            out.add(entry)
+            continue
+        path, _, name = entry.partition("#")
+        while "." in name:
+            name = name.rsplit(".", 1)[0]
+            if f"{path}#{name}" in exp:
+                out.add(f"{path}#{name}")
+                break
+        else:
+            out.add(entry)
+    return out
+
+
+def who_verdicts(records: list[dict]) -> dict[str, dict[str, int]]:
+    """arm -> {checked, strict, folded}: how the impact checks score under each rule."""
+    out: dict[str, dict[str, int]] = {a: {"checked": 0, "strict": 0, "folded": 0} for a in ARMS}
+    for r in records:
+        who = ((r.get("grade") or {}).get("checks") or {}).get("who")
+        if not isinstance(who, dict) or r["arm"] not in ARMS:
+            continue
+        cell = out[r["arm"]]
+        cell["checked"] += 1
+        cell["strict"] += bool(who.get("passed"))
+        answer, expected = who.get("answer") or [], who.get("expected") or []
+        cell["folded"] += fold_nested(answer, expected) == set(expected)
+    return out
+
+
 def summarize(records: list[dict]) -> dict[str, dict]:
     """task → arm → {runs, scored, passed, tokens[], turns[], files[]}."""
     table: dict[str, dict] = defaultdict(
@@ -111,7 +152,7 @@ def summarize(records: list[dict]) -> dict[str, dict]:
     return dict(table)
 
 
-def render(table: dict[str, dict], title: str) -> str:
+def render(table: dict[str, dict], title: str, who: dict[str, dict[str, int]] | None = None) -> str:
     header = (
         "| task | family | runs | pass links | pass baseline | median tokens links | "
         "median tokens baseline | ratio | median turns links | median turns baseline |"
@@ -180,6 +221,18 @@ def render(table: dict[str, dict], title: str) -> str:
             cell = totals(linked)[arm]
             lines.append(f"| {arm} | {cell['linked']} | {cell['stamped']} |")
 
+    if who and any(v["checked"] for v in who.values()):
+        lines += ["", "## Impact grading: strict and folded", ""]
+        lines.append(
+            "The prompt asks for the innermost definition; `who` credits the enclosing "
+            "addressable one, so an agent that names a nested function is marked wrong under "
+            "the strict rule. **Folded** walks such an answer up to its enclosing definition."
+        )
+        lines += ["", "| arm | who checks | pass (strict) | pass (folded) |"]
+        lines.append("|---|---:|---:|---:|")
+        for arm in ARMS:
+            v = who[arm]
+            lines.append(f"| {arm} | {v['checked']} | {v['strict']} | {v['folded']} |")
     lines += ["", "## Result files", ""]
     for task in sorted(table):
         for arm in ARMS:
@@ -197,7 +250,9 @@ def main(argv: list[str] | None = None) -> int:
     if not records:
         print(f"no result files under {args.directory}", file=sys.stderr)
         return 1
-    text = render(summarize(records), f"Agent benchmark — {args.directory.name}")
+    text = render(
+        summarize(records), f"Agent benchmark — {args.directory.name}", who_verdicts(records)
+    )
     print(text, end="")
     if not args.no_write:
         (args.directory / "report.md").write_text(text, encoding="utf-8")

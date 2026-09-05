@@ -296,6 +296,20 @@ def test_jobs_runs_tasks_in_parallel_and_still_records_every_run(tmp_path, monke
         assert mine == sorted(mine, key=lambda x: (order.index(x[1]), x[2]))
 
 
+def test_folding_a_nested_impact_answer_onto_its_enclosing_definition():
+    """`who` cannot address a nested function, so it credits the enclosing method; an agent
+    reading source names the nested one. Folding removes a bias in the links arm's favour."""
+    expected = ["m.py#C.method", "m.py#func"]
+    nested = ["m.py#C.method.inner", "m.py#func"]
+    assert report.fold_nested(nested, expected) == set(expected)
+    assert report.fold_nested(expected, expected) == set(expected)
+    # A genuinely wrong answer is not rescued by folding.
+    wrong = ["m.py#C.other", "m.py#func"]
+    assert report.fold_nested(wrong, expected) != set(expected)
+    # An entry from another file is not folded across paths.
+    assert report.fold_nested(["z.py#C.method.inner"], expected) == {"z.py#C.method.inner"}
+
+
 def test_the_weekly_guard_reads_the_seven_day_window():
     """One turn-capped run cost 1.9M tokens (P8-T3), so a long sweep is guarded, not estimated."""
     event = {"unifiedWindows": {"seven_day": {"utilization": 0.62}, "five_hour": {}}}
