@@ -8,6 +8,8 @@ the end (skipped until `bash bench/agent/fetch.sh` has run)."""
 import gzip
 import json
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -255,6 +257,43 @@ def test_the_report_counts_stamps_over_the_cross_repo_tasks_only():
         assert table[task]["_family"] == "cross-repo"
     text = report.render(table, "t")
     assert "## Stamps written (cross-repo tasks)" in text
+
+
+def test_jobs_runs_tasks_in_parallel_and_still_records_every_run(tmp_path, monkeypatch):
+    """`--jobs N` parallelises whole tasks; each run keeps its own directory and record."""
+    seen: list[tuple[str, str, int]] = []
+    concurrent = {"max": 0, "now": 0}
+    guard = threading.Lock()
+
+    def fake_run_once(task, arm, n, settings, out_dir, keep):
+        with guard:
+            concurrent["now"] += 1
+            concurrent["max"] = max(concurrent["max"], concurrent["now"])
+        time.sleep(0.05)
+        with guard:
+            concurrent["now"] -= 1
+            seen.append((task.name, arm.name, n))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return {
+            "task": task.name, "arm": arm.name, "run": n, "status": "pass",
+            "tokens": 10, "num_turns": 2, "wall_seconds": 0.1, "total_cost_usd": 0.0,
+            "rate_limit": {"unifiedWindows": {"seven_day": {"utilization": 0.1}}},
+        }  # fmt: skip
+
+    monkeypatch.setattr(harness, "run_once", fake_run_once)
+    monkeypatch.setattr(harness, "RESULTS", tmp_path)
+    monkeypatch.setattr(harness, "effective_registries", lambda: [])
+    names = [t.name for t in REAL_TASKS[:4]]
+    argv = [a for n in names for a in ("--task", n)]
+    assert harness.main([*argv, "--runs", "2", "--date", "d", "--jobs", "3"]) == 0
+    assert len(seen) == len(names) * 2 * 2  # tasks x arms x runs
+    assert concurrent["max"] > 1, "no two tasks ever overlapped"
+    # Each task's own runs stay in order even though tasks interleave: arms in the order
+    # `ARMS` declares them, runs ascending within an arm.
+    order = list(harness.ARMS)
+    for name in names:
+        mine = [x for x in seen if x[0] == name]
+        assert mine == sorted(mine, key=lambda x: (order.index(x[1]), x[2]))
 
 
 def test_the_weekly_guard_reads_the_seven_day_window():

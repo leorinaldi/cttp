@@ -45,6 +45,7 @@ recorded stream without touching the subscription.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures as cf
 import datetime as dt
 import gzip
 import json
@@ -54,6 +55,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -669,6 +671,17 @@ def main(argv: list[str] | None = None) -> int:
     add("--replay", type=Path, help="re-derive a record from its stream; write under --out")
     add("--out", type=Path, help="where --replay writes")
     add(
+        "--jobs",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "run N tasks at a time (default 1). A run is mostly waiting on the model — the "
+            "links arm sits in 4-minute loops on the impact tasks — and every run has its own "
+            "checkout, cache and index, so tasks parallelise cleanly"
+        ),
+    )
+    add(
         "--stop-above",
         type=float,
         default=0.85,
@@ -725,18 +738,40 @@ def main(argv: list[str] | None = None) -> int:
     arms = [ARMS[a] for a in (args.arm or list(ARMS))]
     date_dir = RESULTS / args.date
     records: list[dict[str, object]] = []
-    for t in tasks:
+    lock = threading.Lock()
+    stop = threading.Event()
+    exit_code = 0
+
+    def keep(record: dict[str, object]) -> None:
+        with lock:
+            records.append(record)
+
+    def halt(code: int, message: str) -> None:
+        """First worker to hit a limit wins; the rest finish their current run and stop."""
+        nonlocal exit_code
+        with lock:
+            if not stop.is_set():
+                exit_code = code
+                stop.set()
+                say(message)
+
+    def one_task(t: Task) -> None:
+        """A whole task, its arms and runs in order. Tasks are what `--jobs` runs in parallel:
+        a run is mostly waiting on the model, and every run already has its own checkout,
+        cache and index, so nothing is shared but the subscription."""
         for arm in arms:
             for n in range(1, args.runs + 1):
+                if stop.is_set():
+                    return
                 out_dir = date_dir / t.name / arm.name
                 existing = out_dir / f"{n}.json"
                 if existing.is_file() and not args.redo:
                     old = json.loads(existing.read_text(encoding="utf-8"))
                     if old.get("status") != "limited":
                         say(f"{t.name} {arm.name} #{n}: exists ({old['status']}), skipped")
-                        records.append(old)
+                        keep(old)
                         continue
-                while True:
+                while not stop.is_set():
                     say(f"{t.name} {arm.name} #{n}: running…")
                     record = run_once(t, arm, n, settings, out_dir, args.keep)
                     say(
@@ -744,28 +779,41 @@ def main(argv: list[str] | None = None) -> int:
                         f"tokens, {record['num_turns']} turns, {record['wall_seconds']} s"
                     )
                     if record["status"] != "limited":
-                        records.append(record)
+                        keep(record)
                         used = weekly_utilization(record.get("rate_limit"))
                         if args.stop_above and used is not None and used > args.stop_above:
-                            print(summarize(records))
-                            say(
+                            halt(
+                                4,
                                 f"stopping: the seven-day window is at {used:.0%}, above the "
                                 f"--stop-above limit of {args.stop_above:.0%}. Runs already "
-                                "recorded are kept; the same command resumes where it stopped."
+                                "recorded are kept; the same command resumes where it stopped.",
                             )
-                            return 4
                         break
+                    keep(record)
                     if not args.wait_for_reset:
-                        records.append(record)
-                        print(summarize(records))
-                        say(
+                        halt(
+                            3,
                             "stopped at a usage limit; run the same command again after the "
-                            "window resets (or pass --wait-for-reset)"
+                            "window resets (or pass --wait-for-reset)",
                         )
-                        return 3
+                        return
                     wait_for_reset(record.get("rate_limit"))  # type: ignore[arg-type]
+
+    jobs = max(1, args.jobs)
+    if jobs == 1:
+        for t in tasks:
+            if stop.is_set():
+                break
+            one_task(t)
+    else:
+        say(f"running {len(tasks)} task(s), {jobs} at a time")
+        with cf.ThreadPoolExecutor(max_workers=jobs) as pool:
+            for future in cf.as_completed([pool.submit(one_task, t) for t in tasks]):
+                future.result()
+    with lock:
+        records.sort(key=lambda r: (str(r["task"]), str(r["arm"]), int(r["run"])))  # type: ignore[arg-type]
     print(summarize(records))
-    return 0
+    return exit_code
 
 
 def median(values: list[int | float]) -> float | None:
