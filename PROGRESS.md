@@ -4,13 +4,13 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: STAGE 3 — PHASE 0 UNDER WAY. P0-T1 (SPIKE), P0-T2 (PUBLIC REGISTRY) AND P0-T3 (CONFIG
-AND RESOLVER) ARE DONE.** On 2026-09-04 Leo confirmed the spec and agreed the plan; the spike was
-built the same evening; the public registry `github.com/leorinaldi/cttp-registry` was published
-and tagged `v1`; and the resolver now runs off `~/.config/cttp/config.toml` with an ordered
-registry list and `[remotes]`. `hello-world` resolves from a local clone of the real registry to
-`hello-world@d29352a4fbf1`; expand, `python3 -I`, `cttp run`, and `cttp check` (pass, then drift)
-all work against it. 36 tests green, ruff clean.
+**Status: STAGE 3 — PHASE 0 UNDER WAY. P0-T1 TO P0-T4 ARE DONE; P0-T5 REMAINS.** On 2026-09-04
+Leo confirmed the spec and agreed the plan; the spike was built the same evening; the public
+registry `github.com/leorinaldi/cttp-registry` was published and tagged `v1`; the resolver runs
+off `~/.config/cttp/config.toml` with an ordered registry list and `[remotes]`; and the registry
+is now an **HTTP contract**: the default config lists `http://localhost:3120` first and the local
+clone second, `cttp resolve` goes through the server when it is up and through the clone when it
+is down, and the two answers differ only in `registry`. 41 tests green, ruff clean.
 
 _Last updated: 2026-09-04._
 
@@ -21,25 +21,25 @@ _Last updated: 2026-09-04._
 
 ## Next session — suggested next steps
 
-**Start here: P0-T4 — `cttp serve`, the registry contract on 3120, properly.** Read its entry
-in [`docs/plan.md`](docs/plan.md) in full. The config already accepts `http://…` entries in
-`registries` and `HttpRegistry` in `registry.py` is a stub that raises "not supported yet
-(P0-T4)"; T4 fills it in so `cttp resolve` can go through the server, and makes
-`http://localhost:3120` the default registry per spec §8. After that: P0-T5 (acceptance test 4 as
-a full test suite with first-run confirmation), then **write `docs/overview.md` (Stage 4)** before
-Phase 1.
+**Start here: P0-T5 — `expand`, `check`, `run` for a single link; acceptance test 4 as tests.**
+Read its entry in [`docs/plan.md`](docs/plan.md) in full. Much of it already exists from the
+spike (`tests/test_expand.py` walks expand → `python3 -I` → check → drift → run); what T5 adds is
+the **first-run confirmation** in `cttp run` (`--yes` is currently accepted and ignored) and
+whatever the plan's acceptance list still lacks. After T5, Phase 0 is complete: **write
+`docs/overview.md` (Stage 4)** before starting Phase 1.
 
 If Leo wants to play with the spike first, the demo is in **How to run** below.
 
 ## Current state — working & verified
 
 **Code (`src/cttp/`), 2026-09-04.** Real modules in minimal form:
-- `config.py` — **P0-T3.** `~/.config/cttp/config.toml` (XDG; `CTTP_CONFIG` overrides the path):
-  `registries` (ordered list of local paths or HTTP URLs; first match wins) and `[remotes]`
-  (locator prefix → URL prefix, longest prefix wins, else `https://<locator>.git`). Paths take
-  `~`; relative paths are relative to the file. No file → one registry at
-  `~/.local/share/cttp/registry`, no remotes. `--registry <path>` or `CTTP_REGISTRY` replaces the
-  list with that one entry (remotes kept). `cttp config [--json]` prints the effective result.
+- `config.py` — **P0-T3/T4.** `~/.config/cttp/config.toml` (XDG; `CTTP_CONFIG` overrides the
+  path): `registries` (ordered list of HTTP URLs or local paths; first match wins) and
+  `[remotes]` (locator prefix → URL prefix, longest prefix wins, else `https://<locator>.git`).
+  Paths take `~`; relative paths are relative to the file. **First run writes the file** with
+  the defaults: `http://localhost:3120`, then `~/.local/share/cttp/registry`, no remotes.
+  `--registry <entry>` or `CTTP_REGISTRY` replaces the list with that one entry (remotes kept).
+  `cttp config [--json]` prints the effective result.
 - `address.py` — name form only (`hello-world`, `@rev|label`, `#symbol` parsed but not resolvable);
   spec §2 normalization and SHA-256 identity. The identity of `print("hello world!")` is pinned
   in `tests/test_address.py` (`75a27070015e…`).
@@ -48,10 +48,17 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
   cloned from `config.url_for(locator)`; rev-parse, blob at rev, license from the first line of
   `LICENSE*`/`COPYING`. **A fetch is skipped when the wanted rev is a SHA already in the cache**,
   so `check` on an expanded file is offline once the repo is cached; labels always fetch.
-- `registry.py` — `Registries`: the configured list; `LocalRegistry` reads `cttp.toml` +
-  `names/*.toml`; `HttpRegistry` is a stub for P0-T4. A miss names the registry asked (all of
-  them, when several). `create_local_registry()` builds one from `tests/fixtures/registry/`.
-- `resolve.py` — name → registry → git → extract → hash → `Resolved` with `origin` fields.
+- `registry.py` — `Registries`: the configured list, asked in order; a `RegistryError` from
+  one is a miss and the next is asked; when all miss, the error names them all with each reason.
+  `LocalRegistry` reads `cttp.toml` + `names/*.toml`. `HttpRegistry.fetch(name, version)` is
+  `GET <url>/<name>[@<version>].json` and returns the server's object (**the server resolves,
+  the client asks**); 404 and an unreachable server are misses, anything else is an error.
+  `MissingRegistry` stands in for a configured path with nothing at it (a miss that says how to
+  clone). `Registries(local_only=True)` is what the **server** uses — it must never ask an HTTP
+  registry, which could be itself. `create_local_registry()` builds one from the fixture.
+- `resolve.py` — `resolve()` asks each registry in turn: an HTTP one yields
+  `Resolved.from_json(...)` with `registry` set to the URL; a local one goes through
+  `resolve_entry()`: entry → locator → git → extract → hash. `to_json()` adds `origin` fields.
 - `links.py` — parse and write `# cttp:` lines (stamp, `key=value` fields, quoted description).
 - `expand.py` — `expand` (one link, no closure), `check` (unexpanded / drift / unresolvable / ok),
   `run` for an address (`~/.cache/cttp/run/<pin>/main.py`) or a file (copy, expand, run).
@@ -59,14 +66,14 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
   Jinja2 templates with derived/asserted tags. Looked at in a headless browser: renders correctly.
 - `cli.py` — `cttp --version | config | resolve | serve | expand | check | run`; `--json` is
   accepted before or after the subcommand.
-- Tests: 36 in `tests/`. `conftest.py` builds, in `tmp_path`, a registry repo, a **bare clone of
+- Tests: 41 in `tests/`. `conftest.py` builds, in `tmp_path`, a registry repo, a **bare clone of
   it under `remotes/github.com/leorinaldi/cttp-registry`**, and a config whose `[remotes]` maps
-  the prefix there; `CTTP_CONFIG` and `CTTP_HOME` point at `tmp_path`. No network.
+  the prefix there; `CTTP_CONFIG` and `CTTP_HOME` point at `tmp_path`. `test_server.py` drives
+  the FastAPI app in-process and points an `HttpRegistry` at it through the test client
+  (`via_http` fixture), so the HTTP path is tested without a socket. No network.
   `test_no_runtime_component` guards the no-runtime rule.
 
 **Corners the spike cut (each is closed by the named task):**
-- No HTTP registry backend — `cttp resolve` reads the registry repo directly, not the server; an
-  `http://` entry in `registries` is accepted but its lookups fail with a message → **P0-T4**
 - `[remotes]` exists but there is no license matcher beyond the first-line map, and no mirror
   has been exercised outside the tests → **P2-T1**
 - No object cache; no symbols; no locator/identity address forms → **P2-T2 / P1-T1 / P1-T3**
@@ -86,8 +93,9 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
   `d29352a4fbf1` tagged `v1`, contents identical to `tests/fixtures/registry/` (verified by
   anonymous clone, 2026-09-04). The README links to spec §8 in this private repo — a dead link
   for the public until cttp is opened.
-- **On this machine (2026-09-04):** `~/.config/cttp/config.toml` lists one registry,
-  `~/.local/share/cttp/registry`, which is now a **real clone** of the public repo. The spike's
+- **On this machine (2026-09-04):** `~/.config/cttp/config.toml` is the first-run default
+  (localhost first, then `~/.local/share/cttp/registry`, which is a **real clone** of the public
+  repo). The spike's
   fixture-built registry was moved aside to `~/.local/share/cttp/registry.spike` (commit
   `9d12912`, exists nowhere else) and `~/.cache/cttp` was wiped — **trap:** the spike's cache
   held a clone of that fake repo under the real locator, so a pinned `9d12912…` address kept
@@ -125,7 +133,16 @@ trigger that would schedule it.
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
-- **2026-09-04 (sixth session) — P0-T3: config file, registry list, `[remotes]`.** Added
+- **2026-09-04 (seventh session) — P0-T4: the registry as an HTTP contract.** `HttpRegistry`
+  now fetches `GET <url>/<name>@<version>.json` and the resolver dispatches: HTTP registries hand
+  back the server's object (`Resolved.from_json`, `registry` = the URL), local ones do the git
+  work. Misses fall through — 404, unreachable server, or a configured path with nothing at it
+  (`MissingRegistry`, no longer an error at startup) — and the final error names every registry
+  with its reason. The server opens registries `local_only=True` so a config that lists it first
+  cannot make it query itself. First run writes the default config (localhost first, clone
+  second). Acceptance run live: the four curl checks, the page looked at in headless Chromium,
+  and `cttp resolve hello-world --json` with the server up versus down identical except for
+  `registry`. Trimmed history to five sessions. Added
   `config.py`; `registry.py` became `Registries` (ordered, first match wins) over `LocalRegistry`
   plus an `HttpRegistry` stub; the spike's "the registry repo serves itself from its local path"
   rule was removed — every locator now goes through `[remotes]` or https, and the tests reach a
@@ -170,9 +187,6 @@ is the archive, and a bloated history taxes every future session start.
   principles — a teardown of the Linux LM75 driver, a measurement across 736 driver files — landed
   on a protocol: definitions get addresses, references are links, an index computes backlinks,
   files remain the rendered form. Renamed every doc; created the private remote.
-- **2026-09-04 (first session) — Project created and fisheye vision drafted.** Scaffolded from
-  `~/Claude/new-project`: session procedure, document skeleton under `docs/`, web port **3120**
-  allocated. The fisheye vision was superseded the same day.
 
 ## How to run
 
@@ -183,8 +197,10 @@ uv run pytest -q                               # 21 tests, no network
 uv run ruff check . && uv run ruff format --check .
 
 git clone https://github.com/leorinaldi/cttp-registry ~/.local/share/cttp/registry   # once
-uv run cttp config                             # shows the effective config (file optional)
+uv run cttp config                             # first run writes ~/.config/cttp/config.toml; shows it
 uv run cttp serve                              # http://localhost:3120  (Ctrl-C to stop)
+curl -s localhost:3120/hello-world.json        # the contract; /hello-world is the page
+uv run cttp resolve hello-world --json         # registry: http://localhost:3120 when up, the clone when down
 ```
 
 The demo (acceptance test 4), from any directory with the server up or down:

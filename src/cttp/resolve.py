@@ -3,9 +3,9 @@
 from dataclasses import asdict, dataclass
 
 from cttp import gitcache
-from cttp.address import identity, parse_name, short
+from cttp.address import Name, identity, parse_name, short
 from cttp.extract.python import extract_script
-from cttp.registry import Registries, ref_for, split_target
+from cttp.registry import Entry, HttpRegistry, Registries, RegistryError, ref_for, split_target
 
 
 class ResolveError(LookupError):
@@ -28,6 +28,19 @@ class Resolved:
     path: str
     registry: str
 
+    FIELDS = (
+        "name", "address", "rev", "identity", "identity_full", "kind", "language", "source",
+        "description", "license", "target", "path", "registry",
+    )  # fmt: skip
+
+    @classmethod
+    def from_json(cls, d: dict, registry: str) -> "Resolved":
+        """The object as an HTTP registry served it; `registry` becomes the URL that answered."""
+        missing = [f for f in cls.FIELDS if f not in d]
+        if missing:
+            raise RegistryError(f"{registry}: resolution is missing {missing}")
+        return cls(**{f: d[f] for f in cls.FIELDS if f != "registry"}, registry=registry)
+
     def to_json(self) -> dict:
         d = asdict(self)
         d["origin"] = {
@@ -43,7 +56,17 @@ def resolve(text: str, registries: Registries) -> Resolved:
     n = parse_name(text)
     if n.symbol:
         raise ResolveError("symbols are not resolvable yet (P1-T3)")
-    entry, registry = registries.lookup(n.name)
+
+    def ask(registry):
+        if isinstance(registry, HttpRegistry):
+            return Resolved.from_json(registry.fetch(n.name, n.rev), registry.url)
+        return resolve_entry(n, registry.lookup(n.name), registry, registries)
+
+    return registries.first(n.name, ask)
+
+
+def resolve_entry(n: Name, entry: Entry, registry, registries: Registries) -> Resolved:
+    """Name → entry → locator → fetch → extract → hash, against a local registry repository."""
     locator, path = split_target(entry.target)
     if path is None:
         raise ResolveError(f"{n.name!r} names a whole repository; symbol search arrives in P2-T1")

@@ -104,7 +104,7 @@ def serve(
     import uvicorn
 
     try:
-        reg = open_registries(registry)
+        reg = open_registries(registry, local_only=True)
     except ERRORS as e:
         fail(str(e))
     if registry:

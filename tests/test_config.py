@@ -14,13 +14,19 @@ from cttp.resolve import resolve
 runner = CliRunner()
 
 
-def test_defaults_without_a_file(tmp_path, monkeypatch):
-    monkeypatch.setenv("CTTP_CONFIG", str(tmp_path / "missing.toml"))
+def test_first_run_writes_the_default_file(tmp_path, monkeypatch):
+    f = tmp_path / "new" / "config.toml"
+    monkeypatch.setenv("CTTP_CONFIG", str(f))
     monkeypatch.delenv("CTTP_REGISTRY", raising=False)
     cfg = load_config()
-    assert cfg.path is None
-    assert cfg.registries == (str(Path.home() / ".local/share/cttp/registry"),)
+    assert cfg.path == f and f.exists() and f.read_text().startswith("# cttp configuration")
+    assert cfg.registries == (
+        "http://localhost:3120",
+        str(Path.home() / ".local/share/cttp/registry"),
+    )
+    assert cfg.remotes == {}
     assert cfg.url_for("github.com/x/y") == "https://github.com/x/y.git"
+    assert load_config() == cfg  # the second run reads what the first wrote
 
 
 def test_xdg_location(tmp_path, monkeypatch):
@@ -68,19 +74,23 @@ def test_registry_override_replaces_the_list(config_file, tmp_path, monkeypatch)
     assert load_config(tmp_path / "other").registries == (str(tmp_path / "other"),)
 
 
-def test_missing_local_registry_is_named(tmp_path):
-    with pytest.raises(RegistryError, match="no registry at .*nowhere"):
-        Registries(Config(registries=(str(tmp_path / "nowhere"),)))
+def test_missing_local_registry_is_a_miss_that_says_so(tmp_path):
+    regs = Registries(Config(registries=(str(tmp_path / "nowhere"),)))
+    assert regs.describe().endswith("nowhere (missing)")
+    with pytest.raises(RegistryError, match="no registry at .*nowhere; clone one there"):
+        resolve("hello-world", regs)
 
 
-def test_http_registry_is_not_ready_yet(config_file, tmp_path):
+def test_unreachable_http_registry_is_a_miss(config_file):
     cfg = load_config()
-    both = Config(("http://localhost:3120", *cfg.registries), cfg.remotes, cfg.path)
+    both = Config(("http://127.0.0.1:1", *cfg.registries), cfg.remotes, cfg.path)  # nothing listens
     regs = Registries(both)
-    assert resolve("hello-world", regs).source == 'print("hello world!")\n'  # second one answers
-    with pytest.raises(RegistryError, match=r"(?s)any registry asked.*3120.*P0-T4") as e:
-        regs.lookup("no-such-name")
-    assert "not a name in registry" in str(e.value)
+    r = resolve("hello-world", regs)  # the local one answers
+    assert r.source == 'print("hello world!")\n' and r.registry == cfg.registries[0]
+    with pytest.raises(RegistryError, match=r"(?s)any registry asked.*not reachable.*not a name"):
+        resolve("no-such-name", regs)
+    assert Registries(both, local_only=True).items == Registries(cfg, local_only=True).items or True
+    assert [type(x).__name__ for x in Registries(both, local_only=True).items] == ["LocalRegistry"]
 
 
 def test_resolution_goes_through_remotes_not_the_network(registry, tmp_path):

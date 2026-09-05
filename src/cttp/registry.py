@@ -1,13 +1,17 @@
 """The registry: names → addresses (spec §8).
 
 An ordered list of registries from the config, first match wins. Each is a **local registry
-repository** (`cttp.toml` + `names/*.toml`) or an HTTP registry (P0-T4).
+repository** (`cttp.toml` + `names/*.toml`) or an **HTTP registry** serving the contract
+(`GET /<name>@<version>.json`). A registry that does not know a name — or cannot be reached —
+is a miss, and the next one is asked; the last miss names them all.
 """
 
 import subprocess
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+
+import httpx
 
 from cttp.config import Config, is_url, load_config
 
@@ -70,43 +74,89 @@ class LocalRegistry:
         )
 
 
-class HttpRegistry:
-    """A registry served over the spec §8 contract. The client arrives in P0-T4."""
+class MissingRegistry:
+    """A configured local path with no registry at it: every lookup is a miss that says so."""
 
-    def __init__(self, url: str):
-        self.url = url.rstrip("/")
+    def __init__(self, path: Path):
+        self.path = path
 
     def describe(self) -> str:
-        return self.url
+        return f"{self.path} (missing)"
 
     def names(self) -> list[str]:
         return []
 
     def lookup(self, name: str) -> Entry:
-        raise RegistryError(f"{name!r}: HTTP registry {self.url} is not supported yet (P0-T4)")
+        raise RegistryError(
+            f"no registry at {self.path}; clone one there: "
+            f"git clone https://github.com/leorinaldi/cttp-registry {self.path}"
+        )
 
 
-Registry = LocalRegistry | HttpRegistry
+class HttpRegistry:
+    """A registry served over the spec §8 contract: the server resolves, the client asks.
+
+    `fetch(name, version)` is `GET <url>/<name>@<version>.json` and returns the server's object
+    (the resolver's schema). A 404 or an unreachable server is a miss (`RegistryError`); any other
+    failure is an error that stops the search.
+    """
+
+    TIMEOUT = 10.0
+
+    def __init__(self, url: str, client: httpx.Client | None = None):
+        self.url = url.rstrip("/")
+        self.client = client or httpx.Client(timeout=self.TIMEOUT)
+
+    def describe(self) -> str:
+        return self.url
+
+    def names(self) -> list[str]:
+        return []  # the contract has no listing route (spec §8)
+
+    def lookup(self, name: str) -> Entry:
+        raise RegistryError(f"{name!r}: {self.url} answers resolutions, not entries; use fetch()")
+
+    def fetch(self, name: str, version: str | None) -> dict:
+        slug = f"{name}@{version}" if version else name
+        try:
+            res = self.client.get(f"{self.url}/{slug}.json")
+        except httpx.HTTPError as e:
+            raise RegistryError(f"{self.url} is not reachable ({e.__class__.__name__})") from e
+        if res.status_code == 404:
+            detail = res.json().get("detail") if _is_json(res) else res.text
+            raise RegistryError(f"{name!r} is not a name in registry {self.url}: {detail}")
+        if res.status_code != 200 or not _is_json(res):
+            raise RegistryError(
+                f"{self.url}/{slug}.json answered {res.status_code}, not a resolution"
+            )
+        return res.json()
+
+
+def _is_json(res: httpx.Response) -> bool:
+    return res.headers.get("content-type", "").startswith("application/json")
+
+
+Registry = LocalRegistry | HttpRegistry | MissingRegistry
 
 
 class Registries:
     """The configured registries, in order. The first that knows a name answers for it."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, local_only: bool = False):
+        """`local_only` is for the server, which must never ask an HTTP registry (itself)."""
         self.config = config
         self.items: list[Registry] = []
         for entry in config.registries:
             if is_url(entry):
-                self.items.append(HttpRegistry(entry))
+                if not local_only:
+                    self.items.append(HttpRegistry(entry))
             else:
                 p = Path(entry)
-                if not p.exists():
-                    raise RegistryError(
-                        f"no registry at {p}; clone one there (git clone "
-                        "https://github.com/leorinaldi/cttp-registry "
-                        f"{p}) or set `registries` in {config.path or 'the config file'}"
-                    )
-                self.items.append(LocalRegistry(p))
+                self.items.append(LocalRegistry(p) if p.exists() else MissingRegistry(p))
+        if not self.items:
+            raise RegistryError(
+                f"no usable registry in {config.path or 'the config'}: {config.registries}"
+            )
 
     def describe(self) -> str:
         return ", ".join(r.describe() for r in self.items)
@@ -115,10 +165,20 @@ class Registries:
         return sorted({n for r in self.items for n in r.names()})
 
     def lookup(self, name: str) -> tuple[Entry, Registry]:
+        """The entry for `name` from the first local registry that has it; HTTP ones are skipped."""
+        return self.first(name, lambda r: (r.lookup(name), r), skip=HttpRegistry)
+
+    def first(self, name, ask, skip: type | None = None):
+        """Ask each registry in turn with `ask(registry)`; a RegistryError is a miss, try the next.
+
+        When every registry misses, the error names them all and carries each one's reason.
+        """
         errors: list[str] = []
         for r in self.items:
+            if skip is not None and isinstance(r, skip):
+                continue
             try:
-                return r.lookup(name), r
+                return ask(r)
             except RegistryError as e:
                 errors.append(str(e))
         if len(errors) == 1:
@@ -132,8 +192,8 @@ class Registries:
         return self.config.url_for(locator)
 
 
-def open_registries(registry: str | Path | None = None) -> Registries:
-    return Registries(load_config(registry))
+def open_registries(registry: str | Path | None = None, local_only: bool = False) -> Registries:
+    return Registries(load_config(registry), local_only=local_only)
 
 
 def create_local_registry(dest: Path, files: Path) -> Path:

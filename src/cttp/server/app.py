@@ -1,6 +1,7 @@
 """`cttp serve`: the registry contract (spec §8) and the viewer (spec §9) on port 3120.
 
-The three name routes and an index page, over the configured registries (HTTP backend: P0-T4).
+The three name routes and an index page, over the configured **local** registry repositories —
+the server never asks an HTTP registry, which could be itself.
 """
 
 from pathlib import Path
@@ -22,7 +23,7 @@ templates = jinja2.Environment(
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    reg = open_registries()
+    reg = open_registries(local_only=True)
     entries = [reg.lookup(n)[0] for n in reg.names()]
     return templates.get_template("index.html").render(entries=entries, registry=reg.describe())
 
@@ -33,7 +34,7 @@ def name_page(slug: str):
     if want_json:
         slug = slug[: -len(".json")]
     name, _, version = slug.partition("@")
-    reg = open_registries()
+    reg = open_registries(local_only=True)
     try:
         r = resolve(f"{name}@{version}" if version else name, reg)
         entry, _ = reg.lookup(name)

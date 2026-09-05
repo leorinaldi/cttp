@@ -7,9 +7,10 @@ registries = ["~/.local/share/cttp/registry", "http://localhost:3120"]  # in ord
 "github.com/leorinaldi/" = "/srv/mirrors/leorinaldi/"
 ```
 
-Without a file, the defaults are one registry at `~/.local/share/cttp/registry` and no remotes, so
-every locator is fetched from `https://<locator>.git`. Paths in the file may use `~`; relative
-paths are relative to the file's directory.
+On first run the file is written with the defaults: `http://localhost:3120` first (`cttp serve`),
+the local registry repository at `~/.local/share/cttp/registry` second, and no remotes, so every
+locator is fetched from `https://<locator>.git`. Paths in the file may use `~`; relative paths are
+relative to the file's directory.
 """
 
 import os
@@ -31,6 +32,21 @@ def config_path() -> Path:
         return Path(env).expanduser()
     xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     return Path(xdg) / "cttp" / "config.toml"
+
+
+DEFAULT_REGISTRIES = ("http://localhost:3120", "~/.local/share/cttp/registry")
+DEFAULT_CONFIG = """\
+# cttp configuration — see `cttp config`.
+#
+# Registries, in order: the first that knows a name answers. An http(s) URL is a registry
+# serving the cttp contract (`cttp serve` on localhost, cttp.ai later); a path is a local
+# registry repository (git clone https://github.com/leorinaldi/cttp-registry <path>).
+registries = ["http://localhost:3120", "~/.local/share/cttp/registry"]
+
+# Remotes map a locator prefix to a URL prefix — a mirror, or a local path. Longest prefix
+# wins; without a match, host/owner/repo is fetched from https://host/owner/repo.git
+[remotes]
+"""
 
 
 def is_url(text: str) -> bool:
@@ -73,7 +89,7 @@ def parse_config(text: str, path: Path | None) -> Config:
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"{path or 'config'}: {e}") from e
     base = path.parent if path else Path.cwd()
-    registries = data.get("registries", [str(default_registry_path())])
+    registries = data.get("registries", list(DEFAULT_REGISTRIES))
     if not isinstance(registries, list) or not all(isinstance(r, str) for r in registries):
         raise ConfigError(f"{path}: `registries` must be a list of strings")
     if not registries:
@@ -91,12 +107,15 @@ def parse_config(text: str, path: Path | None) -> Config:
 
 
 def load_config(registry: str | Path | None = None) -> Config:
-    """The effective configuration. `registry` (or `CTTP_REGISTRY`) replaces the registry list."""
+    """The effective configuration; the file is written with defaults if it does not exist.
+
+    `registry` (or `CTTP_REGISTRY`) replaces the registry list with that one entry.
+    """
     path = config_path()
-    if path.exists():
-        cfg = parse_config(path.read_text(encoding="utf-8"), path)
-    else:
-        cfg = Config(registries=(str(default_registry_path()),))
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(DEFAULT_CONFIG, encoding="utf-8")
+    cfg = parse_config(path.read_text(encoding="utf-8"), path)
     override = registry or os.environ.get("CTTP_REGISTRY")
     if override:
         one = _resolve_entry(str(override), Path.cwd())
