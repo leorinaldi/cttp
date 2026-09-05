@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cttp import gitcache
-from cttp.address import AddressError, identity, parse, short
+from cttp.address import AddressError, parse
+from cttp.hashing import identity, short
 from cttp.links import LINK_RE, Link, find_links, format_stamped
 from cttp.registry import Registries, RegistryError
 from cttp.resolve import Resolved, ResolveError, resolve

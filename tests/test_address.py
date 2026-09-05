@@ -1,18 +1,6 @@
 import pytest
 
-from cttp.address import (
-    Address,
-    AddressError,
-    identity,
-    is_sha,
-    normalize,
-    parse,
-    parse_pinned,
-)
-
-# The identity of `print("hello world!")` under the spec §2 normalization. Pinned so that a change
-# to the normalization is loud.
-HELLO_IDENTITY = "75a27070015ebce788a4dd572e5c3acffb9e0edffecb96611db6fc1da6f39acb"
+from cttp.address import Address, AddressError, is_sha, parse, parse_pinned
 
 SHA = "8f4c2e1d9a03"
 FULL = "7f3a9c1e42b8" * 5 + "7f3a"  # 64 hex
@@ -189,13 +177,3 @@ def test_is_sha():
         not is_sha(None) and not is_sha("") and not is_sha("8f4c2e1d9a0") and not is_sha("g" * 12)
     )
     assert not is_sha("a" * 41)
-
-
-def test_normalize():
-    assert normalize("  x\r\n  y  \r\n\n\n") == "x\ny\n"
-    assert normalize("    def f():\n        pass") == "def f():\n    pass\n"
-
-
-def test_identity_is_stable():
-    assert identity('print("hello world!")') == HELLO_IDENTITY
-    assert identity('  print("hello world!")\r\n\n') == HELLO_IDENTITY

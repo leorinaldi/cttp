@@ -1,4 +1,4 @@
-"""The address: the three forms of spec §2, and identity hashing.
+"""The address: the three forms of spec §2.
 
 ```text
 name      := label ("." label)* [ "@" (version | rev) ] [ "#" symbol ]   ; resolved by the registry
@@ -7,17 +7,30 @@ identity  := "sha256:" hex               ; 64 hex digits, or a unique prefix of 
 ```
 
 `parse()` turns text into one `Address`; `str(address)` is the canonical text (without the
-`cttp:` marker, which is the link line's job); `address.format(marker=True)` puts it back. The
-shape hash (spec §2) arrives in P1-T2.
+`cttp:` marker, which is the link line's job); `address.format(marker=True)` puts it back.
+Hashing lives in `hashing.py`; `normalize`, `identity`, `shape` and `short` are re-exported here.
 """
 
-import hashlib
 import re
-import textwrap
 from dataclasses import dataclass
 
+from cttp.hashing import SHORT, identity, normalize, shape, short
+
+__all__ = [
+    "Address",
+    "AddressError",
+    "MARKER",
+    "SHORT",
+    "identity",
+    "is_sha",
+    "normalize",
+    "parse",
+    "parse_pinned",
+    "shape",
+    "short",
+]
+
 MARKER = "cttp:"
-SHORT = 12
 FULL_SHA = 40
 FULL_IDENTITY = 64
 
@@ -181,22 +194,3 @@ def _parse_locator(head: str, symbol: str | None, raw: str) -> Address:
     return Address(
         form="locator", locator=f"{host}/{owner}/{repo}", path=path, rev=rev, symbol=symbol
     )
-
-
-def normalize(text: str) -> str:
-    """Spec §2: dedent to column zero, LF endings, no trailing whitespace, one trailing newline."""
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = textwrap.dedent(text)
-    lines = [line.rstrip() for line in text.split("\n")]
-    while lines and lines[-1] == "":
-        lines.pop()
-    return "\n".join(lines) + "\n"
-
-
-def identity(text: str) -> str:
-    """Full SHA-256 hex of the normalized text."""
-    return hashlib.sha256(normalize(text).encode("utf-8")).hexdigest()
-
-
-def short(hexdigest: str, n: int = SHORT) -> str:
-    return hexdigest[:n]

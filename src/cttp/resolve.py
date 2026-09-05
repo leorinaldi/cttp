@@ -9,8 +9,9 @@ needs the object cache (P2-T2).
 from dataclasses import asdict, dataclass
 
 from cttp import gitcache
-from cttp.address import Address, identity, parse, short
+from cttp.address import Address, parse
 from cttp.extract.python import extract_script
+from cttp.hashing import identity, short
 from cttp.registry import Entry, HttpRegistry, Registries, RegistryError, ref_for, split_target
 
 

@@ -1,7 +1,7 @@
 """Python extractor. Spike: a whole file as a script only (P1-T3 adds definitions)."""
 
-from cttp.address import normalize
 from cttp.extract import Page
+from cttp.hashing import normalize
 
 
 def extract_script(source: str) -> Page:
