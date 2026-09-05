@@ -9,7 +9,8 @@ from typer.testing import CliRunner
 
 from cttp.cli import app
 from cttp.expand import check_file, expand_file
-from cttp.extract import ExtractError, extract
+from cttp.extract import ExtractError, Ref, extract
+from cttp.extract.python import _source_roots
 from cttp.resolve import ResolveError, resolve
 from cttp.server.app import app as server
 
@@ -237,3 +238,26 @@ def test_extract_directly_without_a_repository():
     with pytest.raises(ExtractError, match="not valid Python"):
         extract("x.py", "def (:\n", "f")
     assert extract("x.py", "def (:\n").kind == "script"  # a broken file is still a script page
+
+
+def test_an_absolute_import_reaches_a_src_layouts_package():
+    """A src-layout's `src/` is on no importing file's path, so it is a source root of its own."""
+    files = {"src/pkg/__init__.py", "src/pkg/core.py", "tests/test_core.py"}
+    src = "from pkg.core import run\n\n\ndef t():\n    run()\n"
+    assert extract("tests/test_core.py", src, "t", files).refs == (
+        Ref("src/pkg/core.py", "run", "run"),
+    )
+    # a flat layout resolved through the file's ancestors before this rule, and still does
+    assert extract("tests/test_core.py", src, "t", {"pkg/core.py"}).refs == (
+        Ref("pkg/core.py", "run", "run"),
+    )
+    # nothing in the repository answers: an outside module, as before
+    page = extract("tests/test_core.py", src, "t", {"tests/test_core.py"})
+    assert page.refs == () and page.third_party == ("pkg",)
+    # the file's own ancestors still win: nearest first, the source root last
+    both = files | {"tests/pkg/__init__.py", "tests/pkg/core.py"}
+    assert extract("tests/test_core.py", src, "t", both).refs == (
+        Ref("tests/pkg/core.py", "run", "run"),
+    )
+    # a repository with no `src/` gains no source root
+    assert _source_roots({"pkg/core.py", "srcs/x.py"}) == ()

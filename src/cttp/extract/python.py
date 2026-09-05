@@ -28,6 +28,9 @@ MODULE_GLOBALS = frozenset(
      "__path__", "__annotations__", "__dict__", "__debug__"}
 )  # fmt: skip
 
+# repository-root directories an absolute import is also rooted at: the src-layout convention
+SOURCE_ROOTS = ("src",)
+
 Function = ast.FunctionDef | ast.AsyncFunctionDef
 Definition = Function | ast.ClassDef | ast.Assign | ast.AnnAssign
 
@@ -82,6 +85,7 @@ class Module:
         self.text = text
         self.path = path
         self.files = files
+        self.source_roots = _source_roots(files)
         self.defs: dict[str, Definition] = {}
         self.nested: dict[str, str] = {}  # a nested def → the definition it is nested in
         self._collect(tree.body, prefix="")
@@ -214,11 +218,14 @@ class Module:
         """The repository file for the longest module prefix of `parts`, and what is left over.
 
         A relative import starts at the file's package (`level` dots up); an absolute one is
-        tried against every ancestor directory of the file, nearest first, then the root.
+        tried against every ancestor directory of the file, nearest first, then the root, then
+        the repository's source roots — the `src/` a src-layout puts its packages under, which is
+        on no importing file's path.
         """
         here = PurePosixPath(self.path).parent
         if level == 0:
             bases = [here, *here.parents]
+            bases += [root for root in self.source_roots if root not in bases]
         elif level == 1:
             bases = [here]
         elif level - 2 < len(here.parents):
@@ -239,6 +246,19 @@ class Module:
 
 
 # -- helpers -----------------------------------------------------------------------------------
+
+
+def _source_roots(files: set[str]) -> tuple[PurePosixPath, ...]:
+    """The directories an absolute import may be rooted at besides the file's own ancestors.
+
+    A src-layout puts its packages under a directory that is on no importing file's path:
+    `tests/test_compat.py` says `from click._compat import strip_ansi` and means
+    `src/click/_compat.py`. Only a repository-root directory of one of `SOURCE_ROOTS` counts, and
+    only when the repository has one — so a flat layout is unaffected.
+    """
+    return tuple(
+        PurePosixPath(name) for name in SOURCE_ROOTS if any(f.startswith(f"{name}/") for f in files)
+    )
 
 
 def _join(base: PurePosixPath, parts: tuple[str, ...]) -> str:

@@ -7,9 +7,12 @@ of **tool sets inside Claude Code**, on fifteen tasks over three real Python lib
 **The short answer:** it depends on the question. Copying a definition out of another repository
 is cheaper with cttp and gets cheaper the more the definition drags with it. Fixing a bug in the
 repository you are already in costs about twice as much and succeeds slightly more often. Asking
-what uses a definition is where cttp should have won and does not — not because the question is
-wrong for it, but because `who` returns quietly incomplete answers on `src/`-layout projects and
-the agent burns twenty to forty times the context failing to confirm them.
+what uses a definition is where cttp should have won and did not — not because the question is
+wrong for it, but because `who` returned quietly incomplete answers on `src/`-layout projects and
+the agent burned twenty to forty times the context failing to confirm them. **That defect has
+since been fixed and the impact questions re-run**: the family's ratio fell from 16.28 to 6.65
+and the thrash largely stopped — see
+[§The src-layout fix](#the-src-layout-fix-and-what-it-moved).
 
 It is not a claim about cttp against "no cttp" in the abstract, and it is not a model evaluation.
 Read [§What the number does not mean](#what-the-number-does-not-mean) before quoting anything here.
@@ -157,9 +160,9 @@ the links arm has no `grep` to check with. So it searched, folded and read acros
 
 **The tool answered the question; the agent could not tell that the answer was complete.** That
 is a property of the interface, not of the harness, and it is the most useful thing this
-benchmark has produced. A `who` that resolved src-layout imports would likely end the thrash. It
-is a logged follow-up, and fixing it mid-sweep would make the runs incomparable, so it is
-reported here rather than fixed.
+benchmark has produced. A `who` that resolved src-layout imports would likely end the thrash.
+Fixing it mid-sweep would have made the runs incomparable, so the ninety runs above stand as
+measured and the fix came after them — with the five impact tasks re-run to see what it moved.
 
 Two consequences for reading the table. **Cost grows with the square of the turn count** —
 every turn re-reads the whole conversation from cache, so 6 turns cost 37k tokens, 18 cost 189k
@@ -167,6 +170,48 @@ and 41 cost 5M. One non-converging run outweighs fifty short ones, so the table 
 and keeps per-task rows. And a run that hits the turn cap is an `error`: it enters neither the
 pass rate nor the median, and shows up only under run health. A family whose links arm carries
 errors should be read as *did not converge*, not as a gap in the data.
+
+---
+
+## The src-layout fix, and what it moved
+
+After the sweep, `extract/python.py` gained a **source-root rule**: an absolute import is tried
+against the importing file's ancestor directories as before, and then against the repository's
+`src/`, which a src-layout puts its packages under and which is on no importing file's path. On
+click's `strip_ansi` at the benchmark commit, `who` went from 9 backlinks to 21 — the twelve it
+had been missing are all in `tests/`.
+
+The five impact tasks were then re-run, three runs per arm, same model, same harness, same
+commits: `bench/agent/results/2026-09-05-impact-srcroots/`.
+
+| task | layout | ratio before | ratio after | turns before | turns after |
+|---|---|---:|---:|---:|---:|
+| `im-color-default-click` | `src/` | 39.95 | **23.62** | 57 | 43 |
+| `im-nested-chain-click` | `src/` | 31.06 | **8.06** | 48 | 27 |
+| `im-obj-setattr-attrs` | `src/` | 19.42 | **5.84** | 59 | 26 |
+| `im-pick-bool-rich` | flat | 1.93 | 1.74 | 15 | 13 |
+| `im-set-cell-size-rich` | flat | 1.43 | 1.04 | 11 | 9 |
+| **impact total** | | **16.28** | **6.65** | 40 | 25 |
+
+Three things to read from this.
+
+**The three src-layout tasks moved and the two flat ones did not.** Rich was already complete
+and shifts by less than the run-to-run spread; click and attrs fall by 1.7x, 3.9x and 3.3x. The
+control is what makes the attribution safe: the change touched only the case it was aimed at.
+
+**The thrash stopped short of ending.** All fifteen links runs were scored — the sweep's
+turn-capped `error` is gone, and no run came near the 40-turn cap on the two cheaper click and
+attrs tasks. But `im-color-default-click` still costs 23x and still runs to 43 turns. Completeness
+was necessary and was not sufficient: the agent has no way to *know* `who` is complete, so on the
+hardest question it still corroborates by hand. An interface that stated its own coverage — which
+paths the index holds, which imports it could not resolve — is the follow-up this points to.
+
+**Correctness is unchanged.** The links arm passes 14 strict and 15 folded, the baseline 12
+strict and 15 folded — the same counts as the sweep, now out of fifteen scored runs rather than
+fourteen; both arms still fail `im-obj-setattr-attrs` under the strict naming rule. The
+graders' ground truth did not move either: the three src-layout targets have no test callers, so
+`cttp who` returns the same reference answer before and after the fix, and the re-run is directly
+comparable to the sweep rather than being graded against a new standard.
 
 ---
 

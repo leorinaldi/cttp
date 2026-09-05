@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). NEXT IS THE `who` SRC-LAYOUT FIX THE BENCHMARK POINTS TO.** Phase 0
+**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). THE BENCHMARK'S HEADLINE DEFECT IS FIXED AND RE-MEASURED.** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -48,36 +48,46 @@ tool calls and grades, a `--replay` dry run, and the smoke task passing in both 
 task set** (2026-09-05) — fifteen tasks over `click`, `attrs` and `rich` (cloned by
 `bench/agent/fetch.sh`): five real merged fixes with the commit's tests as the hidden grader,
 five cross-repository reuses graded by hidden tests plus a link check, five impact questions
-graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). 358 fast tests
-green plus 17 `slow` (the corpus, and the graders' acceptance over the real clones), ruff clean.
+graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). **405 fast tests
+green plus 17 `slow`** (the corpus, and the graders' acceptance over the real clones), ruff clean.
 
-_Last updated: 2026-09-05, session end (P8-T3 done: ninety runs, the table in `docs/benchmark.md`, three measurement biases found and fixed; next is the `who` src-layout fix the benchmark points to)._
+_Last updated: 2026-09-05, session end (the src-layout source-root rule in `extract/python.py`, and the five impact tasks re-run: the family's ratio 16.28 → 6.65)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**P8 is complete.** The ninety runs are recorded, [`docs/benchmark.md`](docs/benchmark.md)
-carries the table and the honest reading, and `bench/agent/results/2026-09-05-full/report.md` is
-generated from the records. The plan has no task after P8-T3, so the next session picks from
-what the benchmark found. In priority order:
+**P8 is complete and its headline defect is closed.** `extract/python.py` now resolves an
+absolute import against the repository's source roots, `who` is complete on `src/`-layout
+projects, and the five impact tasks were re-run to measure it: the family's ratio fell 16.28 →
+**6.65**, the three `src/` tasks by 1.7x / 3.9x / 3.3x while the two flat rich tasks barely
+moved. `docs/benchmark.md` carries the before/after table and its reading;
+`bench/agent/results/2026-09-05-impact-srcroots/` carries the thirty records.
 
-1. **Fix `who` on `src/`-layout projects** — the highest-value change the benchmark points to,
-   and the cause of its worst number. `extract/python.py` resolves an absolute import against the
-   importing file's ancestor directories only, so `from click._compat import x` in `tests/` never
-   reaches `src/click/`. `who` returns a quietly incomplete answer on click and attrs, the agent
-   cannot confirm it, and the impact tasks cost 19–40x the baseline against rich's 1.4–1.9x. A
-   source-root rule (`src/`, or `pyproject.toml`'s package dirs) is the fix. **Re-run the five
-   impact tasks afterwards** to see whether the ratio collapses — the strongest evidence the fix
-   matters, and cheap (30 runs, ~20 min at `--jobs 3`).
-2. **The closure keeps a function-local relative import** (`click.formatting.wrap_text` does
+The plan has no task after P8-T3, so the next session picks from what the re-run found. In
+priority order:
+
+1. **Let `who` state its own coverage.** The re-run's finding: completeness was necessary and
+   not sufficient. `im-color-default-click` still costs 23x at 43 turns because the agent has no
+   way to *know* the answer is complete, so it corroborates by hand — and the links arm has no
+   `grep` with which to do that cheaply. A `who` object that said what the index holds (which
+   revisions, which paths crawled) and what it could not resolve (imports the extractor gave up
+   on, links whose target identity is NULL) would let an agent stop. Schema change → bump
+   `SCHEMA_VERSION` and the fingerprint. **Re-run the impact tasks afterwards**, as this session
+   did — it is the cheap direct measurement (30 runs, ~25 min at `--jobs 3`).
+2. **`who` does not follow a re-export.** `from attr import fields` in `tests/` now reaches
+   `src/attr/__init__.py#fields`, which only imports the name, so the definition in
+   `src/attr/_funcs.py` still gains no backlink. A re-export rule (an `__init__.py` binding that
+   is an import of a sibling definition forwards the reference) would close the last of the
+   original defect. Smaller than item 1, and it makes `who` right on attrs' public API.
+3. **The closure keeps a function-local relative import** (`click.formatting.wrap_text` does
    `from ._textwrap import TextWrapper` in its body; `expand` inlines the definition and leaves
    the line, which fails at run time). Found in P8-T2, still open; spec §3's refusal list grows
    one line.
-3. **Publish the benchmark.** Leo asked this session whether the results could be seen on a page.
-   Nothing benchmark-related is in the viewer's index by design (each run indexes into its own
-   throwaway directory), so this would be a page of its own, not a viewer route.
+4. **Publish the benchmark.** Leo asked whether the results could be seen on a page. Nothing
+   benchmark-related is in the viewer's index by design (each run indexes into its own throwaway
+   directory), so this would be a page of its own, not a viewer route.
 
 Still Leo's, not blocking: the **DNS for `cttp.ai`** (apex `A` records 185.199.108.153,
 185.199.109.153, 185.199.110.153, 185.199.111.153, or an `ALIAS` to `leorinaldi.github.io`);
@@ -86,8 +96,11 @@ tool treats as a miss. When the records exist: `gh api -X PUT
 repos/leorinaldi/cttp-registry/pages -f https_enforced=true`, then compare
 `curl -s https://cttp.ai/hello-world.json` with `localhost:3120/hello-world.json`. Also pending
 Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced byte for byte by `fetch.sh`)
-can be deleted, and whether three stale `/tmp/cttp-bench-*` directories left by this session's
-killed runs can go.
+can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by killed runs can go.
+
+The **real index** (`~/.local/share/cttp/index.db`) still holds `github.com/leorinaldi/cttp`
+crawled under the old rule; `cttp index crawl --force` re-reads it so the viewer shows the
+backlinks the fix adds.
 
 ## Current state — working & verified
 
@@ -129,9 +142,11 @@ killed runs can go.
   one name; class members as `Class.member`, recursively; span from the first decorator. A nested
   def is reported as nested inside its parent; an unknown symbol lists the definitions. Derived
   references: import bindings and attribute chains resolved against the repository's file list
-  (relative imports from the file's package, absolute ones against every ancestor directory,
-  longest module prefix wins), plus sibling definitions in the same file; a parameter shadows a
-  module-level import. A script's references are every import it makes; a definition's are the
+  (relative imports from the file's package, absolute ones against every ancestor directory and
+  then the repository's **source roots** — `SOURCE_ROOTS = ("src",)`, counted only when the
+  repository has that directory and tried last, so a src-layout's `tests/` reach their package
+  while flat layouts and nearer ancestors are unaffected; longest module prefix wins), plus
+  sibling definitions in the same file; a parameter shadows a module-level import. A script's references are every import it makes; a definition's are the
   names it uses. **P3-T1:** `Ref.name` is the text the page reaches a reference by (`REG_BITS`,
   `decode.STEP_MILLICELSIUS`, `r2m`); `Page.imports` is a definition's module-level import
   statements for the stdlib/third-party names it uses (`import struct`, `from asyncio import
@@ -784,12 +799,13 @@ trigger that would schedule it.
   repository module) or drop the statement when the closure binds the name → **unscheduled**;
   trigger: the first real expansion of a definition with a local import (spec §3's refusal
   list would grow one line)
-- **`who` misses a `src/` layout's tests and every re-export**: the extractor resolves an
-  absolute import against the importing file's ancestors, so `from click._compat import x` in
-  `tests/` never reaches `src/click/`, and `attr.fields` is a ref to `__init__.py`, not to the
-  definition. The five impact targets avoid both (grep agrees with `who`); the README says so →
-  **unscheduled**; trigger: wanting `who` right on a src-layout project (a source-root rule —
-  `src/`, or `pyproject.toml`'s package dirs — in `extract/python.py`'s reference resolution)
+- ~~`who` misses a `src/` layout's tests~~ — closed 2026-09-05: `SOURCE_ROOTS = ("src",)` in
+  `extract/python.py`, tried after the file's ancestors. `who` on click's `strip_ansi` went
+  9 backlinks → 21, the twelve new ones all in `tests/`
+- **`who` does not follow a re-export**: `from attr import fields` in `tests/` reaches
+  `src/attr/__init__.py#fields`, which only imports the name, so `src/attr/_funcs.py#fields`
+  gains no backlink. The other half of the original defect, and the last of it → **next
+  session**, second item; trigger: wanting `who` right on a package's public API
 - **`expand` writes hoisted imports without a blank line after preceding code** when the link
   is at the end of the file, and before whatever `--at` points at (`import os` ends up after
   the expanded function when the link is inserted above it) — valid Python, untidy →
@@ -803,11 +819,16 @@ trigger that would schedule it.
 - ~~Decide whether ninety streams stay in git~~ — closed 2026-09-05: they do, **gzipped**
   (5.4 MB for the ninety; `harness.resolve_stream` reads plain or `.gz`, a replay from a
   gzipped stream reproduces the numbers exactly)
-- **`who` misses a `src/` layout's tests — this is now the benchmark's headline defect**, not a
-  curiosity: the impact tasks cost 19–40x the baseline on click and attrs against 1.4–1.9x on
-  rich, because the agent cannot confirm an answer it senses is incomplete and has no `grep`.
-  A source-root rule in `extract/python.py` is the fix → **next session**, first item; re-run
-  the five impact tasks after to see the ratio collapse
+- ~~`who` misses a `src/` layout's tests — the benchmark's headline defect~~ — closed
+  2026-09-05 and **re-measured**: the impact family fell 16.28x → 6.65x, the three `src/` tasks
+  by 1.7x / 3.9x / 3.3x, the two flat rich ones unmoved (the control). Records in
+  `results/2026-09-05-impact-srcroots/`
+- **An agent cannot tell that a `who` answer is complete**, so it corroborates by hand:
+  `im-color-default-click` still costs 23x at 43 turns *after* the fix, and the links arm has no
+  `grep` to check with cheaply. Completeness was necessary and not sufficient. A `who` that
+  stated its own coverage — revisions and paths crawled, imports the extractor gave up on, links
+  whose target identity is NULL — is the answer → **next session**, first item; it is a schema
+  change (`SCHEMA_VERSION` and the fingerprint)
 - **The impact grader's naming convention favours the links arm.** `who` cannot address a nested
   function, so it credits the enclosing method and the reference answers inherit that; an agent
   reading source names the nested one and is marked wrong. `report.fold_nested` prints a folded
@@ -825,6 +846,31 @@ trigger that would schedule it.
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
+
+- **2026-09-05 (twentieth session) — the src-layout source-root rule, and the impact tasks
+  re-run to measure it.** The benchmark's worst number was one defect: `extract/python.py`
+  resolved an absolute import against the importing file's ancestor directories only, so
+  `from click._compat import strip_ansi` in `tests/` never reached `src/click/_compat.py` and
+  `who` answered click and attrs quietly incomplete. **The fix** is `SOURCE_ROOTS = ("src",)`
+  plus `_source_roots(files)`: an absolute import is tried against the ancestors first and the
+  repository's source roots **last**, and a root counts only when the repository actually has
+  that directory — so a flat layout gains nothing and a nearer ancestor still wins, which is why
+  no existing test moved. Two tests: the rule itself (ancestors win, a repo without `src/` gains
+  no root, an unknown module is still third-party) and an end-to-end `who` over a crawled
+  src-layout repo. On click at the benchmark commit, `who` on `strip_ansi` went **9 backlinks →
+  21**, the twelve new ones all in `tests/`. **The measurement:** the five impact tasks re-run,
+  three runs per arm, same model and commits — the family's ratio **16.28 → 6.65**, the three
+  `src/` tasks falling 1.7x / 3.9x / 3.3x while the two flat rich tasks moved less than the
+  run-to-run spread. That control is what makes the attribution safe. The sweep's turn-capped
+  `error` is gone: all fifteen links runs scored. **Why the graders did not have to change:** the
+  three `src/` impact targets have no test callers, so `cttp who` returns the same reference
+  answer before and after — all sixteen `--check-graders` still pass and the re-run is directly
+  comparable to P8-T3 rather than graded against a new standard. **The honest remainder:**
+  `im-color-default-click` still costs 23x at 43 turns. Completeness was necessary and not
+  sufficient — the agent has no way to *know* `who` is complete, so it corroborates by hand, and
+  a `who` that stated its own coverage is what this now points to. `docs/benchmark.md` gains a
+  before/after section and its two stale claims are amended; `docs/overview.md` §4 gains the rule
+  and §8's trap now describes only the re-export case that remains.
 
 - **2026-09-05 (nineteenth session) — P8-T3: the ninety runs, and three measurement biases
   found and fixed on the way.** **The arms first:** the P8-T2 first runs showed the links arm
@@ -963,39 +1009,7 @@ is the archive, and a bloated history taxes every future session start.
   session-end run caught a flake — `test_definition_repo_dups_and_search_pages`, one run in
   about five — traced to git's one-second commit timestamps deciding which of two places a
   search hit shows; the test now asserts the identity (follow-up filed on the query).
-- **2026-09-05 (fifteenth session) — Phase 6 end to end: P6-T1 the tree-sitter extractor,
-  P6-T2 the corpus and acceptance test 1, P6-T3 the measurement.** Three commits. P6-T1:
-  `tree-sitter` 0.26.0 segfaulted on nodes returned from query captures (a `Point` read from
-  freed memory gave spans like `(9928, 9928)` before the crash); pinned `<0.26` and, belt and
-  braces, every row is computed from `start_byte`/`end_byte`. Decisions: tagged types are
-  addressed `struct.<tag>` / `enum.<tag>` / `union.<tag>` (C's tag namespace is separate, and the
-  symbol grammar is dotted identifiers); kinds `type` and `macro` were added rather than
-  stretching `class`; the C shape keeps keywords and primitive types and abstracts every
-  identifier node, and a raw macro body or `ERROR` text is regex-tokenized with comments cut
-  out; a comment directly above a definition is its docstring unless it is a link line; the
-  first of two `#ifdef` definitions wins. `shape()` took a `language` argument instead of a
-  second function, so the crawl and `resolve` stopped special-casing Python. A refusal of C
-  pages in the closure was tried and reverted: `test_check.py` expands a C script page beneath a
-  `//` link in a `.c` file on purpose. P6-T2: the preserved copy's `urls.txt` said `master`,
-  2026-09-04; hashing every file as a git blob against the GitHub contents API showed the five
-  directories unchanged on master from the rtc merge `275bc4eedf2c` (2026-08-28) through
-  2026-09-05, so **v7.3-rc1** is the pin. Reproducing the original fetch exactly needed
-  non-cone sparse patterns (cone mode takes `hwmon/pmbus` and the 12 files of `drivers/iio`
-  itself) ordered shallowest-first so an exclusion never undoes a deeper inclusion; the result
-  is byte-identical to the preserved copy (moved to `corpus-preserved/`, not deleted). The crawl
-  of a blobless clone would have fetched the whole kernel blob by blob, so a sparse checkout is
-  crawled as the files it has; the acceptance test runs git with `GIT_ALLOW_PROTOCOL=none` so a
-  lazy fetch would fail loudly. Crawl: 799 files, 34,087 pages, 33,811 identities, 2 m 14 s,
-  nothing skipped. The vision's own example groups were not recoverable; `expected.json` records
-  what the tool finds (four `(s8)reg * 1000` decoders by shape, two verbatim pairs) and says so.
-  A `cttp resolve github.com/torvalds/linux@v7.3-rc1/…` typed by hand started cloning the whole
-  kernel into `~/.cache/cttp` — killed, cache dir removed, follow-up filed. P6-T3: the
-  line-level numbers came out 92 % / 42 % under the stated method, and 89/31, 83/23, 66/16 over
-  lines of ≥3, ≥5, ≥8 tokens — nowhere near 37/14 under any reading tried, so the vision was
-  amended to the recomputed figures with the method named, and `expected.json` keeps the old
-  numbers under `vision_before`. Slow corpus tests are deselected by default (`addopts`). The
-  viewer answered 500 during the real-index crawl (`database is locked`: a read-only open ran
-  the schema script); readers now skip it.
+
 ## How to run
 
 ```bash

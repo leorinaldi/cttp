@@ -50,9 +50,12 @@ is complete**: fifteen tasks over `click`, `attrs` and `rich`, ninety runs recor
 [`benchmark.md`](benchmark.md) carrying the table and its reading. What it found, in one line:
 cttp is cheaper for cross-repository reuse and the margin grows with the closure's size (0.90
 overall, 0.38 on a two-file closure), costs about twice as much on in-repository fixes while
-passing slightly more often, and costs 19–40x on impact questions over a `src/`-layout project —
-one defect, not a property of the question, since `who` cannot resolve a test's import into
-`src/` and the agent cannot confirm an answer it senses is incomplete.
+passing slightly more often, and cost 19–40x on impact questions over a `src/`-layout project.
+That last was **one defect** — `who` could not resolve a test's import into `src/`, and the agent
+cannot confirm an answer it senses is incomplete. The source-root rule (§4) closed it and the
+five impact tasks were re-run: the family 16.28x → **6.65x**, the `src/` tasks falling 1.7–3.9x
+while the flat ones held still. What remains is that an agent still cannot *tell* a `who` answer
+is complete, so the hardest question still costs 23x.
 
 ## 2. Architecture
 
@@ -275,6 +278,12 @@ token would have broken claims by anyone but Leo.
   `Ref` only when the longest module prefix names a file at that rev; anything else is a
   stdlib or third-party top-level module, decided by `sys.stdlib_module_names`. A parameter
   shadows a module-level import.
+- **An absolute import is rooted at the file's ancestors, then at the repository's source
+  roots.** A src-layout puts its packages under a directory that is on no importing file's path,
+  so `from click._compat import strip_ansi` in `tests/` would otherwise reach nothing.
+  `SOURCE_ROOTS` in `extract/python.py` is `("src",)`; a root counts only when the repository
+  actually has that directory, and it is tried **last**, so a flat layout and a nearer ancestor
+  both keep winning. This is what makes `who` complete on click and attrs.
 - **A `#symbol` travels the HTTP contract as `%23` in the existing route.** The contract grew
   no route; spec §8's table lists it, and the resolver's object beneath the table.
 - **The block beneath a link is recorded, never guessed.** It begins after the link's *stack*
@@ -554,10 +563,10 @@ token would have broken claims by anyone but Leo.
   task repositories' test-time needs (`hypothesis`, `pygments`, `markdown-it-py`). `click` and
   `attrs` are importable in the venv for other reasons (`typer`, `hypothesis`); the cross-repo
   hidden tests check the agent did not import them.
-- **`who` does not see a `src/` layout's tests.** The extractor resolves an absolute import
-  against the importing file's ancestor directories, so `from click._compat import strip_ansi` in
-  `tests/` does not reach `src/click/_compat.py`, and a re-export (`attr.fields`) is not a
-  backlink of the definition. Rich (flat layout) is fine. The impact tasks avoid both cases.
+- **`who` does not follow a re-export.** `from attr import fields` in `tests/` reaches
+  `src/attr/__init__.py`, which only *imports* the name, so the definition in `src/attr/_funcs.py`
+  gains no backlink from that test. A `src/` layout's tests are otherwise seen — that is the
+  source-root rule in §4.
 - **The closure keeps a function-local relative import.** `click.formatting.wrap_text` does
   `from ._textwrap import TextWrapper` inside its body; `expand` inlines `TextWrapper` and leaves
   the import line, which fails at run time. Pick definitions without local imports until this is

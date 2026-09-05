@@ -186,3 +186,29 @@ def test_queries_need_an_index(registry, tmp_path, monkeypatch):
     monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "none.db"))
     res = runner.invoke(app, ["who", "hello-world"])
     assert res.exit_code == 1 and "no index at" in res.output
+
+
+def test_who_sees_a_src_layouts_tests(registry, tmp_path, monkeypatch):
+    """The benchmark's worst number: `from pkg.core import greet` in `tests/` is on no ancestor
+    path of the package under `src/`, so `who` used to answer a quietly incomplete 0."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(
+        tmp_path,
+        "srclayout",
+        {
+            "src/pkg/__init__.py": "",
+            "src/pkg/core.py": GREET,
+            "tests/test_core.py": (
+                'from pkg.core import greet\n\n\ndef test_greet():\n    assert greet("a")\n'
+            ),
+        },
+    )
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    out = who(conn, f"{repo}@v1/src/pkg/core.py#greet", registry)
+    # the test file as a script page (its imports) and the test function that uses the name
+    assert out["count"] == 2 and out["by"] == {"ref": {"derived": 2}}
+    script, fn = out["backlinks"]
+    assert script["source"]["path"] == "tests/test_core.py" and script["source"]["symbol"] is None
+    assert fn["source"]["symbol"] == "test_greet" and fn["name"] == "greet"

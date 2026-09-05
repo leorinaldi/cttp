@@ -1,0 +1,631 @@
+{
+  "schema": 1,
+  "task": "im-obj-setattr-attrs",
+  "family": "impact",
+  "arm": "links",
+  "run": 2,
+  "system_prompt": "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the cttp MCP tools, not the shell: `search` finds a definition by name or docstring, `resolve` returns one definition's text by address, `who` lists what links to a definition, `closure` what a definition needs to run, `fold` reads a file as its links, `dups` finds copies. The shell's file readers (grep, cat, find, ls, sed) are denied; `Read` reads a file whose path you already know.",
+  "status": "pass",
+  "passed": true,
+  "model": "opus",
+  "model_used": "claude-opus-5",
+  "claude_code_version": "2.1.261",
+  "max_turns": 40,
+  "tokens": 631416,
+  "usage": {
+    "input_tokens": 34,
+    "cache_creation_input_tokens": 81691,
+    "cache_read_input_tokens": 536031,
+    "output_tokens": 13660,
+    "output_tokens_details": {
+      "thinking_tokens": 10261
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 81691,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 618,
+        "cache_read_input_tokens": 84421,
+        "cache_creation_input_tokens": 1548,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1548
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "model_usage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 1126,
+      "outputTokens": 17,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001211,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-haiku-4-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    },
+    "claude-opus-5": {
+      "inputTokens": 34,
+      "outputTokens": 13660,
+      "cacheReadInputTokens": 536031,
+      "cacheCreationInputTokens": 81691,
+      "webSearchRequests": 0,
+      "costUSD": 1.4265954999999997,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "thinkingTokens": 10261,
+      "canonicalModel": "claude-opus-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "stream_usage": {
+    "input_tokens": 34,
+    "cache_read_input_tokens": 536031,
+    "cache_creation_input_tokens": 81691
+  },
+  "requests": 17,
+  "total_cost_usd": 1.4278064999999998,
+  "num_turns": 25,
+  "duration_ms": 193423,
+  "duration_api_ms": 194583,
+  "wall_seconds": 194.873,
+  "returncode": 0,
+  "timed_out": false,
+  "subtype": "success",
+  "is_error": false,
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01NdjKbcieifeqW6z6jLnLyE",
+      "tool_input": {
+        "command": "git ls-files | head -100",
+        "description": "List tracked files"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_015JC7p8pNXSbxZRK9sGXDs8",
+      "tool_input": {
+        "command": "python3 -c \"import os;print(sorted(os.listdir('.')));print(sorted(os.listdir('tests')));print(sorted(os.listdir('src/attr')));print(sorted(os.listdir('src/attrs')))\"",
+        "description": "List directory contents via python"
+      }
+    }
+  ],
+  "tool_counts": {
+    "mcp__cttp__who": 3,
+    "mcp__cttp__search": 4,
+    "Bash": 2,
+    "mcp__cttp__fold": 3,
+    "mcp__cttp__resolve": 1,
+    "Read": 10,
+    "Write": 1
+  },
+  "tool_calls": [
+    {
+      "id": "toolu_014MYVZ9wpnLqH1oQeVSXy8t",
+      "name": "mcp__cttp__who",
+      "input": {
+        "address": "src/attr/_make.py#_OBJ_SETATTR"
+      },
+      "denied": false,
+      "error": true,
+      "result_chars": 146
+    },
+    {
+      "id": "toolu_01GycGm137t9C68M2P8Pi9qT",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "_OBJ_SETATTR"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 628
+    },
+    {
+      "id": "toolu_01Hxfjh6ekSGm5imTQuSwi7S",
+      "name": "mcp__cttp__who",
+      "input": {
+        "address": "github.com/python-attrs/attrs@8f767776326f/src/attr/_make.py#_OBJ_SETATTR"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 11090
+    },
+    {
+      "id": "toolu_01NdjKbcieifeqW6z6jLnLyE",
+      "name": "Bash",
+      "input": {
+        "command": "git ls-files | head -100",
+        "description": "List tracked files"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 65
+    },
+    {
+      "id": "toolu_014ct649PYx3wvodFUZ6PKgW",
+      "name": "mcp__cttp__fold",
+      "input": {
+        "file": "tests/test_make.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 54
+    },
+    {
+      "id": "toolu_015JC7p8pNXSbxZRK9sGXDs8",
+      "name": "Bash",
+      "input": {
+        "command": "python3 -c \"import os;print(sorted(os.listdir('.')));print(sorted(os.listdir('tests')));print(sorted(os.listdir('src/attr')));print(sorted(os.listdir('src/attrs')))\"",
+        "description": "List directory contents via python"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 727
+    },
+    {
+      "id": "toolu_01Bi7ZHh2dVszHfbaYXmX3t8",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "simple_class",
+        "limit": 10
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 3480
+    },
+    {
+      "id": "toolu_019uPPqnVJd7gPByW5ufSrxL",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "test setattr frozen",
+        "limit": 15
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 3860
+    },
+    {
+      "id": "toolu_01LvzEMnJTB6uraKSwiSF6L5",
+      "name": "mcp__cttp__fold",
+      "input": {
+        "file": "tests/test_setattr.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 57
+    },
+    {
+      "id": "toolu_01R1edAvDk9LyQrZ1pRTJxbh",
+      "name": "mcp__cttp__fold",
+      "input": {
+        "file": "src/attr/_funcs.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 54
+    },
+    {
+      "id": "toolu_01DeBbMRRfPh9QdDq7BgHBhy",
+      "name": "mcp__cttp__resolve",
+      "input": {
+        "address": "github.com/python-attrs/attrs@8f767776326f/tests/test_make.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 1527
+    },
+    {
+      "id": "toolu_01QenAz3mddD2UR43RNt2Sg2",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_funcs.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 18222
+    },
+    {
+      "id": "toolu_015RVv1NQLwnhQP18rh5nQoc",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 350,
+        "limit": 200
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 7728
+    },
+    {
+      "id": "toolu_01WtedincEKNXo9o7eKhnCFn",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 470,
+        "limit": 120
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 4872
+    },
+    {
+      "id": "toolu_01QRMV4tYNXVRdBNEDSFNqq6",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 1,
+        "limit": 350
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 11156
+    },
+    {
+      "id": "toolu_01VtTgGeaAHnSkiDY3pxLNri",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 589,
+        "limit": 450
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 17827
+    },
+    {
+      "id": "toolu_01VXa1zSHmUpSAWWUuLtTMmr",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 1039,
+        "limit": 300
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 10847
+    },
+    {
+      "id": "toolu_01FcA6ngtC3RkQKYFktUwhYk",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 1960,
+        "limit": 200
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 6801
+    },
+    {
+      "id": "toolu_01X75YXxCiN9bGY9zqjSfvKm",
+      "name": "mcp__cttp__search",
+      "input": {
+        "text": "slots_setstate"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 111
+    },
+    {
+      "id": "toolu_0118gFXZVYJibWWmjAPGHrpY",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 2160,
+        "limit": 340
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 14301
+    },
+    {
+      "id": "toolu_01Fnm6nf6hMhwmbQm2iDhk62",
+      "name": "mcp__cttp__who",
+      "input": {
+        "address": "github.com/python-attrs/attrs@8f767776326f/src/attr/_make.py#_transform_attrs"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 8207
+    },
+    {
+      "id": "toolu_017PU1Dvs11UfcZnb56yFohs",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 2499,
+        "limit": 400
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 12879
+    },
+    {
+      "id": "toolu_01MqbGxzxeb2ucHjpvs6Gj4t",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/src/attr/_make.py",
+        "offset": 1339,
+        "limit": 620
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 22381
+    },
+    {
+      "id": "toolu_012zAKGg5zwhX9unDGHVai4P",
+      "name": "Write",
+      "input": {
+        "file_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo/impact.txt",
+        "content": "src/attr/_funcs.py#assoc\nsrc/attr/_funcs.py#resolve_types\nsrc/attr/_make.py#_transform_attrs\nsrc/attr/_make.py#_make_cached_property_getattr\nsrc/attr/_make.py#_ClassBuilder._patch_original_class\nsrc/attr/_make.py#_ClassBuilder._create_slots_class\nsrc/attr/_make.py#_ClassBuilder._make_getstate_setstate\nsrc/attr/_make.py#_ClassBuilder.add_setattr\nsrc/attr/_make.py#_make_init_script\nsrc/attr/_make.py#Attribute.__init__\nsrc/attr/_make.py#Attribute.evolve\nsrc/attr/_make.py#Attribute._setattrs\n"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 165
+    }
+  ],
+  "mcp_servers": [
+    {
+      "name": "cttp",
+      "status": "connected"
+    }
+  ],
+  "cttp_connected": true,
+  "tools_available": [
+    "Bash",
+    "Edit",
+    "Read",
+    "Write",
+    "mcp__cttp__closure",
+    "mcp__cttp__dups",
+    "mcp__cttp__fold",
+    "mcp__cttp__resolve",
+    "mcp__cttp__search",
+    "mcp__cttp__who"
+  ],
+  "rate_limit": {
+    "status": "allowed",
+    "resetsAt": 1788652800,
+    "rateLimitType": "five_hour",
+    "overageStatus": "rejected",
+    "overageDisabledReason": "out_of_credits",
+    "isUsingOverage": false,
+    "unifiedWindows": {
+      "five_hour": {
+        "utilization": 0.39,
+        "resetsAt": 1788652800
+      },
+      "seven_day": {
+        "utilization": 0.48,
+        "resetsAt": 1788840000
+      }
+    }
+  },
+  "session_id": "a5dd5c38-9b60-434a-b095-c09def5f0f50",
+  "final_text": "Wrote `impact.txt` with the 12 definitions that use `_OBJ_SETATTR`.\n\nHow I got there: `who` on `src/attr/_make.py#_OBJ_SETATTR` gave 15 backlinks; I dropped the `src/attr/_funcs.py` module-level entry (a bare import) and the two class-page aggregates (`_ClassBuilder`, `Attribute`), keeping their methods instead, then read `src/attr/_make.py` and `src/attr/_funcs.py` end-to-end to confirm each use site and that no use sits in a class body.\n\nResult:\n\n- `src/attr/_funcs.py` \u2014 `assoc`, `resolve_types`\n- `src/attr/_make.py` \u2014 `_transform_attrs`, `_make_cached_property_getattr`, `_make_init_script`, `_ClassBuilder._patch_original_class`, `_ClassBuilder._create_slots_class`, `_ClassBuilder._make_getstate_setstate`, `_ClassBuilder.add_setattr`, `Attribute.__init__`, `Attribute.evolve`, `Attribute._setattrs`\n\nTwo notes on judgment calls:\n\n- Nested functions: the uses at `_make.py:1046` and `_make.py:1198-1216` are inside the locally defined `slots_setstate` and `__setattr__`. I listed the enclosing methods (`_make_getstate_setstate`, `add_setattr`), matching the two name forms the task specifies and the index's definition granularity.\n- Tests: no test uses the name. I verified the index does record test-side references (`who` on `_transform_attrs` returns `tests/test_make.py` entries), so the absence of test backlinks for `_OBJ_SETATTR` is a real absence, not an indexing gap.\n\nNo test command was named in the task, and no other file was changed.",
+  "grade": {
+    "passed": true,
+    "returncode": null,
+    "timed_out": false,
+    "output": "",
+    "diff": "\n# untracked files:\nimpact.txt\n",
+    "command": null,
+    "checks": {
+      "who": {
+        "address": "github.com/python-attrs/attrs@8f767776326faaed11e6c2974798787f6e19b343/src/attr/_make.py#_OBJ_SETATTR",
+        "answer_file": "impact.txt",
+        "who_count": 15,
+        "expected": [
+          "src/attr/_funcs.py#assoc",
+          "src/attr/_funcs.py#resolve_types",
+          "src/attr/_make.py#Attribute.__init__",
+          "src/attr/_make.py#Attribute._setattrs",
+          "src/attr/_make.py#Attribute.evolve",
+          "src/attr/_make.py#_ClassBuilder._create_slots_class",
+          "src/attr/_make.py#_ClassBuilder._make_getstate_setstate",
+          "src/attr/_make.py#_ClassBuilder._patch_original_class",
+          "src/attr/_make.py#_ClassBuilder.add_setattr",
+          "src/attr/_make.py#_make_cached_property_getattr",
+          "src/attr/_make.py#_make_init_script",
+          "src/attr/_make.py#_transform_attrs"
+        ],
+        "answer": [
+          "src/attr/_funcs.py#assoc",
+          "src/attr/_funcs.py#resolve_types",
+          "src/attr/_make.py#Attribute.__init__",
+          "src/attr/_make.py#Attribute._setattrs",
+          "src/attr/_make.py#Attribute.evolve",
+          "src/attr/_make.py#_ClassBuilder._create_slots_class",
+          "src/attr/_make.py#_ClassBuilder._make_getstate_setstate",
+          "src/attr/_make.py#_ClassBuilder._patch_original_class",
+          "src/attr/_make.py#_ClassBuilder.add_setattr",
+          "src/attr/_make.py#_make_cached_property_getattr",
+          "src/attr/_make.py#_make_init_script",
+          "src/attr/_make.py#_transform_attrs"
+        ],
+        "missing": [],
+        "extra": [],
+        "passed": true,
+        "why": "ok"
+      }
+    }
+  },
+  "base_sha": "8f767776326faaed11e6c2974798787f6e19b343",
+  "index": {
+    "add": [
+      {
+        "schema_version": 3,
+        "repo": "github.com/python-attrs/attrs",
+        "local_path": "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/w/repo",
+        "default_branch": "main",
+        "status": "added"
+      }
+    ],
+    "crawl": {
+      "schema_version": 3,
+      "crawled": [
+        {
+          "repo": "github.com/python-attrs/attrs",
+          "sha": "8f767776326faaed11e6c2974798787f6e19b343",
+          "status": "crawled",
+          "files": 140,
+          "pages": 1588,
+          "definitions": 1511,
+          "links": 3373,
+          "skipped": [
+            "docs/_static/attrs_logo.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "docs/_static/attrs_logo_white.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "docs/_static/docset-icon.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "docs/_static/docset-icon@2x.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte",
+            "docs/_static/social card.afdesign: 'utf-8' codec can't decode byte 0xff in position 1: invalid start byte",
+            "docs/_static/social card.png: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte"
+          ]
+        }
+      ]
+    }
+  },
+  "argv": [
+    "claude",
+    "-p",
+    "We are about to rename `_OBJ_SETATTR` (defined in `src/attr/_make.py`) in this repository (attrs). Before we\ndo, list every definition whose code uses it: every function, method or class body that refers\nto the name `_OBJ_SETATTR`, in the package and in the tests.\n\nWrite the list to a new file `impact.txt` at the repository root, one entry per line, in the\nform `<path>#<name>`, where `<path>` is the file's path from the repository root and `<name>`\nis the dotted name of the innermost definition containing the use \u2014 `pkg/mod.py#func` for a\nfunction, `pkg/mod.py#Class.method` for a method (name the method, not its class, unless the\nuse is in the class body itself). Sort order does not matter. Do not list modules that merely\nimport the name, do not list the definition itself, and do not change any other file. Nothing\nneeds to be run.",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "opus",
+    "--max-turns",
+    "40",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--append-system-prompt",
+    "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done (if it names one), exactly as the task writes it and without piping it into anything else, and then stop with a short summary of what you did. Your search is the cttp MCP tools, not the shell: `search` finds a definition by name or docstring, `resolve` returns one definition's text by address, `who` lists what links to a definition, `closure` what a definition needs to run, `fold` reads a file as its links, `dups` finds copies. The shell's file readers (grep, cat, find, ls, sed) are denied; `Read` reads a file whose path you already know.",
+    "--tools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "--allowedTools",
+    "mcp__cttp__resolve",
+    "mcp__cttp__who",
+    "mcp__cttp__closure",
+    "mcp__cttp__search",
+    "mcp__cttp__dups",
+    "mcp__cttp__fold",
+    "Read",
+    "Edit",
+    "Write",
+    "--disallowedTools",
+    "Bash(cat)",
+    "Bash(cat *)",
+    "Bash(head)",
+    "Bash(head *)",
+    "Bash(tail)",
+    "Bash(tail *)",
+    "Bash(less)",
+    "Bash(less *)",
+    "Bash(more)",
+    "Bash(more *)",
+    "Bash(grep)",
+    "Bash(grep *)",
+    "Bash(egrep)",
+    "Bash(egrep *)",
+    "Bash(fgrep)",
+    "Bash(fgrep *)",
+    "Bash(rg)",
+    "Bash(rg *)",
+    "Bash(ag)",
+    "Bash(ag *)",
+    "Bash(find)",
+    "Bash(find *)",
+    "Bash(ls)",
+    "Bash(ls *)",
+    "Bash(tree)",
+    "Bash(tree *)",
+    "Bash(sed)",
+    "Bash(sed *)",
+    "Bash(awk)",
+    "Bash(awk *)",
+    "Bash(wc)",
+    "Bash(wc *)",
+    "Bash(stat)",
+    "Bash(stat *)",
+    "Bash(file)",
+    "Bash(file *)",
+    "Bash(diff)",
+    "Bash(diff *)",
+    "Bash(git)",
+    "Bash(git *)",
+    "Bash(od)",
+    "Bash(od *)",
+    "Bash(xxd)",
+    "Bash(xxd *)",
+    "Bash(strings)",
+    "Bash(strings *)",
+    "Bash(nl)",
+    "Bash(nl *)",
+    "Bash(cut)",
+    "Bash(cut *)",
+    "Bash(sort)",
+    "Bash(sort *)",
+    "Bash(uniq)",
+    "Bash(uniq *)",
+    "Bash(tac)",
+    "Bash(tac *)",
+    "Bash(rev)",
+    "Bash(rev *)",
+    "Bash(column)",
+    "Bash(column *)",
+    "Bash(paste)",
+    "Bash(paste *)",
+    "Bash(fold)",
+    "Bash(fold *)",
+    "Bash(pr)",
+    "Bash(pr *)",
+    "Bash(fmt)",
+    "Bash(fmt *)",
+    "Bash(look)",
+    "Bash(look *)",
+    "Bash(locate)",
+    "Bash(locate *)",
+    "Bash(which)",
+    "Bash(which *)",
+    "Bash(type)",
+    "Bash(type *)",
+    "Bash(printf)",
+    "Bash(printf *)",
+    "Bash(echo)",
+    "Bash(echo *)",
+    "--mcp-config",
+    "/tmp/cttp-bench-im-obj-setattr-attrs-links-3cyqdmou/mcp.json"
+  ],
+  "stream_file": "2.stream.jsonl",
+  "recorded_at": "2026-09-05T21:31:53+00:00",
+  "replayed_from": null,
+  "stderr": ""
+}
