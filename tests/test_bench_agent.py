@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
 RESULTS = ROOT / "bench" / "agent" / "results"
 SMOKE_RECORDS = sorted(RESULTS.glob("*/*/*/1.json"))  # every committed first run, not only smoke
+# The date directory holding the smoke run — not simply the newest one: a full P8-T3 date
+# directory sorts after it and holds no smoke task.
+SMOKE_DIRS = sorted({p.parents[2] for p in RESULTS.glob("*/smoke-pyrepo/*/1.json")})
 REAL_TASKS = [t for t in graders.load_tasks() if t.name != "smoke-pyrepo"]
 
 
@@ -218,9 +221,9 @@ def test_a_replay_reproduces_the_recorded_numbers(record_path, tmp_path):
     assert "--setting-sources" in recorded["argv"] and "--bare" not in recorded["argv"]
 
 
-@pytest.mark.skipif(not SMOKE_RECORDS, reason="no recorded smoke run under bench/agent/results")
+@pytest.mark.skipif(not SMOKE_DIRS, reason="no recorded smoke run under bench/agent/results")
 def test_the_report_renders_one_row_per_task_with_medians_and_a_ratio(tmp_path):
-    date_dir = SMOKE_RECORDS[-1].parents[2]
+    date_dir = SMOKE_DIRS[-1]
     records = report.load_records(date_dir)
     assert {r["arm"] for r in records} >= {"links", "baseline"}
     table = report.summarize(records)
@@ -228,8 +231,27 @@ def test_the_report_renders_one_row_per_task_with_medians_and_a_ratio(tmp_path):
     text = report.render(table, "t")
     assert "| smoke-pyrepo | in-repo |" in text and "**in-repo total**" in text
     assert "smoke-pyrepo/links/1.json" in text
+    # The grand total, the run-health denominator and the deny list's cost are all in the table.
+    assert "**all tasks**" in text
+    assert "## Run health" in text
+    for arm in ("links", "baseline"):
+        cell = table["smoke-pyrepo"][arm]
+        assert cell["runs"] == cell["scored"] == 1
+        assert cell["statuses"]["pass"] == 1
     assert report.main([str(date_dir), "--no-write"]) == 0
     assert not (tmp_path / "report.md").exists()
+
+
+@pytest.mark.skipif(not SMOKE_DIRS, reason="no recorded smoke run under bench/agent/results")
+def test_the_report_counts_stamps_over_the_cross_repo_tasks_only():
+    """The link check accepts an unstamped link, so the report *reports* stamps (P8-T3)."""
+    table = report.summarize(report.load_records(SMOKE_DIRS[-1]))
+    linked = {t for t in table if table[t]["links"]["linked"]}
+    assert linked, "no cross-repo record in the fixture directory"
+    for task in linked:
+        assert table[task]["_family"] == "cross-repo"
+    text = report.render(table, "t")
+    assert "## Stamps written (cross-repo tasks)" in text
 
 
 # --- P8-T2: the task set ------------------------------------------------------------------------

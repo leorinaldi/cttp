@@ -25,6 +25,7 @@ Each document has one job. Keeping them apart is what stops any of them from rot
 | [`docs/vision.md`](docs/vision.md) | **Why this exists** — purpose and intent | when direction is in question |
 | [`docs/spec.md`](docs/spec.md) | **The end state** — the finished product, its interface, its structure underneath, non-goals | when touching scope or the core model |
 | [`docs/plan.md`](docs/plan.md) | **How we get there** — phased tasks with acceptance checks. Not a status doc | before starting any build task |
+| [`docs/benchmark.md`](docs/benchmark.md) | **The agent benchmark** — what the two arms measure, the table, and the honest reading of it. Generated numbers come from `bench/agent/results/<date>/report.md` | when quoting or rerunning the benchmark |
 | [`docs/json-schemas.md`](docs/json-schemas.md) | **The `--json` contract** — every command's output schema, generated from `src/cttp/schemas.py` (`python -m cttp.schemas`); never edit by hand | when reading or changing any `--json` output or MCP tool |
 
 Add subsystem design docs and runbooks as `docs/*.md` when they earn their place, and **register each

@@ -3,10 +3,15 @@
     uv run python -m bench.agent.report bench/agent/results/<date>
 
 Reads every `<task>/<arm>/<run>.json` under the directory, prints the table, and writes
-`report.md` beside them. One row per task and family totals: runs, pass rate per arm, median
-tokens per arm, and the ratio of the medians (links over baseline — below 1 means the links arm
-consumed less context). Every cell is traceable to the result files listed under it. `limited`,
-`timeout` and `error` runs are counted but never enter a median or a pass rate.
+`report.md` beside them. One row per task, family totals and a grand total: runs, pass rate per
+arm, median tokens per arm, and the ratio of the medians (links over baseline — below 1 means the
+links arm consumed less context). Every cell is traceable to the result files listed under it.
+`limited`, `timeout` and `error` runs are counted but never enter a median or a pass rate; the
+**run health** section says how many there were and how many permission denials each arm hit,
+so the table's denominator and the deny list's cost are both visible. The **stamps** section
+counts, over the cross-repo tasks, how often each arm's link carried an `id=` — the link check
+accepts an unstamped link (the identity is reachable only through `resolve`), so this is
+recorded rather than graded.
 """
 
 from __future__ import annotations
@@ -45,11 +50,30 @@ def _rate(passed: int, total: int) -> str:
     return f"{passed}/{total}" if total else "–"
 
 
+def _merge_statuses(dicts) -> dict[str, int]:
+    merged: dict[str, int] = defaultdict(int)
+    for d in dicts:
+        for k, v in d.items():
+            merged[k] += v
+    return dict(merged)
+
+
 def summarize(records: list[dict]) -> dict[str, dict]:
     """task → arm → {runs, scored, passed, tokens[], turns[], files[]}."""
     table: dict[str, dict] = defaultdict(
         lambda: {
-            arm: {"runs": 0, "scored": 0, "passed": 0, "tokens": [], "turns": [], "files": []}
+            arm: {
+                "runs": 0,
+                "scored": 0,
+                "passed": 0,
+                "tokens": [],
+                "turns": [],
+                "files": [],
+                "statuses": defaultdict(int),
+                "denials": 0,
+                "stamped": 0,
+                "linked": 0,
+            }
             for arm in ARMS
         }
     )
@@ -61,6 +85,12 @@ def summarize(records: list[dict]) -> dict[str, dict]:
         families[r["task"]] = r.get("family", "")
         cell["runs"] += 1
         cell["files"].append(r["_file"])
+        cell["statuses"][r["status"]] += 1
+        cell["denials"] += len(r.get("permission_denials") or [])
+        link = ((r.get("grade") or {}).get("checks") or {}).get("link")
+        if isinstance(link, dict):
+            cell["linked"] += 1
+            cell["stamped"] += bool(link.get("stamped"))
         if r["status"] in ("pass", "fail"):
             cell["scored"] += 1
             cell["passed"] += r["status"] == "pass"
@@ -94,23 +124,54 @@ def render(table: dict[str, dict], title: str) -> str:
             f"{_cell(links['turns'])} | {_cell(base['turns'])} |"
         )
 
-    for task in sorted(table):
-        lines.append(row(task, table[task]["_family"], table[task]))
-    for family in FAMILIES:
-        members = [t for t in table if table[t]["_family"] == family]
-        if not members:
-            continue
-        total = {
+    def totals(members: list[str]) -> dict:
+        return {
             arm: {
                 "runs": sum(table[t][arm]["runs"] for t in members),
                 "scored": sum(table[t][arm]["scored"] for t in members),
                 "passed": sum(table[t][arm]["passed"] for t in members),
                 "tokens": [x for t in members for x in table[t][arm]["tokens"]],
                 "turns": [x for t in members for x in table[t][arm]["turns"]],
+                "denials": sum(table[t][arm]["denials"] for t in members),
+                "stamped": sum(table[t][arm]["stamped"] for t in members),
+                "linked": sum(table[t][arm]["linked"] for t in members),
+                "statuses": _merge_statuses(table[t][arm]["statuses"] for t in members),
             }
             for arm in ARMS
         }
-        lines.append(row(f"**{family} total**", "", total))
+
+    for task in sorted(table):
+        lines.append(row(task, table[task]["_family"], table[task]))
+    for family in FAMILIES:
+        members = [t for t in table if table[t]["_family"] == family]
+        if not members:
+            continue
+        lines.append(row(f"**{family} total**", "", totals(members)))
+    everything = totals(sorted(table))
+    lines.append(row("**all tasks**", "", everything))
+
+    # Run health: the denominator of every pass rate, and what the deny list cost.
+    lines += ["", "## Run health", ""]
+    lines.append("| arm | runs | scored | not scored | permission denials |")
+    lines.append("|---|---:|---:|---|---:|")
+    for arm in ARMS:
+        cell = everything[arm]
+        unscored = {k: v for k, v in cell["statuses"].items() if k not in ("pass", "fail")}
+        detail = ", ".join(f"{v} {k}" for k, v in sorted(unscored.items())) or "none"
+        lines.append(
+            f"| {arm} | {cell['runs']} | {cell['scored']} | {detail} | {cell['denials']} |"
+        )
+
+    # Stamps: recorded, not graded — see the module docstring.
+    linked = [t for t in table if table[t]["links"]["linked"] or table[t]["baseline"]["linked"]]
+    if linked:
+        lines += ["", "## Stamps written (cross-repo tasks)", ""]
+        lines.append("| arm | graded links | carried an `id=` |")
+        lines.append("|---|---:|---:|")
+        for arm in ARMS:
+            cell = totals(linked)[arm]
+            lines.append(f"| {arm} | {cell['linked']} | {cell['stamped']} |")
+
     lines += ["", "## Result files", ""]
     for task in sorted(table):
         for arm in ARMS:
