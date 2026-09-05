@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cttp import gitcache
-from cttp.address import AddressError, identity, parse_name, short
+from cttp.address import AddressError, identity, parse, short
 from cttp.links import LINK_RE, Link, find_links, format_stamped
 from cttp.registry import Registries, RegistryError
 from cttp.resolve import Resolved, ResolveError, resolve
@@ -70,7 +70,7 @@ def expand_text(text: str, registry: Registries) -> tuple[str, list[Report]]:
                 f"{link.address} resolves to a page that links to {len(inner)} other page(s) "
                 f"(first: {inner[0].address}); closure expansion arrives in P3-T1"
             )
-        stamp = format_stamped(r.name, short(r.rev), short(r.identity_full), r.description)
+        stamp = format_stamped(r.address, short(r.identity_full), r.description)
         out.append(link.indent + stamp)
         out.extend(link.indent + s if s else s for s in r.source.rstrip("\n").split("\n"))
         reports.append(Report(i + 1, link.address, "expanded", r.address))
@@ -156,7 +156,7 @@ def run_file(path: Path, registry: Registries, confirm: Confirm = None) -> int:
 
 def is_address(text: str) -> bool:
     try:
-        parse_name(text)
+        parse(text)
     except AddressError:
         return False
     return not Path(text).exists()

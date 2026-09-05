@@ -191,6 +191,19 @@ class Registries:
     def url_for(self, locator: str) -> str:
         return self.config.url_for(locator)
 
+    def entry_for_target(self, target: str) -> tuple[Entry, Registry] | None:
+        """The first local entry whose target is `target`, if any registry names it.
+
+        A locator address needs no registry to resolve; this only recovers the name and
+        description a registry may have for it. HTTP registries have no listing and are skipped.
+        """
+        for r in self.items:
+            for name in r.names():
+                entry = r.lookup(name)
+                if entry.target == target:
+                    return entry, r
+        return None
+
 
 def open_registries(registry: str | Path | None = None, local_only: bool = False) -> Registries:
     return Registries(load_config(registry), local_only=local_only)

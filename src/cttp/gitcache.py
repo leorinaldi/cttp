@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from cttp.address import is_sha
+
 LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
 # Spike: a first line → SPDX id map. P2-T1 brings a real matcher.
 LICENSE_FIRST_LINES = {"MIT License": "MIT", "Apache License": "Apache-2.0"}
@@ -26,10 +28,6 @@ def _git(*args: str, cwd: Path | None = None) -> str:
     if proc.returncode != 0:
         raise GitError(f"git {' '.join(args)} failed: {proc.stderr.strip()}")
     return proc.stdout
-
-
-def is_sha(ref: str) -> bool:
-    return len(ref) >= 12 and all(c in "0123456789abcdef" for c in ref.lower())
 
 
 def ensure_repo(locator: str, url: str, want: str | None = None) -> Path:

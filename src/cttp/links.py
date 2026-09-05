@@ -46,8 +46,9 @@ def find_links(lines: list[str]) -> list[Link]:
     return [link for i, line in enumerate(lines) if (link := parse_link(i, line))]
 
 
-def format_stamped(name: str, rev12: str, id12: str, description: str | None) -> str:
-    out = f"# cttp: {name}@{rev12} id=sha256:{id12}"
+def format_stamped(pinned: str, id12: str, description: str | None) -> str:
+    """The stamp: the pinned address (any form, SHA rev), the identity, then the description."""
+    out = f"# cttp: {pinned} id=sha256:{id12}"
     if description is not None:
         out += f'  "{description}"'
     return out

@@ -34,7 +34,7 @@ def test_find_links_keeps_line_numbers():
 
 
 def test_format_stamped_round_trips():
-    line = format_stamped("hello-world", "d29352a4fbf1", "75a27070015e", "Prints 'hello world'.")
+    line = format_stamped("hello-world@d29352a4fbf1", "75a27070015e", "Prints 'hello world'.")
     assert (
         line == "# cttp: hello-world@d29352a4fbf1 id=sha256:75a27070015e  \"Prints 'hello world'.\""
     )
@@ -43,6 +43,14 @@ def test_format_stamped_round_trips():
         back.address == "hello-world@d29352a4fbf1" and back.description == "Prints 'hello world'."
     )
     assert (
-        format_stamped("n", "a" * 12, "b" * 12, None)
+        format_stamped(f"n@{'a' * 12}", "b" * 12, None)
         == f"# cttp: n@{'a' * 12} id=sha256:{'b' * 12}"
+    )
+
+
+def test_format_stamped_locator():
+    line = format_stamped("github.com/leo/thermo@" + "a" * 12 + "/src/a.py", "b" * 12, None)
+    back = parse_link(0, line)
+    assert (
+        back and back.stamped and back.address == "github.com/leo/thermo@" + "a" * 12 + "/src/a.py"
     )

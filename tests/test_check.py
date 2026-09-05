@@ -49,3 +49,15 @@ def test_check_cli_exit_codes_and_json(registry, hello):
     assert link["status"] == "drift" and link["line"] == 1
     text = runner.invoke(app, ["check", str(hello)]).output
     assert f"{hello}:1: drift hello-world@" in text
+
+
+def test_locator_link_expands_and_checks(registry, tmp_path):
+    f = tmp_path / "loc.py"
+    f.write_text("# cttp: github.com/leorinaldi/cttp-registry@main/snippets/hello_world.py\n")
+    expand_file(f, registry)
+    first = f.read_text().split("\n")[0]
+    assert (
+        first.startswith("# cttp: github.com/leorinaldi/cttp-registry@") and "id=sha256:" in first
+    )
+    assert "@main" not in first  # the stamp pins a SHA, never a branch
+    assert [r.status for r in check_file(f, registry)] == ["ok"]
