@@ -161,7 +161,11 @@ def test_definition_repo_dups_and_search_pages(client, crawled, registry):
     assert "consumer@" in dups.text and "pyrepo@" in dups.text
     assert client.get("/dups?shape=1").status_code == 200
     s = client.get("/?q=bottom chain")
-    assert s.status_code == 200 and "lib.py#deep" in s.text and "search: bottom chain" in s.text
+    assert s.status_code == 200 and "search: bottom chain" in s.text
+    # the hit is `deep`, linked by identity; the one address shown is the identity's most
+    # recently committed current place — pyrepo's or the consumer's copy, whichever second
+    # their commits fell in — so assert the identity, not the place (a timing flake otherwise)
+    assert f"/d/{ident[:12]}" in s.text and ("lib.py#deep" in s.text or "hello.py#deep" in s.text)
     assert "No page in the index matches" in client.get("/?q=zzzz").text
     home = client.get("/")
     assert "3 revision(s)" not in home.text and "revision(s) crawled" in home.text

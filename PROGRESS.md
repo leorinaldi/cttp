@@ -44,7 +44,7 @@ them, the `CTTP_TOKEN` secret, enabling Pages, the DNS for `cttp.ai` and the two
 requests are Leo's, and are the open items of P7-T2/T3. 334 fast tests green plus 2 `slow`
 corpus tests (deselected by default), ruff clean.
 
-_Last updated: 2026-09-05 (Phase 7 done; cttp.ai DNS pending, not blocking)._
+_Last updated: 2026-09-05, session end (Phase 7 done; P8 re-planned onto Claude Code headless; cttp.ai DNS pending, not blocking)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
@@ -687,6 +687,13 @@ trigger that would schedule it.
   fixture's `cttp.toml` declares `hello-world`; the public `v1` commit does not). The fixture's
   own `v1` tag is on the fixture content, so `hello-world@v1` resolves the same either way →
   **standing**; overview §6 says `main`
+- **A search hit's one `address` is the identity's most recently committed current place**,
+  so a definition copied into another repository (the consumer's expanded `deep`) can show the
+  copy's address rather than the origin's; the origin is knowable from the copy's backlink. The
+  viewer test asserted the origin and flaked (about one run in five: pyrepo's and the consumer's
+  commits straddling a second boundary flipped the tie-break) — fixed 2026-09-05 to assert the
+  identity → **unscheduled**; trigger: wanting search to prefer the origin (follow the `is` /
+  `from` backlink among the places)
 - **`resolve` through the index for a file that is its one definition says `kind: function`**
   (the definition's view won the `definitions` row) where git would say `script` for the file
   address — same text, same identity → **unscheduled**; trigger: it confuses someone
@@ -724,7 +731,15 @@ is the archive, and a bloated history taxes every future session start.
   resolution in CI); PR #2, a hand-written undeclared name, failed on `declaration` and was
   closed, then #1 merged and the fixture re-synced (one test asserted the old aligned file
   format — fixed). The fresh-machine half of the P7-T3 acceptance ran clean with cttp.ai
-  missing and localhost answering. The DNS is Leo's and blocks nothing.
+  missing and localhost answering. The DNS is Leo's and blocks nothing. Last: on Leo's
+  question about API cost, the **P8 harness was re-planned onto Claude Code headless (`claude
+  -p --output-format json`) under his subscription login** instead of the Anthropic SDK —
+  checked against the current docs, which say ordinary individual use of Claude Code and the
+  Agent SDK is what the login is for; `plan.md`'s decision table, pinned stack, P8-T1 and P8-T3
+  record it, with the caveat that both arms then run inside Claude Code's harness. The
+  session-end run caught a flake — `test_definition_repo_dups_and_search_pages`, one run in
+  about five — traced to git's one-second commit timestamps deciding which of two places a
+  search hit shows; the test now asserts the identity (follow-up filed on the query).
 - **2026-09-05 (fifteenth session) — Phase 6 end to end: P6-T1 the tree-sitter extractor,
   P6-T2 the corpus and acceptance test 1, P6-T3 the measurement.** Three commits. P6-T1:
   `tree-sitter` 0.26.0 segfaulted on nodes returned from query captures (a `Point` read from
