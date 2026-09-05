@@ -39,9 +39,11 @@ test, rendered to `docs/json-schemas.md`) and `cttp mcp`, an MCP server over std
 CLI prints; and the **read side for C** — a tree-sitter extractor driven by a per-language
 query file, so `.c`/`.h` files have definitions, identities, shapes and backlinks like Python
 files (no references, no write side), and the **driver corpus** reproduced under `bench/drivers/`
-with spec §12's acceptance test 1 and the line-level measurement behind the vision's numbers.
-The registry as a service and the benchmark are still ahead — [`plan.md`](plan.md) lays out the
-phases.
+with spec §12's acceptance test 1 and the line-level measurement behind the vision's numbers;
+and the **registry as a service** — `cttp name show | claim | verify` (proof of control: the
+target's `cttp.toml` declares the name; a claim is a pull request), federation (registries in
+order, first match wins), and `cttp serve --export` writing the contract as static files for
+`cttp.ai`. The benchmark is still ahead — [`plan.md`](plan.md) lays out the phases.
 
 ## 2. Architecture
 
@@ -73,7 +75,13 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   repository** (`cttp.toml` + `names/<name>.toml`, each entry mapping a name to a
   `host/owner/repo/path` target and version labels to refs) or an **HTTP registry** serving
   `GET /<name>[@<version>][%23<symbol>].json` — a symbol rides the same route, percent-encoded.
-  First that knows the name answers; a miss falls through.
+  First that knows the name answers; a miss falls through. **Names** (spec §8): `declaration_at`
+  reads a target's `cttp.toml` at the head of its default branch (`name = "x"`, `names = […]`);
+  `check_entry` runs the registry's checks (declaration, owner, target, labels, resolves);
+  `claim` writes `names/<name>.toml` — into the first local registry's working tree
+  (`--no-pr`), or onto a `claim/<name>` branch made in a temporary worktree, pushed to `origin`
+  and opened as a PR with `gh` — and `verify` is what the registry's CI runs. The owner is
+  `host/owner` of the target, derived.
 - **Git cache** (`gitcache.py`) — bare clones under `$CTTP_HOME/repos/<host>/<owner>/<repo>`,
   fetched from wherever `[remotes]` in the config points, else `https://<locator>.git`. Plain
   `git`: `rev-parse` for tags and branches, `cat-file` for blobs, `ls-tree` for a rev, the bare
@@ -151,11 +159,15 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   search), `/<name>` (with history and *who links here*), `/d/<identity>`,
   `/r/<host>/<owner>/<repo>`, `/dups[?shape=1]`. `base.html` fixes the derived/asserted layout
   once — two labelled columns, stacking on a narrow screen — and every page says when there is
-  no index. Those three route prefixes are declared before `/{slug}`.
+  no index. Those three route prefixes are declared before `/{slug}`. **`server/export.py`**
+  renders every contract route for every name through the same app and writes the bytes
+  (`cttp serve --export <dir>`), so a static host — GitHub Pages behind `cttp.ai` — is a
+  registry by construction; symbol routes are not exported.
 - **CLI** (`cli.py`) — Typer. `cttp --version | config | resolve [--id] [--latest] | closure
   [--indexed] | serve | expand [--package] [--write-deps] | add [--at] | check [--fix] | update
   [--all] [--to] [--yes] | fold [--open] | run [--yes] | cache status | cache clear | index
-  add|crawl|status | who | dups [--shape] | search | history | rank | mcp [install]`. Every
+  add|crawl|status | who | dups [--shape] | search | history | rank | mcp [install] | name
+  show|claim|verify | serve --export`. Every
   subcommand takes `--json`, before or after the subcommand name; every index reader takes
   `--index`. `emit()` prints every object through `schemas.stamp()`, so `schema_version` comes
   first; `fail()` prints the `error` object. Prompts (`run`, `update`) go through
@@ -182,7 +194,7 @@ Data an address needs lives in three places on disk, all of them derivable:
 
 | Location | What | Env override |
 |---|---|---|
-| `~/.config/cttp/config.toml` | `registries` (ordered) and `[remotes]`; **written with defaults on first run** | `CTTP_CONFIG` (path), `CTTP_REGISTRY` (replace the list with one entry) |
+| `~/.config/cttp/config.toml` | `registries` (ordered: `https://cttp.ai`, `http://localhost:3120`, the clone) and `[remotes]`; **written with defaults on first run**, never rewritten | `CTTP_CONFIG` (path), `CTTP_REGISTRY` (replace the list with one entry) |
 | `~/.local/share/cttp/registry` | a clone of the public registry repo; the second default registry | (an entry in the config) |
 | `~/.cache/cttp/` | `repos/<locator>` bare clones; `objects/<sha256>` + `.json` the object cache; `run/<pinned address>/main.py` and `run/file-<hash>/` run caches | `CTTP_HOME` |
 | `~/.local/share/cttp/index.db` | the index: what was crawled, by identity | `CTTP_INDEX` (path), `--index`, `XDG_DATA_HOME` |
@@ -195,9 +207,10 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `src/cttp/extract/` | `__init__.py` (`Page`, `Ref`, `extract()` dispatch by suffix), `python.py` (the `ast` extractor), `treesitter.py` + `queries/c.scm` (the C extractor; add a grammar wheel and a query file per further language) | authored |
 | `src/cttp/index/` | `schema.py` (tables, `open_index`), `crawl.py` (`add`, `crawl`, `status`), `queries.py` (the six queries, `forward`, `lookup_identity`) | authored |
 | `src/cttp/schemas.py`, `src/cttp/mcp.py` | the agent interface: the `--json` schemas and the MCP server; see §2 | authored |
+| `src/cttp/server/export.py` | the static export of the contract (`cttp serve --export`), what `cttp-registry`'s `pages.yml` publishes to `cttp.ai` | authored |
 | `src/cttp/server/templates/` | `base.html` (the one layout and stylesheet), `_macros.html` (tags, backlinks, locations, history), `index.html`, `name.html`, `definition.html`, `repo.html`, `dups.html` | authored |
-| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_extract_c`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`, `_index_crawl`, `_index_queries`, `_acceptance_move`, `_acceptance_provenance`, `_acceptance_drivers` (`slow`), `_schemas`, `_mcp`); `conftest.py` builds the offline world, forbids sockets, and points `CTTP_INDEX` at `tmp_path` | authored |
-| `tests/fixtures/registry/` | the registry repository's contents — **identical to the public repo at `v1`**; keep them in sync | authored |
+| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_extract_c`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`, `_index_crawl`, `_index_queries`, `_acceptance_move`, `_acceptance_provenance`, `_acceptance_drivers` (`slow`), `_schemas`, `_mcp`, `_name`, `_registry_federation`, `_export`); `conftest.py` builds the offline world, forbids sockets (and non-`file` git protocols), and points `CTTP_INDEX` at `tmp_path` | authored |
+| `tests/fixtures/registry/` | the registry repository's contents — **identical to the public repo's `main`** (minus its `.github/` and README); keep them in sync | authored |
 | `tests/fixtures/hello/hello.py` | one line, `# cttp: hello-world` | authored |
 | `tests/fixtures/thermo/` | a fake sensor package (`src/thermo/{__init__,decode,lm75}.py`) with every definition kind the extractor must handle; served in tests as `github.com/leorinaldi/thermo` | authored |
 | `tests/fixtures/pyrepo/` | the closure fixture: `lib.py` (siblings in a chain, a `requests` import, a stdlib import, a missing name, mutual recursion) and `many.py` (51 tiny definitions, over budget); served as `github.com/leorinaldi/pyrepo` | authored |
@@ -211,7 +224,10 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `pyproject.toml` | hatchling build, `cttp` entry point, ruff and pytest config | authored |
 
 Outside the repo: the public registry `github.com/leorinaldi/cttp-registry`, whose `README.md`
-links to spec §8 in this private repo.
+links to spec §8 in this private repo, and whose `.github/workflows/` hold `verify.yml` (runs
+`cttp name verify --registry .` on every PR touching `names/`) and `pages.yml` (publishes
+`cttp serve --export` to GitHub Pages as `cttp.ai` on every push to `main`). Both install cttp
+from this private repo with a `CTTP_TOKEN` secret.
 
 ## 4. The data model — load-bearing decisions
 
@@ -301,6 +317,11 @@ links to spec §8 in this private repo.
   `search` and the viewer's repository page report over it; `history` and `who` see every
   crawled revision, ordered by commit time, then crawl order (`rowid`) for ties. A `--rev` crawl
   makes that rev current, on purpose.
+- **A name is claimed by proof of control, not an account.** The target repository's
+  `cttp.toml` at the head of its default branch declares the name (`name = "x"`, or
+  `names = […]` for a repository that is the target of several); the entry's `owner` is
+  `host/owner` of the target's locator, derived by `claim` and checked by `verify`, never typed.
+  The claim is a pull request; the registry's CI runs the same checks before merging.
 - **Registry entries name a target, not code.** `names/<name>.toml` holds `target =
   host/owner/repo/path`, a `default` label and `[versions]` mapping labels to refs. Version
   labels are names for refs; git revisions are the versions. There is no second versioning scheme.
@@ -396,7 +417,9 @@ links to spec §8 in this private repo.
   `github.com/leorinaldi/` prefix at the bare repo through `[remotes]`. An autouse fixture
   patches `socket.socket.connect` to raise; only a test marked `network` (there is one, against
   a closed local port) escapes it. The server tests drive the FastAPI app in-process through the
-  test client, whose event loop makes a socketpair — no connect, so it passes the guard.
+  test client, whose event loop makes a socketpair — no connect, so it passes the guard. **The
+  socket guard covers Python only**: a `git` subprocess can still reach the network, so the
+  fixture also sets `GIT_ALLOW_PROTOCOL=file` — a fetch of `https://…` fails at once.
 - **Never invent a value.** A missing license is `None` and prints `not available`; a missing
   description stays absent. Nothing is coerced to a plausible default.
 - **Rows come from byte offsets, never from a tree-sitter `Point`.** py-tree-sitter 0.26.0
@@ -409,8 +432,8 @@ links to spec §8 in this private repo.
   loudly instead of reaching GitHub.
 - **Stamps carry commit SHAs only.** Tags and branches are for humans; they never appear in a
   stamp the tool writes.
-- **`tests/fixtures/registry/` mirrors the public registry repo.** A change to one is a change to
-  both, in the same session.
+- **`tests/fixtures/registry/` mirrors the public registry repo's `main`.** A change to one is a
+  change to both, in the same session.
 - **Tests never touch the real index.** `config_file` sets `CTTP_INDEX` to `tmp_path`; a test
   that needs an index opens one there. `open_index(create=False)` is what queries use, so a
   query never creates an empty index as a side effect.
@@ -483,6 +506,12 @@ links to spec §8 in this private repo.
 - **A sparse clone is crawled as the files it has, and a detached HEAD is named by its tag.**
   `fetch.sh`'s corpus is both; the crawl of a blobless clone would otherwise fetch the whole
   kernel one blob at a time, and `index status` would say `[HEAD]`.
+- **`name claim` commits in a worktree, not in the registry clone's checkout.** An uncommitted
+  `names/<name>.toml` in the working tree would collide with the merged PR on the next pull; the
+  worktree and the local `claim/<name>` branch are removed afterwards. `--no-pr` writes into the
+  working tree on purpose — `LocalRegistry` reads it, so the name works at once.
+- **`serve --export` renders through the ASGI app, not the templates directly.** "Identical to
+  the live responses" is then true by construction. Symbol routes are not exported: unbounded.
 - **`rank` counts a copy that links back to its original.** Distinct linking *pages* are
   (identity, repo, file), so the same identity elsewhere counts; only a derived self-reference
   (recursion) is excluded.
@@ -564,6 +593,10 @@ uv run cttp who <address>                 # backlinks; also dups [--shape], sear
 uv run cttp closure --indexed <address>…  # from the index's recorded links, several roots
 uv run cttp mcp install                   # the `claude mcp add` line; --claude-code runs it
 uv run cttp mcp                           # the MCP server over stdio (what Claude Code launches)
+uv run cttp name show <name>              # a registry entry and its resolution
+uv run cttp name claim <name> --target host/owner/repo/path [--no-pr]   # proof of control → names/<name>.toml, PR via gh
+uv run cttp name verify [<name>…]         # the registry's checks (what cttp-registry's CI runs)
+uv run cttp serve --export <dir>          # the contract as static files (what cttp.ai serves)
 uv run python -m cttp.schemas             # regenerate docs/json-schemas.md after a schema change
 
 bash bench/drivers/fetch.sh               # the corpus (~60 MB); then index add bench/drivers/corpus && index crawl (~2 min)

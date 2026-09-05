@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 6 COMPLETE. NEXT IS P7-T1 (`name claim` and `name show`).** Phase 0
+**Status: PHASES 0 TO 7 BUILT; P7-T2/T3 WAIT ON LEO FOR THE OUTWARD-FACING STEPS. NEXT IS P8-T1 (THE HARNESS).** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -31,42 +31,63 @@ through it everywhere (schema version **2**: `language` gains `c`, `kind` gains 
 `bench/drivers/fetch.sh` (a sparse, blobless clone, which the crawl reads as the files it has);
 spec §12 **acceptance test 1** passing with the groups `expected.json` records; and the
 line-level measurement recomputed by `bench/drivers/measure.py` — the vision's numbers amended
-(42 % verbatim, 92 % by shape; the old 37 %/14 % could not be reproduced). 321 fast tests green
-plus 2 `slow` corpus tests (deselected by default), ruff clean.
+(42 % verbatim, 92 % by shape; the old 37 %/14 % could not be reproduced). Phase 7
+(2026-09-05): **the registry as a service** — `cttp name show | claim | verify` (spec §8's proof
+of control: the target's `cttp.toml` declares the name at its default branch, the owner is the
+target's account, a claim is a pull request on a `claim/<name>` branch opened with `gh`);
+federation tested (registries in order, first match wins, the answer names the registry);
+`cttp serve --export <dir>` writing the contract as static files byte-identical to the live
+responses; the default registry list now `https://cttp.ai`, `localhost:3120`, the clone (schema
+version **3**). The registry repository's `verify` and `pages` workflows, the `hello-world`
+declaration and the README are on an **unpushed `p7` branch of the registry clone** — pushing
+them, the `CTTP_TOKEN` secret, enabling Pages, the DNS for `cttp.ai` and the two test pull
+requests are Leo's, and are the open items of P7-T2/T3. 334 fast tests green plus 2 `slow`
+corpus tests (deselected by default), ruff clean.
 
-_Last updated: 2026-09-05 (Phase 6)._
+_Last updated: 2026-09-05 (Phase 7 built; its publish steps pending)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: P7-T1 — `cttp name show` and `cttp name claim`.** Read its entry in
-[`docs/plan.md`](docs/plan.md) in full. `name show <name>` prints the registry entry and its
-resolution; `name claim <name> --target <locator>` verifies the target repository declares the name
-in a `cttp.toml` at its default branch, writes `names/<name>.toml`, and opens a PR against the
-registry repository with `gh` (or prints the file under `--no-pr`); refuses an existing name with
-another owner unless `--transfer`. Acceptance is against a `tmp_path` registry and target: claim
-with the declaration → entry written and printed; without → refused naming the missing file; a
-second owner → refused; `name show hello-world` prints the P0-T2 entry. Decide first what the
-target's `cttp.toml` declaration looks like (spec §8 names the file; the plan says "declaring the
-name") — that is a small spec addition, note it. `name show`/`name claim` outputs are new
-`--json` objects: add them to `schemas.py` (`COMMANDS`), bump `SCHEMA_VERSION` to 3, re-pin,
-regenerate the doc.
+**Start here: finish P7-T2/T3's outward-facing steps, if Leo has approved them** (see
+**Environment** below for the exact state):
+1. Push the registry clone's `p7` branch and merge it to `main` (`verify.yml`, `pages.yml`,
+   `cttp.toml` declaring `hello-world`, README with the claiming instructions).
+2. Add the `CTTP_TOKEN` secret to `cttp-registry` (a fine-grained token with read access to the
+   private `cttp` repo — the workflows `pip install` the tool from it) — or make `cttp` public,
+   which removes the need.
+3. Enable Pages from GitHub Actions (`gh api -X POST repos/leorinaldi/cttp-registry/pages -f
+   build_type=workflow`), set the custom domain `cttp.ai`, and point the DNS at Pages (apex `A`
+   records 185.199.108.153 / .109 / .110 / .111, or the `ALIAS` the registrar offers).
+4. The P7-T2 acceptance, by hand: a good claim (`cttp name claim hello-world --target
+   github.com/leorinaldi/cttp-registry/snippets/hello_world.py --description "Prints 'hello
+   world'."` opens a real PR through the tool — the same owner, so `updated`) passes the check;
+   a hand-written `names/bogus.toml` pointing at an undeclared name fails it. Record both PR
+   numbers here.
+5. The P7-T3 acceptance: `curl -s https://cttp.ai/hello-world.json` equals
+   `localhost:3120/hello-world.json`; a fresh config (`CTTP_CONFIG=/tmp/x cttp run hello-world
+   --yes`) prints `hello world!` through cttp.ai.
 
-Before that, two things from this session worth a minute: review the **vision amendment** (the
-duplicate-line numbers and the decoder example changed — `git show b111f5c -- docs/vision.md`),
-and decide whether `bench/drivers/corpus-preserved/` (the original raw-file copy, now reproduced
-byte for byte by `fetch.sh`) can be deleted.
+**Then P8-T1 — the benchmark harness.** Read its entry in [`docs/plan.md`](docs/plan.md) in
+full and consult the `claude-api` skill before writing a line: two arms differing only in tools,
+`claude-opus-5`, usage recorded per response, results under `bench/agent/results/`, a dry-run
+mode replaying a transcript. It needs `ANTHROPIC_API_KEY` in `.env` (not present) or `ant auth
+login`; a `bench` dependency group with `anthropic`.
+
+Also pending Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced byte for byte by
+`fetch.sh`) can be deleted.
 
 ## Current state — working & verified
 
-**Code (`src/cttp/`), 2026-09-05.** Real modules; Phases 1 to 5 in full:
+**Code (`src/cttp/`), 2026-09-05.** Real modules; Phases 1 to 7 in full (P7's publish steps pending):
 - `config.py` — **P0-T3/T4.** `~/.config/cttp/config.toml` (XDG; `CTTP_CONFIG` overrides the
   path): `registries` (ordered list of HTTP URLs or local paths; first match wins) and
   `[remotes]` (locator prefix → URL prefix, longest prefix wins, else `https://<locator>.git`).
   Paths take `~`; relative paths are relative to the file. **First run writes the file** with
-  the defaults: `http://localhost:3120`, then `~/.local/share/cttp/registry`, no remotes.
+  the defaults: `https://cttp.ai`, `http://localhost:3120`, then `~/.local/share/cttp/registry`
+  (P7-T3; localhost first before that), no remotes.
   `--registry <entry>` or `CTTP_REGISTRY` replaces the list with that one entry (remotes kept).
   `cttp config [--json]` prints the effective result.
 - `hashing.py` — **P1-T2.** `normalize()` (spec §2: dedent, LF, no trailing whitespace, one
@@ -151,6 +172,22 @@ byte for byte by `fetch.sh`) can be deleted.
   clone). `Registries(local_only=True)` is what the **server** uses — it must never ask an HTTP
   registry, which could be itself. `git_repo_from()` makes a git repo from a directory of files
   (branch `main`, tag `v1`); `create_local_registry()` is that for the registry fixture.
+  **P7-T1/T2 — names.** `declaration_at(locator)` reads the target's `cttp.toml` at the head
+  of its default branch: `name = "x"` and `names = ["y", …]` are the names it is the target of
+  (the list form is the one addition to spec §8). `owner_of(locator)` is `host/owner` — the
+  owner is derived, never asked. `check_entry(entry)` runs the registry's checks — `declaration`,
+  `owner`, `target` (the path exists), `labels` (well formed, each ref a revision, the default
+  resolvable), `resolves` — as `Check(check, ok, detail)`. `claim(name, target, …)` validates
+  the name (`NAME_RE`: labels namespaced by dots) and the locator, refuses a target that does not
+  declare the name (naming the file, the branch and what it does declare), refuses a name another
+  owner holds unless `transfer`, builds the entry (`latest = <default branch>` unless `--version`
+  given), runs the checks, and either writes `names/<name>.toml` into the first local registry's
+  working tree (`pr=False`) or `open_claim_pr()`: a temporary **worktree** of the clone at
+  `origin/<default>`, branch `claim/<name>`, commit, `push --force -u origin`, `gh pr create`
+  (`_gh()`, patched in tests), then the worktree and local branch are removed — the person's
+  checkout is never touched. `verify(names)` runs `check_entry` over the given or every name of
+  the first local registry. `entry_text()` writes the file with `tomli_w`; `entry_json()` is the
+  `entry` schema object.
 - `resolve.py` — `resolve()` for a **name** asks each registry in turn: an HTTP one yields
   `Resolved.from_json(...)` with `registry` set to the URL; a local one goes through
   `resolve_entry()`: entry → locator → git → extract → hash. For a **locator** (P1-T1)
@@ -340,12 +377,21 @@ byte for byte by `fetch.sh`) can be deleted.
   labelled, tinted columns that stack under 44rem; inline facts keep their tag; tables become
   stacked cards on a phone. Every page says plainly when there is no index. Looked at in headless
   Chrome at 1200px and 390px against the real index.
+- `server/export.py` — **P7-T3.** `export(directory, registries)` renders every route of the
+  contract for every name through the same ASGI app (`TestClient`) and writes the bytes: `/` →
+  `index.html`, `/<name>` → `<name>/index.html`, `/<name>.json`, `/<name>@<label>.json` per
+  label; a non-200 stops it (`ExportError`). `routes_for()` lists them. Symbol routes are
+  unbounded and not exported. `cttp serve --export <dir>` is the command; `--registry` chooses
+  the registry (the env override is restored afterwards). Checked against the real registry and
+  looked at in headless Chrome: identical to the live page.
 - `cli.py` — `cttp --version | config | resolve [--id …] [--latest] [--index] | closure
   [--indexed] <address>… | serve | expand [--package] [--write-deps] | add [--at] [--package] |
   check [--fix] | update [--all] [--to] [--yes] | fold [--open] | run [--yes] | cache status |
   cache clear [--run] | index add <repo-or-path> | index crawl [<repo>…] [--rev] [--force] | index
   status | who <address> | dups [--shape] | search <text>… [--limit] | history <address> | rank
-  [--limit] | mcp [--registry] [--index] | mcp install [--claude-code]`; every index-reading
+  [--limit] | mcp [--registry] [--index] | mcp install [--claude-code] | name show <name> | name
+  claim <name> --target … [--description] [--version label=ref]… [--default] [--transfer]
+  [--no-pr] | name verify [<name>…] | serve --export <dir>`; every index-reading
   command takes `--index <path>`; `--json` is accepted before or after the subcommand, and every
   object is stamped with `schema_version` (P5-T1). `closure` with several addresses, or `--indexed`, reads the index; one
   address without the flag is the live walk. `update` takes files and addresses mixed; exit 2
@@ -449,12 +495,18 @@ byte for byte by `fetch.sh`) can be deleted.
 **Environment**
 - Git on `main`, remote `origin` → `github.com/leorinaldi/cttp` (**private**).
 - **Registry repo:** `github.com/leorinaldi/cttp-registry` (**public**), first commit
-  `d29352a4fbf1` tagged `v1`, contents identical to `tests/fixtures/registry/` (verified by
-  anonymous clone, 2026-09-04). The README links to spec §8 in this private repo — a dead link
-  for the public until cttp is opened.
-- **On this machine (2026-09-04):** `~/.config/cttp/config.toml` is the first-run default
-  (localhost first, then `~/.local/share/cttp/registry`, which is a **real clone** of the public
-  repo). The spike's
+  `d29352a4fbf1` tagged `v1`. The README links to spec §8 in this private repo — a dead link
+  for the public until cttp is opened. **Unpushed (2026-09-05):** the clone at
+  `~/.local/share/cttp/registry` has a local branch **`p7`** (two commits on top of `origin/main`,
+  worktree at the session scratchpad, since removed — `git worktree prune` if it lingers) with
+  `.github/workflows/verify.yml`, `.github/workflows/pages.yml`, `cttp.toml` declaring
+  `names = ["hello-world"]` (identical to `tests/fixtures/registry/cttp.toml`) and the README's
+  claiming instructions. `git -C ~/.local/share/cttp/registry push origin p7:main` publishes it
+  once Leo says so; Actions are enabled on the repo, Pages is not yet.
+- **On this machine (2026-09-04):** `~/.config/cttp/config.toml` is the first-run default *as it
+  was before P7-T3* (localhost first, then `~/.local/share/cttp/registry`, which is a **real
+  clone** of the public repo); an existing file is never rewritten, so `https://cttp.ai` is not in
+  Leo's list until he adds it. The spike's
   fixture-built registry was moved aside to `~/.local/share/cttp/registry.spike` (commit
   `9d12912`, exists nowhere else) and `~/.cache/cttp` was wiped — **trap:** the spike's cache
   held a clone of that fake repo under the real locator, so a pinned `9d12912…` address kept
@@ -579,10 +631,6 @@ trigger that would schedule it.
   and `macro` kinds, and names tagged types `struct.<tag>` — the spec should say so, and §12
   test 1's wording ("four temperature decoders… two verbatim copies") should match
   `expected.json` → **P7-T3** (the spec edit that publishes)
-- **The vision's original 37 % / 14 % could not be reproduced** — the measurement session's
-  method is lost; the vision now carries the recomputed figures (42 % verbatim, 92 % by shape
-  over substantive lines; 16 % / 66 % over lines of eight or more tokens) and names
-  `measure.py` as the method. Leo to confirm the amendment reads right → **next session**
 - **`cttp resolve` on a real locator clones the whole repository into the git cache** — for
   `github.com/torvalds/linux` that is the entire kernel; the corpus is reachable only through the
   index and its local clone (`dups`, `who`, `search`, `resolve sha256:…`). A locator whose
@@ -611,6 +659,27 @@ trigger that would schedule it.
   viewer answered 500 for the two minutes a corpus crawl held the lock; fixed this session
   (readers skip the script; 5 s busy timeout) — a test with a concurrent writer is still missing
   → **unscheduled**; trigger: the next change to `open_index`
+- **The registry workflows install cttp from a private repository** (`pip install git+https://
+  x-access-token:${CTTP_TOKEN}@github.com/leorinaldi/cttp.git`), so `cttp-registry` needs a
+  `CTTP_TOKEN` secret until `cttp` is public or on PyPI → **next session** (Leo's call which)
+- **The exported site's header links to `/dups`, search and `/d/…`**, which need an index a
+  static host does not have (404 on Pages), and shows the registry's path (the CI checkout's);
+  the name page's *who links here* is whatever index the exporting machine had → **unscheduled**;
+  trigger: cttp.ai being live and someone clicking them (an `exporting` flag on the templates
+  would drop the index navigation and name the registry by URL)
+- **`name claim` pushes `claim/<name>` with `--force`**, so a second claim of the same name
+  replaces the branch (and the open PR's commits) rather than failing → **standing**, by
+  design; a stale claim branch is never worth keeping
+- **The `verify` workflow checks only the names a PR adds or changes** (`--diff-filter=AM`); a
+  PR that deletes an entry, or edits `snippets/`, runs no check on it → **unscheduled**;
+  trigger: the first deletion PR (a check that the deleter is the owner would need the PR
+  author's identity, which `gh` can give the workflow)
+- **`name show` is not an MCP tool** (nor `verify`) → **unscheduled**; trigger: an agent task
+  in P8 that needs an entry's owner or labels
+- **`tests/fixtures/registry/` now mirrors the public repo's `main`, not its `v1` tag** (the
+  fixture's `cttp.toml` declares `hello-world`; the public `v1` commit does not). The fixture's
+  own `v1` tag is on the fixture content, so `hello-world@v1` resolves the same either way →
+  **standing**; overview §6 says `main`
 - **`resolve` through the index for a file that is its one definition says `kind: function`**
   (the definition's view won the `definitions` row) where git would say `script` for the file
   address — same text, same identity → **unscheduled**; trigger: it confuses someone
@@ -620,6 +689,28 @@ trigger that would schedule it.
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-05 (sixteenth session) — Phase 7 built: P7-T1 `name show` and `name claim`,
+  P7-T2 `name verify` and federation, P7-T3 `serve --export` and the cttp.ai default.** Three
+  commits, plus two on an unpushed `p7` branch of the registry clone. Decisions: the target's
+  declaration is `name = "x"` as spec §8 says, plus `names = […]` for a repository that is the
+  target of several (the registry repo itself: its own `name` is `cttp-registry`, and it hosts
+  `hello-world`), written into the spec; the **owner is derived from the locator**
+  (`host/owner`), never an option, because "the account that proved control of the target" is
+  exactly that; a claim opens its PR from a **temporary worktree** so the registry clone's
+  checkout is never dirtied and a merged PR pulls cleanly (an uncommitted `names/<name>.toml` in
+  the working tree would have collided with the merge); `--no-pr` writes into the working tree
+  on purpose, since `LocalRegistry` reads it and the name works at once; a same-owner re-claim
+  is `updated`, not refused. The schema went to **3** once and was re-pinned as commands were
+  added within the session. Found on the way: a `git fetch` subprocess in a test reached GitHub
+  — the socket guard covers Python only — so `conftest.py` sets `GIT_ALLOW_PROTOCOL=file`;
+  `serve --registry` leaked `CTTP_REGISTRY` into the process, invisible while `serve` ran
+  forever, visible the moment `--export` returned. The export goes through the ASGI app with
+  the test client so "identical to the live responses" is by construction, not by a second
+  renderer; the running dev server, started last session, printed `schema_version: 2` against
+  the export's 3 — restarted. The workflows install cttp from the private repo with a token
+  secret; `pages.yml` writes `CNAME` and `.nojekyll` itself so the export stays host-neutral.
+  Outward-facing steps (push, secret, Pages, DNS, the two acceptance PRs) were not done: the
+  plan says ask first.
 - **2026-09-05 (fifteenth session) — Phase 6 end to end: P6-T1 the tree-sitter extractor,
   P6-T2 the corpus and acceptance test 1, P6-T3 the measurement.** Three commits. P6-T1:
   `tree-sitter` 0.26.0 segfaulted on nodes returned from query captures (a `Point` read from
@@ -722,27 +813,13 @@ is the archive, and a bloated history taxes every future session start.
   and reads Apache-2.0, git's COPYING reads GPL-2.0 (a preamble longer than the first head size
   tried — widened to 2,000 chars), the twelve canonical SPDX texts all classify as intended, and
   `--latest` followed itsdangerous from tag 2.1.2 to head. 138 → 205 tests.
-- **2026-09-04/05 (tenth session) — P1-T2 identity and shape hashing; P1-T3 the Python
-  extractor in full.** `hashing.py` took `normalize`, `identity` and `short` out of `address.py`
-  (re-exported) and added `shape()`: `tokenize` over the normalized text, identifiers positional,
-  literals typed, structure tokens kept so a reordered statement changes the shape, comments and
-  blank lines dropped. Then the extractor: `ast` over the file, every spec §3 definition kind,
-  spans from the first decorator, signature from `ast.unparse`, the docstring's first paragraph
-  as one line, and derived references resolved against the repository's file list. Decisions:
-  a `#symbol` rides the HTTP contract as `%23` in the existing route (no new route); a
-  definition's references are the names it uses while a script's are every import; a parameter
-  shadows a module-level import; non-Python files are `text` script pages with `shape: null`
-  rather than a tokenization error. By-hand acceptance against a real public repository
-  (itsdangerous, over the network) found and fixed two bugs the fixture had not: the shadowing
-  case, and a docstring summary wrapping onto a second line being cut. Both pages looked at in
-  headless Chromium. 113 → 138 tests. Server restarted on the new code.
 
 ## How to run
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"          # uv lives here
 uv sync                                        # once; creates .venv
-uv run pytest -q                               # 321 tests, no network; -m slow adds the corpus tests (~2.5 min)
+uv run pytest -q                               # 334 tests, no network; -m slow adds the corpus tests (~2.5 min)
 uv run ruff check . && uv run ruff format --check .
 
 git clone https://github.com/leorinaldi/cttp-registry ~/.local/share/cttp/registry   # once
@@ -811,6 +888,16 @@ uv run cttp index add bench/drivers/corpus && uv run cttp index crawl github.com
 uv run cttp dups --shape | head                            # the four eight-bit decoders are one group
 uv run python bench/drivers/measure.py                     # the line-level duplicate figures
 uv run pytest -m slow tests/test_acceptance_drivers.py     # acceptance test 1 and the measurement, as tests
+```
+
+Phase 7, the registry as a service:
+
+```bash
+uv run cttp name show hello-world                          # the entry (owner, target, labels) and its resolution
+uv run cttp name claim <name> --target host/owner/repo/path.py --description "…" --no-pr   # writes names/<name>.toml into the clone
+uv run cttp name claim <name> --target host/owner/repo/path.py    # the same on a claim/<name> branch + `gh pr create`
+uv run cttp name verify                                    # every name's checks; exit 1 on a failure (the registry's CI)
+uv run cttp serve --export /tmp/site                       # the contract as static files (what pages.yml publishes)
 ```
 
 `scripts/make_local_registry.py` still builds an offline registry from the fixture if needed.
