@@ -41,5 +41,32 @@
         "drivers/hwmon/smsc47m192.c#TEMP_FROM_REG"
       ]
     }
-  ]
+  ],
+  "measurement": {
+    "method": "bench/drivers/measure.py: every .c file tokenized line by line with the C grammar (comments gone); a line is substantive when it has a token that is not punctuation and is not #include; its shape abstracts identifiers to $0, $1, ... by first appearance within the line and literals to <num>/<str>; its verbatim key is its tokens as written; a line is a duplicate when another file has a line with the same key. Percentages are over substantive lines. Recomputed 2026-09-05 over the corpus at v7.3-rc1.",
+    "files": 736,
+    "lines": 407849,
+    "substantive_lines": 257007,
+    "shape_duplicate_percent": 91.9,
+    "verbatim_duplicate_percent": 42.2,
+    "by_min_tokens": {
+      "3": {
+        "shape_duplicate_percent": 89.5,
+        "verbatim_duplicate_percent": 31.4
+      },
+      "5": {
+        "shape_duplicate_percent": 83.0,
+        "verbatim_duplicate_percent": 22.9
+      },
+      "8": {
+        "shape_duplicate_percent": 66.3,
+        "verbatim_duplicate_percent": 15.9
+      }
+    },
+    "vision_before": {
+      "shape_duplicate_percent": 37,
+      "verbatim_duplicate_percent": 14,
+      "note": "the measurement session's method was not preserved; the vision was amended to these numbers and this method on 2026-09-05"
+    }
+  }
 }

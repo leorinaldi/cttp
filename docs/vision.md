@@ -20,10 +20,14 @@ Code is organized as trees of files, and the tree has one axis. A definition liv
 place, is referenced by importing a name from that place, and is shared only by packaging the whole
 place. Every consequence of that shape shows up when you look at a large codebase closely.
 
-We looked. Across 736 Linux driver files, about 408,000 lines, **37 percent of substantive lines are
-identical to a line in another file once identifiers are abstracted**, and 14 percent are identical
-verbatim. One temperature decoder is written four times across three subsystems; two of the copies
-are the same function in two files for the same silicon. A chip that is both a clock and a
+We looked. Across 736 Linux driver files, about 408,000 lines, 257,000 of them substantive, **42
+percent of substantive lines are identical, token for token, to a line in another file**, and 92
+percent are once identifiers and literals are abstracted; over lines of at least eight tokens the
+figures are still 16 and 66 percent. (Method and numbers: `bench/drivers/measure.py`, recomputed
+with the tool's own tokenizer over Linux v7.3-rc1; the corpus and the groups below are
+reproducible from `bench/drivers/`.) One eight-bit temperature decoder is written four times in
+four drivers under three names; two other decoders are copied byte for byte between two drivers
+each. A chip that is both a clock and a
 thermometer gets its thermometer written inside the clock driver, because a file can only be in one
 directory. A devicetree binding and the driver it describes disagree about which chips support an
 interrupt, because one fact was written twice in two languages and maintained by hand.

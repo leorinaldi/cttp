@@ -3,6 +3,7 @@ driver corpus with no hint. Needs the corpus fetched (`bench/drivers/fetch.sh`);
 about two minutes, so the test is `slow` and deselected by default: `uv run pytest -m slow`."""
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -49,3 +50,17 @@ def test_the_index_rediscovers_the_duplicates(registry, tmp_path, monkeypatch):
         want = set(expected["locations"])
         found = [g for g in groups if places(g) == want]
         assert found, f"no {expected['by']} group is exactly {sorted(want)}: {expected['what']}"
+
+
+def test_the_line_level_measurement_reproduces():
+    sys.path.insert(0, str(BENCH))
+    import measure
+
+    m = measure.measure(CORPUS / "drivers")
+    want = EXPECTED["measurement"]
+    assert m["files"] == want["files"] and m["lines"] == want["lines"]
+    assert m["substantive_lines"] == want["substantive_lines"]
+    assert abs(m["shape_duplicate_percent"] - want["shape_duplicate_percent"]) < 0.5
+    assert abs(m["verbatim_duplicate_percent"] - want["verbatim_duplicate_percent"]) < 0.5
+    for n, r in want["by_min_tokens"].items():
+        assert m["by_min_tokens"][n]["shape_duplicate_percent"] == r["shape_duplicate_percent"]

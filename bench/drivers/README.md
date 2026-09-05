@@ -56,3 +56,27 @@ The same eight-bit decoder appears nine times in the corpus in all; the definiti
 keeps keywords and types, so `int` versus `long` and `inline` versus not are different shapes. The
 crawl also finds 26 functions duplicated verbatim across files, most of them `superio_*` register
 access helpers copied between gpio and hwmon drivers for the same Super I/O chips.
+
+## The line-level measurement — `measure.py`
+
+```bash
+uv run python bench/drivers/measure.py            # a small table; --json for the object
+uv run pytest -m slow tests/test_acceptance_drivers.py::test_the_line_level_measurement_reproduces
+```
+
+The method is in the script's docstring: lines tokenized by the C grammar with comments gone;
+substantive = at least one token that is not punctuation and not `#include`; shape = identifiers
+abstracted by first appearance within the line, literals typed; verbatim = the tokens as written;
+duplicate = another file has a line with the same key. Over Linux v7.3-rc1:
+
+| | substantive lines | shape-identical to a line elsewhere | verbatim-identical |
+|---|---|---|---|
+| all substantive lines | 257,007 | 91.9 % | 42.2 % |
+| lines of ≥ 3 tokens | 194,773 | 89.5 % | 31.4 % |
+| lines of ≥ 5 tokens | 110,810 | 83.0 % | 22.9 % |
+| lines of ≥ 8 tokens | 34,207 | 66.3 % | 15.9 % |
+
+The vision first quoted 37 % and 14 % from the measurement session; that session's method was not
+preserved and no reading of "substantive" or "abstracted" tried here reproduces those figures, so
+the vision now carries these numbers and this method. `expected.json` records them under
+`measurement`, and the slow test checks the script still produces them.
