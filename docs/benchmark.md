@@ -4,6 +4,13 @@
 finds and reuses code more cheaply than the same agent searching with a shell. It is a comparison
 of **tool sets inside Claude Code**, on fifteen tasks over three real Python libraries.
 
+**The short answer:** it depends on the question. Copying a definition out of another repository
+is cheaper with cttp and gets cheaper the more the definition drags with it. Fixing a bug in the
+repository you are already in costs about twice as much and succeeds slightly more often. Asking
+what uses a definition is where cttp should have won and does not — not because the question is
+wrong for it, but because `who` returns quietly incomplete answers on `src/`-layout projects and
+the agent burns twenty to forty times the context failing to confirm them.
+
 It is not a claim about cttp against "no cttp" in the abstract, and it is not a model evaluation.
 Read [§What the number does not mean](#what-the-number-does-not-mean) before quoting anything here.
 
@@ -67,17 +74,80 @@ they cost in dollars. Turns and wall time are recorded beside them.
 
 ## Results
 
-<!-- TABLE -->
-_The ninety runs are in progress; this section is filled from
-`bench/agent/results/<date>/report.md` when they finish._
+Ninety runs, 2026-09-05, Opus 5, Claude Code 2.1.261. Generated table and every record:
+`bench/agent/results/2026-09-05-full/`.
+
+**The answer depends entirely on the question being asked.** There is no single ratio worth
+quoting; the three families point in three directions.
+
+| family | cttp passes | shell passes | median tokens, cttp | median tokens, shell | ratio |
+|---|---|---|---:|---:|---:|
+| cross-repo reuse | 15/15 | 15/15 | 59,573 | 65,963 | **0.90** |
+| in-repo bug fixes | 14/15 | 12/15 | 151,772 | 76,428 | 1.99 |
+| impact questions | 14/15 | 12/15 strict, **15/15 folded** | 1,021,954 | 62,765 | 16.28 |
+| all ninety | 43/45 | 39/45 | 112,634 | 65,963 | 1.71 |
+
+**Cross-repository reuse is where links win outright** — cheaper *and* level on correctness. The
+margin grows with the size of the thing being copied, because `closure` returns a multi-file
+answer in one call where the shell has to find and read each piece:
+
+| task | closure | cttp | shell | ratio |
+|---|---|---:|---:|---:|
+| `xr-join-options-click` | 2 definitions, 2 files | 56,265 | 146,224 | **0.38** |
+| `xr-textwrap-click` | 5 definitions, 2 files | 119,865 | 186,774 | **0.64** |
+| `xr-escape-rich` | 4 definitions | 59,573 | 65,963 | 0.90 |
+| `xr-to-bool-attrs` | 1 definition | 63,275 | 57,770 | 1.10 |
+| `xr-filesize-rich` | 2 definitions | 56,878 | 48,255 | 1.18 |
+
+A one-definition copy is a wash. A five-definition closure across two files costs the shell 1.6x
+what it costs cttp, and the two-file `join_options` closure costs it 2.6x. And every cttp run
+wrote a full `id=` stamp; no shell run wrote one, because the identity is a SHA-256 of normalized
+source that only `resolve` can hand over.
+
+**In-repository fixes cost twice as much and pass more often.** 14/15 against 12/15, at 1.99x.
+Both arms failed `ir-choice-metavar-click`, where the trap is that a `Choice` may hold integers —
+the shell arm went 0/3, cttp 2/3. This is the most credible family in the set, because the grader
+is the upstream project's own test file and owes nothing to cttp.
+
+**Impact questions are where it goes wrong, and the cause is one defect.** The 16.28x is not a
+property of asking "what uses this":
+
+| repository | layout | median tokens, cttp | turns | ratio |
+|---|---|---:|---:|---:|
+| click (`im-color-default`) | `src/` | 2,829,962 | 57 | 39.95 |
+| click (`im-nested-chain`) | `src/` | 1,583,572 | 48 | 31.06 |
+| attrs (`im-obj-setattr`) | `src/` | 1,526,474 | 59 | 19.42 |
+| rich (`im-pick-bool`) | flat | 115,944 | 15 | 1.93 |
+| rich (`im-set-cell-size`) | flat | 89,833 | 11 | 1.43 |
+
+The split is exactly the repository layout. Where `who` gives a complete answer — rich, whose
+package sits at the top level — the cost is 1.4–1.9x and the agent stops after a dozen turns.
+Where `who` silently omits results — click and attrs, whose packages sit under `src/`, so the
+extractor cannot resolve a test's import into them — the agent senses the gap, has no `grep` with
+which to close it, and reads the repository by hand at twenty to forty times the cost. One run
+never finished. See the section below.
+
+So: **cttp costs about twice as much where its answers are complete, and catastrophically more
+where they are quietly incomplete.** Fixing src-layout resolution in `extract/python.py` is the
+single highest-value change this benchmark points to.
+
+### Run health and stamps
+
+| arm | runs | scored | not scored | permission denials |
+|---|---:|---:|---|---:|
+| cttp tools | 45 | 44 | 1 error (turn cap) | 43 |
+| shell | 45 | 45 | none | 76 |
+
+The shell arm's denials are its own pipelines; the cttp arm's are attempts to reach a shell reader
+it does not have. Stamps: 15 of 15 cttp runs wrote one, 0 of 15 shell runs.
 
 ---
 
-## The finding that came before the table
+## Why the impact questions cost so much
 
-The first two runs of the sweep — `im-color-default-click`, links arm — cost 1,895,253 and
-5,043,073 tokens. The second hit the 40-turn cap and was recorded as an error. Both had the right
-answer from their **first** tool call: `who` returns exactly the five definitions the reference
+This was visible in the first two runs of the sweep — `im-color-default-click`, links arm, at
+1,895,253 and 5,043,073 tokens, the second hitting the 40-turn cap. Both had the right answer
+from their **first** tool call: `who` returns exactly the five definitions the reference
 answer lists, and `git grep` over the clone agrees that no test uses the target.
 
 What the agent spent its remaining eighty tool calls on was trying to establish that *nothing
@@ -91,7 +161,7 @@ benchmark has produced. A `who` that resolved src-layout imports would likely en
 is a logged follow-up, and fixing it mid-sweep would make the runs incomparable, so it is
 reported here rather than fixed.
 
-Two consequences for reading the table below. **Cost grows with the square of the turn count** —
+Two consequences for reading the table. **Cost grows with the square of the turn count** —
 every turn re-reads the whole conversation from cache, so 6 turns cost 37k tokens, 18 cost 189k
 and 41 cost 5M. One non-converging run outweighs fifty short ones, so the table reports medians
 and keeps per-task rows. And a run that hits the turn cap is an `error`: it enters neither the

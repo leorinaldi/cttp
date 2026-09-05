@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 7 COMPLETE, P8-T1 (THE HARNESS) AND P8-T2 (THE TASK SET) DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). NEXT IS P8-T3 (RUN AND REPORT).** Phase 0
+**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). NEXT IS THE `who` SRC-LAYOUT FIX THE BENCHMARK POINTS TO.** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -51,33 +51,33 @@ five cross-repository reuses graded by hidden tests plus a link check, five impa
 graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). 358 fast tests
 green plus 17 `slow` (the corpus, and the graders' acceptance over the real clones), ruff clean.
 
-_Last updated: 2026-09-05, session end (P8-T2 done: the task set, the link and who graders, fetch.sh; first runs of one task per family recorded; cttp.ai DNS pending, not blocking)._
+_Last updated: 2026-09-05, session end (P8-T3 done: ninety runs, the table in `docs/benchmark.md`, three measurement biases found and fixed; next is the `who` src-layout fix the benchmark points to)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: P8-T3 — run and report.** Read its entry in [`docs/plan.md`](docs/plan.md) in full
-and `bench/agent/README.md` (§Tasks, §What a record holds, §Caveats). The fifteen tasks are in
-place and `--check-graders` passes; `bash bench/agent/fetch.sh` must have run on the machine
-(the clones are gitignored). The first runs of one task per family are under
-`bench/agent/results/2026-09-05/` (`xr-filesize-rich`, `im-pick-bool-rich`,
-`ir-table-highlight-rich`, both arms, one run each) — **read the build-history entry below for
-their numbers and what they say about the prompts and graders before starting the ninety**, and
-estimate from them: tokens per run per family, how many fit in a five-hour window (every record's
-`rate_limit` has the window's utilization; the six runs, ~480k tokens, moved it 0.25 → 0.41, so
-ninety runs at ~80k median look like about two windows). **The links arm lost on tokens in all
-three families** — decide with Leo, before the ninety, whether to pull the lever the README
-names (a line telling the links arm the cttp tools are its search, replacing the denied
-`grep`), since that changes the arms and must be stated in the report either way. **Tell Leo the
-estimate and get his go-ahead before starting** `uv run python -m bench.agent.harness --runs 3
---wait-for-reset`. Then
-`report.py` into `results/<date>/report.md`, `docs/benchmark.md` with the method, the table and
-the honest reading (the caveats: both arms inside Claude Code's harness; the link check accepts
-an unstamped address; the who check is the extractor's notion of a use; `who` misses
-`src/`-layout tests), registered in `CLAUDE.md`'s document map. Decide whether ninety streams
-(tens of MB) stay in git or only the records.
+**P8 is complete.** The ninety runs are recorded, [`docs/benchmark.md`](docs/benchmark.md)
+carries the table and the honest reading, and `bench/agent/results/2026-09-05-full/report.md` is
+generated from the records. The plan has no task after P8-T3, so the next session picks from
+what the benchmark found. In priority order:
+
+1. **Fix `who` on `src/`-layout projects** — the highest-value change the benchmark points to,
+   and the cause of its worst number. `extract/python.py` resolves an absolute import against the
+   importing file's ancestor directories only, so `from click._compat import x` in `tests/` never
+   reaches `src/click/`. `who` returns a quietly incomplete answer on click and attrs, the agent
+   cannot confirm it, and the impact tasks cost 19–40x the baseline against rich's 1.4–1.9x. A
+   source-root rule (`src/`, or `pyproject.toml`'s package dirs) is the fix. **Re-run the five
+   impact tasks afterwards** to see whether the ratio collapses — the strongest evidence the fix
+   matters, and cheap (30 runs, ~20 min at `--jobs 3`).
+2. **The closure keeps a function-local relative import** (`click.formatting.wrap_text` does
+   `from ._textwrap import TextWrapper` in its body; `expand` inlines the definition and leaves
+   the line, which fails at run time). Found in P8-T2, still open; spec §3's refusal list grows
+   one line.
+3. **Publish the benchmark.** Leo asked this session whether the results could be seen on a page.
+   Nothing benchmark-related is in the viewer's index by design (each run indexes into its own
+   throwaway directory), so this would be a page of its own, not a viewer route.
 
 Still Leo's, not blocking: the **DNS for `cttp.ai`** (apex `A` records 185.199.108.153,
 185.199.109.153, 185.199.110.153, 185.199.111.153, or an `ALIAS` to `leorinaldi.github.io`);
@@ -86,7 +86,8 @@ tool treats as a miss. When the records exist: `gh api -X PUT
 repos/leorinaldi/cttp-registry/pages -f https_enforced=true`, then compare
 `curl -s https://cttp.ai/hello-world.json` with `localhost:3120/hello-world.json`. Also pending
 Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced byte for byte by `fetch.sh`)
-can be deleted.
+can be deleted, and whether three stale `/tmp/cttp-bench-*` directories left by this session's
+killed runs can go.
 
 ## Current state — working & verified
 
@@ -793,20 +794,71 @@ trigger that would schedule it.
   is at the end of the file, and before whatever `--at` points at (`import os` ends up after
   the expanded function when the link is inserted above it) — valid Python, untidy →
   **unscheduled**; trigger: someone reading an expanded file and minding
-- **The link check accepts an unstamped link**; the plan said "a correct `# cttp:` stamp". A
-  stamp needs the identity, which only the links arm can get; `stamped` is recorded per run so
-  the report can show how often each arm wrote one → **P8-T3** (state it in `docs/benchmark.md`)
+- ~~The link check accepts an unstamped link~~ — closed 2026-09-05: stated in
+  `docs/benchmark.md`, and the report's stamps table shows 15/15 links runs wrote one, 0/15
+  baseline
 - **The links arm cannot run `cttp add`/`check`** (Bash is the test command only), so a
   cross-repo task is copy-by-hand in both arms; giving both arms `cttp` in Bash would change
   what is measured → **standing**, by design; note it in the report
-- **`results/` is committed** (the smoke run is 76 KB with its streams); ninety runs of real
-  tasks will be tens of MB of streams — decide whether streams stay in git or only the records
-  → **P8-T3**
+- ~~Decide whether ninety streams stay in git~~ — closed 2026-09-05: they do, **gzipped**
+  (5.4 MB for the ninety; `harness.resolve_stream` reads plain or `.gz`, a replay from a
+  gzipped stream reproduces the numbers exactly)
+- **`who` misses a `src/` layout's tests — this is now the benchmark's headline defect**, not a
+  curiosity: the impact tasks cost 19–40x the baseline on click and attrs against 1.4–1.9x on
+  rich, because the agent cannot confirm an answer it senses is incomplete and has no `grep`.
+  A source-root rule in `extract/python.py` is the fix → **next session**, first item; re-run
+  the five impact tasks after to see the ratio collapse
+- **The impact grader's naming convention favours the links arm.** `who` cannot address a nested
+  function, so it credits the enclosing method and the reference answers inherit that; an agent
+  reading source names the nested one and is marked wrong. `report.fold_nested` prints a folded
+  column (baseline 12/15 → 15/15) and `docs/benchmark.md` says the folded one is to be believed.
+  The grader itself is unchanged — it was mid-sweep → **unscheduled**; trigger: the next impact
+  run, where the grader can fold before comparing
+- **A cross-repo "library is not imported" test was a substring search** and matched the agent's
+  attribution comment, punishing what cttp encourages; now parsed with `ast` in all five tasks
+  → closed 2026-09-05
+- **Cost grows with the square of a run's turn count** (every turn re-reads the conversation from
+  cache): 6 turns 37k tokens, 18 turns 189k, 41 turns 5M. Any future sweep wants `--stop-above`
+  and `--jobs` → **standing**
 
 ## Build history
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
+
+- **2026-09-05 (nineteenth session) — P8-T3: the ninety runs, and three measurement biases
+  found and fixed on the way.** **The arms first:** the P8-T2 first runs showed the links arm
+  reaching for `grep` in every run and learning of its tool set from the permission denial, so
+  the appended system prompt now carries one sentence per arm naming that arm's search
+  (`SEARCH_NOTES`), symmetric so neither has to find it by trial, with the exact text recorded
+  per run as `system_prompt`; the shared instruction also asks for the test command unpiped (the
+  links deny list catches `| tail`, the baseline never hits it). Confirmed on one task: straight
+  to `search`, no denials, 59,141 tokens against 77,293. The six pre-lever runs moved to
+  `results/2026-09-05-first-runs/`. **The sweep** was stopped twice and restarted. The first real
+  run cost 1,895,253 tokens and the second 5,043,073 at the 40-turn cap, so the driver grew
+  `--stop-above` (default 0.85 of the seven-day window) — though the window never bound, moving
+  0.41→0.43 across 6.9M tokens, because cache reads are cheap against a subscription. Time was
+  the constraint: per-run overhead is 13 s once a repo is cached (the 242 s on run one was the
+  initial clone, not the crawl), so the cost is the links arm sitting in 4-minute loops.
+  `--jobs N` runs whole tasks in parallel — every run already has its own checkout, cache and
+  index — and turned four hours into forty minutes. **Three biases, two favouring links:** (a)
+  the impact grader compared answers exactly against `who`, which cannot address a nested
+  function and so credits the enclosing method; an agent reading source names the nested one and
+  was marked wrong, handing the links arm the grader's own convention. `report.fold_nested`
+  prints a folded column beside the strict one — the baseline's impact score goes 12/15 →
+  **15/15**, links unchanged at 14/15. (b) All five cross-repo tasks asserted "the library is not
+  imported" with a substring search over the whole file, which matched the agent's attribution
+  comment ("copied from click (BSD-3-Clause)") in a file importing nothing — punishing exactly
+  what cttp encourages. Now parsed with `ast`; `--check-graders` passes all five and
+  `xr-textwrap-click` was re-run entire (both arms) rather than only its failed run. (c) A pass
+  cell reading `2/2` beside `3/3` hid that a run never finished; it reads `2/2 of 3` now.
+  **The result:** no single ratio is worth quoting. Cross-repo reuse **0.90** and 15/15 both
+  arms, the margin growing with closure size (`join_options` 0.38, `TextWrapper` 0.64), every
+  links run writing a full `id=` stamp against none for the baseline; in-repo fixes 1.99x with
+  links 14/15 against 12/15; impact questions 16.28x, and that number is **one defect** — click
+  and attrs (`src/` layout, where `who` silently omits tests) cost 19–40x, rich (flat) 1.4–1.9x.
+  Streams committed gzipped (5.4 MB for the ninety; `resolve_stream` reads either form).
+  393 tests green, ruff clean.
 
 - **2026-09-05 (eighteenth session) — P8-T2 built: the task set, with the graders it needed.**
   The three repositories: `click` (12.7k lines, BSD-3), `attrs` (6.4k, MIT), `rich` (26.6k, MIT)
@@ -944,31 +996,6 @@ is the archive, and a bloated history taxes every future session start.
   numbers under `vision_before`. Slow corpus tests are deselected by default (`addopts`). The
   viewer answered 500 during the real-index crawl (`database is locked`: a read-only open ran
   the schema script); readers now skip it.
-- **2026-09-05 (fourteenth session) — Phase 5 end to end: P5-T1 the `--json` schemas, P5-T2
-  `cttp mcp`.** Two tasks, one commit. P5-T1: `schemas.py` was written from the code's actual
-  outputs — every `to_json()` and query dict read first — as a small schema language rather than
-  TypedDicts, because one definition had to do three jobs at once: validate strictly (extra
-  fields are errors, so shape drift is caught the day it happens), render JSON Schema for the
-  MCP tools' `outputSchema`, and render the Markdown doc. Load-bearing decisions: **every
-  object is stamped** with `schema_version` at the one place the CLI prints (`emit`) and at the
-  contract route, so the registry contract and `cttp resolve --json` stay byte-identical;
-  **a schema change is a deliberate act** — a fingerprint of every JSON Schema is pinned per
-  version and the test's failure message says what to do; **the live and indexed `closure` are
-  one object** (`source`, `roots`, `missing`), which settled the spec §9 follow-up and gave the
-  MCP tool one output schema; `dups` groups got a fixed `key`/`key_full` so `--shape` is the same
-  schema; `expand`/`add`/`fold` wrap their per-file map in `files` and `crawl` its list in
-  `crawled`, so every object is an object with a version. The schema test builds a fixture world
-  and runs all 24 command shapes for real, including every report status. P5-T2: the official
-  `mcp` SDK turned out to be 2.x (`MCPServer`, not `FastMCP`), so the server hands the SDK
-  pre-built tools with the P5-T1 JSON Schema set as `output_schema` and returns
-  `CallToolResult`s itself — the only way to keep the tool's object byte-identical to the CLI's
-  (the SDK would otherwise wrap a `dict` return in `{"result": …}`). The test asserts that
-  equality per tool through the SDK's in-memory client. By hand: the real stdio server listed
-  six tools and answered `who hello-world` from the real index; Claude Code (Sonnet, via a
-  scratch `--mcp-config`) called `mcp__cttp__who` and answered correctly. Spec §9 amended
-  (schemas, `closure` in both modes); `docs/json-schemas.md` registered in `CLAUDE.md`. Server
-  restarted on the new code. 275 → 295 tests.
-
 ## How to run
 
 ```bash
