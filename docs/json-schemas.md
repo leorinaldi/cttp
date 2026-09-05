@@ -2,7 +2,7 @@
 
 **Generated from `src/cttp/schemas.py` — do not edit.** `python -m cttp.schemas` rewrites it; `tests/test_schemas.py` fails when it is stale.
 
-Schema version **1**, fingerprint `95c46a2dbc0766c1`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
+Schema version **2**, fingerprint `14c8b9e5c6d17b96`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
 
 ## Conventions
 
@@ -63,11 +63,11 @@ The page an address names: its source, identity, license, references and imports
 | `identity_full` | string | derived | the full hex |
 | `shape` | string? | derived | `sha256:<12 hex>` of the shape; `null` when the language has no extractor |
 | `shape_full` | string? | derived |  |
-| `kind` | `function` \| `class` \| `constant` \| `script` | derived | what the page is |
-| `language` | `python` \| `text` | derived | `text` for a file with no extractor |
+| `kind` | `function` \| `class` \| `constant` \| `type` \| `macro` \| `script` | derived | what the page is: `type` (a C struct, union, enum or typedef) and `macro` come from the tree-sitter extractor |
+| `language` | `python` \| `c` \| `text` | derived | `text` for a file with no extractor |
 | `symbol` | string? | derived | for a definition: its dotted name |
-| `signature` | string? | derived | for a definition: the signature without the keyword |
-| `docstring` | string? | derived | the first docstring paragraph as one line |
+| `signature` | string? | derived | for a definition: Python — the header without its keyword; C — the declaration up to the body or initializer, a macro's name and parameters |
+| `docstring` | string? | derived | the first docstring paragraph as one line; for C, the first paragraph of the comment directly above |
 | `span` | [integer] | derived | `[first, last]` 1-based lines in the origin file |
 | `source` | string | derived | the page's own text, normalized, link lines taken out (spec §4) |
 | `description` | string? | asserted | the entry's one line; `null` when the entry has none |
@@ -498,11 +498,11 @@ the resolver's object — what an address names; the registry contract's JSON (s
 | `identity_full` | string | derived | the full hex |
 | `shape` | string? | derived | `sha256:<12 hex>` of the shape; `null` when the language has no extractor |
 | `shape_full` | string? | derived |  |
-| `kind` | `function` \| `class` \| `constant` \| `script` | derived | what the page is |
-| `language` | `python` \| `text` | derived | `text` for a file with no extractor |
+| `kind` | `function` \| `class` \| `constant` \| `type` \| `macro` \| `script` | derived | what the page is: `type` (a C struct, union, enum or typedef) and `macro` come from the tree-sitter extractor |
+| `language` | `python` \| `c` \| `text` | derived | `text` for a file with no extractor |
 | `symbol` | string? | derived | for a definition: its dotted name |
-| `signature` | string? | derived | for a definition: the signature without the keyword |
-| `docstring` | string? | derived | the first docstring paragraph as one line |
+| `signature` | string? | derived | for a definition: Python — the header without its keyword; C — the declaration up to the body or initializer, a macro's name and parameters |
+| `docstring` | string? | derived | the first docstring paragraph as one line; for C, the first paragraph of the comment directly above |
 | `span` | [integer] | derived | `[first, last]` 1-based lines in the origin file |
 | `source` | string | derived | the page's own text, normalized, link lines taken out (spec §4) |
 | `description` | string? | asserted | the entry's one line; `null` when the entry has none |
@@ -538,7 +538,7 @@ one page of a closure
 | `locator` | string | derived | the pinned locator form — the closure's key |
 | `identity` | string | derived |  |
 | `identity_full` | string | derived |  |
-| `kind` | `function` \| `class` \| `constant` \| `script` | derived | what the page is |
+| `kind` | `function` \| `class` \| `constant` \| `type` \| `macro` \| `script` | derived | what the page is: `type` (a C struct, union, enum or typedef) and `macro` come from the tree-sitter extractor |
 | `symbol` | string? | derived |  |
 | `path` | string | derived |  |
 | `lines` | integer | derived | lines of source |
@@ -630,7 +630,7 @@ one indexed link whose target is the address asked about
 | `source.sha` | string |  |  |
 | `source.path` | string |  |  |
 | `source.symbol` | string? |  |  |
-| `source.kind` | `function` \| `class` \| `constant` \| `script` |  | what the page is |
+| `source.kind` | `function` \| `class` \| `constant` \| `type` \| `macro` \| `script` |  | what the page is: `type` (a C struct, union, enum or typedef) and `macro` come from the tree-sitter extractor |
 | `source.name` | string |  | the definition's name, or the file name |
 | `source.signature` | string? | derived |  |
 | `source.license` | string? | derived |  |
@@ -659,7 +659,7 @@ pages that are the same code (by identity) or the same structure (by shape), in 
 | `key_full` | string | derived |  |
 | `identities` | [string] | derived | the distinct identities in the group (one, by identity) |
 | `names` | [string] | derived | the distinct definition names, sorted |
-| `kind` | `function` \| `class` \| `constant` \| `script` | derived | what the page is |
+| `kind` | `function` \| `class` \| `constant` \| `type` \| `macro` \| `script` | derived | what the page is: `type` (a C struct, union, enum or typedef) and `macro` come from the tree-sitter extractor |
 | `lines` | integer | derived |  |
 | `count` | integer |  | places |
 | `locations` | [object] |  |  |
@@ -680,7 +680,7 @@ one search hit
 | `identity` | string | derived |  |
 | `identity_full` | string | derived |  |
 | `name` | string | derived |  |
-| `kind` | `function` \| `class` \| `constant` \| `script` | derived | what the page is |
+| `kind` | `function` \| `class` \| `constant` \| `type` \| `macro` \| `script` | derived | what the page is: `type` (a C struct, union, enum or typedef) and `macro` come from the tree-sitter extractor |
 | `signature` | string? | derived |  |
 | `docstring` | string? | derived |  |
 | `score` | number | derived | FTS5 bm25 rank; lower is better |
@@ -718,7 +718,7 @@ one ranked page
 | `identity` | string | derived |  |
 | `identity_full` | string | derived |  |
 | `name` | string | derived |  |
-| `kind` | `function` \| `class` \| `constant` \| `script` | derived | what the page is |
+| `kind` | `function` \| `class` \| `constant` \| `type` \| `macro` \| `script` | derived | what the page is: `type` (a C struct, union, enum or typedef) and `macro` come from the tree-sitter extractor |
 | `signature` | string? | derived |  |
 | `address` | string? |  |  |
 | `backlinks` | integer | derived | distinct linking pages — (identity, repo, file) |

@@ -9,6 +9,7 @@ from cttp.cli import app as cli
 from cttp.config import Config, load_config
 from cttp.registry import HttpRegistry, Registries, RegistryError
 from cttp.resolve import resolve
+from cttp.schemas import SCHEMA_VERSION
 from cttp.server.app import app
 
 runner = CliRunner()
@@ -92,7 +93,7 @@ def test_resolve_json_is_the_same_with_the_server_up_or_down(via_http, registry)
     assert up == down
     cli_out = json.loads(runner.invoke(cli, ["--json", "resolve", "hello-world"]).stdout)
     cli_out.pop("registry")
-    assert cli_out.pop("schema_version") == 1
+    assert cli_out.pop("schema_version") == SCHEMA_VERSION
     assert cli_out == down
 
 

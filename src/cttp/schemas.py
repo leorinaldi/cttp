@@ -17,8 +17,11 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-SCHEMA_VERSION = 1
-FINGERPRINTS = {1: "95c46a2dbc0766c1"}  # schema version → fingerprint(); a schema change bumps both
+SCHEMA_VERSION = 2
+FINGERPRINTS = {
+    1: "95c46a2dbc0766c1",
+    2: "14c8b9e5c6d17b96",
+}  # schema version → fingerprint(); a schema change bumps both
 
 # --- the schema language -----------------------------------------------------------------------
 
@@ -92,7 +95,15 @@ DERIVED = enum("derived", doc="computed by the tool from the repository")
 ASSERTED = enum("asserted", doc="stated by a person: a link line or a registry entry")
 ORIGIN = enum("derived", "asserted", doc="which it is (spec §10)")
 RELATION = enum("is", "from", "see", doc="the link's marker: `cttp:` / `cttp-from:` / `cttp-see:`")
-KIND = enum("function", "class", "constant", "script", doc="what the page is")
+KIND = enum(
+    "function",
+    "class",
+    "constant",
+    "type",
+    "macro",
+    "script",
+    doc="what the page is: `type` (a C struct, union, enum or typedef) and `macro` come from the tree-sitter extractor",
+)
 
 # --- shared objects ----------------------------------------------------------------------------
 
@@ -158,10 +169,10 @@ DEFS["page"] = obj(
         "shape": string("`sha256:<12 hex>` of the shape; `null` when the language has no extractor").null().derived(),
         "shape_full": string().null().derived(),
         "kind": KIND.derived(),
-        "language": enum("python", "text", doc="`text` for a file with no extractor").derived(),
+        "language": enum("python", "c", "text", doc="`text` for a file with no extractor").derived(),
         "symbol": string("for a definition: its dotted name").null().derived(),
-        "signature": string("for a definition: the signature without the keyword").null().derived(),
-        "docstring": string("the first docstring paragraph as one line").null().derived(),
+        "signature": string("for a definition: Python — the header without its keyword; C — the declaration up to the body or initializer, a macro's name and parameters").null().derived(),
+        "docstring": string("the first docstring paragraph as one line; for C, the first paragraph of the comment directly above").null().derived(),
         "span": arr(integer(), "`[first, last]` 1-based lines in the origin file").derived(),
         "source": string("the page's own text, normalized, link lines taken out (spec §4)").derived(),
         "description": string("the entry's one line; `null` when the entry has none").null().asserted(),

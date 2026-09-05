@@ -8,7 +8,9 @@ The **shape** is SHA-256 over the same text with every identifier replaced by a 
 placeholder and every literal by a typed placeholder, via `tokenize`; keywords and builtins are
 kept, comments and blank lines dropped. Two definitions that differ only in names, whitespace,
 comments and literal values have the same shape. It is derived metadata for near-duplicate
-detection and is never part of an address. Python only.
+detection and is never part of an address. Python is tokenized here; a language with a
+tree-sitter grammar gets the same treatment from `extract.treesitter.shape_text` (identifier and
+literal nodes); any other has no shape (`ShapeError`).
 """
 
 import builtins
@@ -39,7 +41,8 @@ _DROPPED = {
 
 
 class ShapeError(ValueError):
-    """The text does not tokenize as Python, so it has no shape."""
+    """The text does not tokenize in its language — or the language has no extractor — so it
+    has no shape."""
 
 
 def normalize(text: str) -> str:
@@ -57,11 +60,18 @@ def identity(text: str) -> str:
     return hashlib.sha256(normalize(text).encode("utf-8")).hexdigest()
 
 
-def shape_text(text: str) -> str:
+def shape_text(text: str, language: str = "python") -> str:
     """The normalized text with identifiers and literals replaced by placeholders, one token per
     word: `$0`, `$1`, … for identifiers in order of first appearance, `<num>`, `<str>`, `<fstr>`
     for literals, `<nl>`, `<in>`, `<out>` for statement and block structure. Keywords, builtins
-    and operators stay as they are."""
+    and operators stay as they are. A language other than Python goes through its tree-sitter
+    grammar, which has no `<nl>`/`<in>`/`<out>`: braces and semicolons are the structure."""
+    if language != "python":
+        from cttp.extract import treesitter
+
+        if not treesitter.has_grammar(language):
+            raise ShapeError(f"no shape for {language!r}: the language has no extractor")
+        return treesitter.shape_text(language, text)
     names: dict[str, str] = {}
     words: list[str] = []
     try:
@@ -86,9 +96,9 @@ def shape_text(text: str) -> str:
     return " ".join(words)
 
 
-def shape(text: str) -> str:
+def shape(text: str, language: str = "python") -> str:
     """Full SHA-256 hex of the shape text."""
-    return hashlib.sha256(shape_text(text).encode("utf-8")).hexdigest()
+    return hashlib.sha256(shape_text(text, language).encode("utf-8")).hexdigest()
 
 
 def short(hexdigest: str, n: int = SHORT) -> str:

@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS definitions (
     identity   TEXT PRIMARY KEY,       -- full sha256 hex of the page's own text
     shape      TEXT,                   -- full sha256 hex of its shape; NULL when it has none
     language   TEXT NOT NULL,
-    kind       TEXT NOT NULL,          -- function | class | constant | script
+    kind       TEXT NOT NULL,          -- function | class | constant | type | macro | script
     name       TEXT NOT NULL,          -- the last component of the symbol, or the file name
     signature  TEXT,
     docstring  TEXT,

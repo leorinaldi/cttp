@@ -3,13 +3,14 @@
 Crawling is explicit: `add()` registers a repository — a locator, or a local working copy whose
 `origin` remote names one — and `crawl()` walks the registered list. For each repository at one
 commit (its default branch's head, or the rev asked for) every file in the tree is read through
-`git`: a Python file yields its whole-file page and one page per definition, each hashed and
-recorded once per identity and once per place; any other file yields a page only when it carries
-a link line. Every asserted link `links.py` finds is recorded against the innermost page whose
-span holds its line; every derived reference against the page that made it. Target identities
-are filled in afterwards from what the index knows — a stamp's `id=`, a pinned locator seen at
-that rev, a name whose snapshot points at a crawled file — and left NULL otherwise; the crawl
-never fetches a repository it was not given. The tool never executes what it reads.
+`git`: a file with an extractor (Python, C) yields its whole-file page and one page per
+definition, each hashed and recorded once per identity and once per place; any other file yields
+a page only when it carries a link line. Every asserted link `links.py` finds is recorded against
+the innermost page whose span holds its line; every derived reference against the page that made
+it. Target identities are filled in afterwards from what the index knows — a stamp's `id=`, a
+pinned locator seen at that rev, a name whose snapshot points at a crawled file — and left NULL
+otherwise; the crawl never fetches a repository it was not given. The tool never executes what it
+reads.
 """
 
 import json
@@ -225,8 +226,8 @@ def _crawl_repo(
         text, bad = neutralize_bad_links(text)
         out.skipped += [f"{path}: {b} — the line was ignored" for b in bad]
         try:
-            if language_of(path) == "python":
-                writer.python_file(path, text, py_files)
+            if language_of(path) != "text":
+                writer.code_file(path, text, py_files)
             else:
                 writer.other_file(path, text)
         except (LinkError, ExtractError, SyntaxError) as e:
@@ -259,7 +260,8 @@ class _Writer:
         self.conn, self.repo, self.sha, self.out = conn, repo, sha, out
         self.rev12 = short(sha)
 
-    def python_file(self, path: str, text: str, files: list[str]) -> None:
+    def code_file(self, path: str, text: str, files: list[str]) -> None:
+        """A file with an extractor: the file page, one page per definition, every link."""
         whole = extract(path, text, None, files)
         defs: list[tuple[str, Page]] = []
         for sym in definitions(path, text):
@@ -297,7 +299,7 @@ class _Writer:
     def page(self, path: str, symbol: str | None, page: Page) -> str:
         ident = identity(page.source)
         try:
-            shp = shape(page.source) if page.language == "python" else None
+            shp = shape(page.source, page.language)
         except ShapeError:
             shp = None
         name = symbol.split(".")[-1] if symbol else PurePosixPath(path).name

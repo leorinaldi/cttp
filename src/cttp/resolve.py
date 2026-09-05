@@ -286,10 +286,8 @@ def _resolved(
 
 
 def _shape_of(page: Page) -> str | None:
-    if page.language != "python":
-        return None
     try:
-        return shape(page.source)
+        return shape(page.source, page.language)
     except ShapeError:
         return None
 
@@ -484,7 +482,7 @@ def _same_identity_at(repo, sha: str, locator: str, pinned: Resolved):
         if pinned.symbol is None:
             candidates.append((path, None))
             continue
-        if language_of(path) != "python":
+        if language_of(path) == "text":
             continue
         symbols = definitions(path, gitcache.show(repo, sha, path))
         first = [s for s in symbols if s.split(".")[-1] == name]

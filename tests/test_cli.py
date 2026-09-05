@@ -4,6 +4,7 @@ from typer.testing import CliRunner
 
 from cttp import __version__
 from cttp.cli import app
+from cttp.schemas import SCHEMA_VERSION
 
 runner = CliRunner()
 
@@ -11,7 +12,7 @@ runner = CliRunner()
 def test_version():
     assert runner.invoke(app, ["--version"]).stdout.strip() == f"cttp {__version__}"
     out = runner.invoke(app, ["--json", "--version"]).stdout
-    assert json.loads(out) == {"schema_version": 1, "version": __version__}
+    assert json.loads(out) == {"schema_version": SCHEMA_VERSION, "version": __version__}
 
 
 def test_resolve_json(registry):

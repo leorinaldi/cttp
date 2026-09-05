@@ -63,17 +63,17 @@ def test_crawl_counts_and_links(registry, index, consumer, tmp_path):
     assert by[PYREPO].pages == PYREPO_PAGES and by[PYREPO].links == PYREPO_REFS
     assert by[PYREPO].skipped == []
     # consumer: main.py (file page + the copy of deep, same identity as pyrepo's), notes.py
-    # (file page + TOP), sensor.c (a text page, because it carries a link)
-    assert by[locator].pages == 5
+    # (file page + TOP), sensor.c (a C file page + main)
+    assert by[locator].pages == 6
     # deep is one identity in two places (the consumer is crawled first, so it is new there and
-    # not in pyrepo), and notes.py's own text *is* `TOP = 3`, so the file page and the constant
-    # are one identity too
+    # not in pyrepo); notes.py's own text *is* `TOP = 3`, so the file page and the constant are
+    # one identity too; and sensor.c's own text (its link line taken out) *is* `main`
     assert by[locator].definitions == 4 and by[PYREPO].definitions == PYREPO_PAGES - 1
     assert by[locator].links == 3
     c = counts(conn)
     assert c["repos"] == 2 and c["revisions"] == 2 and c["names"] == 1
     assert c["definitions"] == PYREPO_PAGES + 3
-    assert c["locations"] == PYREPO_PAGES + 5
+    assert c["locations"] == PYREPO_PAGES + 6
     assert c["links"] == PYREPO_REFS + 3
 
     deep = resolve(f"{PYREPO}@v1/lib.py#deep", registry)
@@ -217,7 +217,8 @@ def test_a_malformed_link_line_costs_the_line_not_the_file(registry, index, tmp_
     conn = open_index(index)
     add(conn, locator, registry.config)
     [r] = crawl(conn, registry)
-    assert r.pages == 2 and r.links == 0  # doc.py and documented; notes.c has no link left
+    # doc.py and documented; notes.c is a C file page with no definition and no link left
+    assert r.pages == 3 and r.links == 0
     assert len(r.skipped) == 2 and all("the line was ignored" in x for x in r.skipped)
     assert "doc.py: line 3" in r.skipped[0] and "notes.c: line 1" in r.skipped[1]
     assert (

@@ -153,7 +153,7 @@ def test_a_whole_file_is_a_script_and_a_non_python_file_has_no_shape(registry):
     assert j["span"] == [1, 31] and j["shape"] is not None
     readme = resolve_json(f"{THERMO}@main/README.md")
     assert readme["language"] == "text" and readme["shape"] is None and readme["refs"] == []
-    with pytest.raises(ResolveError, match="not Python"):
+    with pytest.raises(ResolveError, match="no extractor"):
         resolve(f"{THERMO}@main/README.md#x", registry)
 
 

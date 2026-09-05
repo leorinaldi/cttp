@@ -1,8 +1,9 @@
 """Extractors: what a definition is, per language. Spec §3.
 
 `extract(path, source, symbol, files)` picks the extractor by the file's suffix. Python has the
-full one (`python.py`); any other file is a whole-file script page with no definitions, no shape
-and no references (tree-sitter read-side extractors arrive in Phase 6).
+full one (`python.py`, exact, with derived references); C goes through the tree-sitter one
+(`treesitter.py` and `queries/c.scm`: definitions, identity, shape, links — no references); any
+other file is a whole-file script page with no definitions, no shape and no references.
 
 A page's `source` is its **own text**. For a script page the link lines inside it — and the block
 beneath any stamped `is` link, which is another page's code — are taken out and reported as the
@@ -17,7 +18,7 @@ from pathlib import PurePosixPath
 from cttp.hashing import normalize
 from cttp.links import Link, strip_links
 
-LANGUAGES = {".py": "python"}
+LANGUAGES = {".py": "python", ".c": "c", ".h": "c"}
 
 
 class ExtractError(LookupError):
@@ -61,22 +62,32 @@ def language_of(path: str) -> str:
 
 def definitions(path: str, source: str) -> list[str]:
     """The addressable symbols of a file, in order; empty for a file without an extractor."""
-    if language_of(path) == "python":
+    language = language_of(path)
+    if language == "python":
         from cttp.extract import python
 
         return python.definitions(source)
+    if language != "text":
+        from cttp.extract import treesitter
+
+        return treesitter.definitions(language, source)
     return []
 
 
 def extract(path: str, source: str, symbol: str | None = None, files: Iterable[str] = ()) -> Page:
     """The page at `path` (or its definition `symbol`); `files` lists the repository at that rev,
     for resolving references. A file without an extractor is a script page as it is."""
-    if language_of(path) == "python":
+    language = language_of(path)
+    if language == "python":
         from cttp.extract import python
 
         return python.extract(source, path, symbol, files)
+    if language != "text":
+        from cttp.extract import treesitter
+
+        return treesitter.extract(language, source, path, symbol)
     if symbol:
-        raise ExtractError(f"{path!r} is not Python; only Python files have definitions")
+        raise ExtractError(f"{path!r} has no extractor, so it has no definitions")
     full = normalize(source)
     kept, links = strip_links(full.split("\n"))
     return Page(
