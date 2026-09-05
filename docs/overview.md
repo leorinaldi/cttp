@@ -20,11 +20,13 @@ stamping the line with the pinned revision and a content hash. The runtime, the 
 reader only ever see ordinary source. A program that uses expanded code runs with cttp
 uninstalled — that is the founding rule, and a test guards it.
 
-Today the whole of the hello-world loop exists in minimal, real form: name-form addresses; a
-registry that is a public git repository (`github.com/leorinaldi/cttp-registry`) or an HTTP server
-speaking the registry contract; `expand`, `check` and `run` over one link at a time; and a viewer
-on port 3120. Symbols, locators, identity addresses, the index, closure expansion, `fold`,
-`update` and the benchmark are all still ahead — [`plan.md`](plan.md) lays out the phases.
+Today the whole of the hello-world loop exists in real form: all three address forms, with a
+`#symbol` selecting one Python definition of a file; a registry that is a public git repository
+(`github.com/leorinaldi/cttp-registry`) or an HTTP server speaking the registry contract;
+identity and shape hashes; a Python extractor that is exact (`ast`) and derives references;
+`expand`, `check` and `run` over one link at a time; and a viewer on port 3120. Identity-address
+resolution, the object cache, the index, closure expansion, `fold`, `update` and the benchmark
+are still ahead — [`plan.md`](plan.md) lays out the phases.
 
 ## 2. Architecture
 
@@ -37,21 +39,33 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
    └────────────────── expand writes stamp + source beneath the link ◀─── page + identity
 ```
 
-- **Address** (`address.py`) — the grammar of spec §2 and the identity hash: SHA-256 of the
-  definition's own normalized source (dedented, LF, no trailing whitespace, one trailing newline).
+- **Address** (`address.py`) — the grammar of spec §2: one frozen `Address` for the name,
+  locator and identity forms, canonical `str()`, `parse_pinned()` for stamps.
+- **Hashing** (`hashing.py`) — the **identity**: SHA-256 of the definition's own normalized
+  source (dedented, LF, no trailing whitespace, one trailing newline); and the **shape**: the
+  same text tokenized with identifiers as positional placeholders and literals as typed ones,
+  keywords and builtins kept, comments and blank lines dropped, structure tokens kept. Python
+  only; `ShapeError` otherwise. `address.py` re-exports both.
 - **Links** (`links.py`) — one regex finds every `# cttp:` line; fields are `key=value`, the
   description is the trailing quoted string. A link with an `id=` field is *stamped*.
 - **Registry** (`registry.py`) — an ordered list from the config. Each is a **local registry
   repository** (`cttp.toml` + `names/<name>.toml`, each entry mapping a name to a
   `host/owner/repo/path` target and version labels to refs) or an **HTTP registry** serving
-  `GET /<name>[@<version>].json`. First that knows the name answers; a miss falls through.
+  `GET /<name>[@<version>][%23<symbol>].json` — a symbol rides the same route, percent-encoded.
+  First that knows the name answers; a miss falls through.
 - **Git cache** (`gitcache.py`) — bare clones under `$CTTP_HOME/repos/<host>/<owner>/<repo>`,
   fetched from wherever `[remotes]` in the config points, else `https://<locator>.git`. Reads
   blobs at a rev and the license file at that rev.
-- **Extractor** (`extract/`) — turns a file at a rev into a `Page`: kind, language, normalized
-  source, span. Python only.
-- **Resolver** (`resolve.py`) — address → `Resolved`: pinned address, full rev, identity, source,
-  description, license, target, and which registry answered. Against a local registry it does the
+- **Extractor** (`extract/`) — `extract(path, source, symbol, files)` turns a file at a rev,
+  or one definition of it, into a `Page`: kind, language, normalized source, span, and for a
+  definition its symbol, signature, first docstring paragraph, **derived references** (`Ref`s
+  to files and definitions in the same repository, resolved against the rev's file list) and
+  the stdlib / third-party modules it needs. The Python extractor is exact, via `ast`; any other
+  file is a `text` script page with no shape and no references.
+- **Resolver** (`resolve.py`) — address → `Resolved`: pinned address (symbol kept), full rev,
+  identity, shape, kind, symbol, signature, docstring, span, source, description, license,
+  target, refs (as pinned locator addresses at the same rev, `origin: derived`), imports, and
+  which registry answered. Against a local registry it does the
   git and extraction work itself; against an HTTP registry it takes the server's object as is.
   **The server resolves, the client asks** — that is the contract.
 - **Materializer** (`expand.py`) — `expand` (write source beneath the link), `check` (stamped?
@@ -76,10 +90,12 @@ Data an address needs lives in three places on disk, all of them derivable:
 | Path | What | Status |
 |---|---|---|
 | `src/cttp/` | the package; see §2 | authored |
+| `src/cttp/extract/` | `__init__.py` (`Page`, `Ref`, `extract()` dispatch by suffix), `python.py` (the `ast` extractor) | authored |
 | `src/cttp/server/templates/` | `base.html`, `index.html`, `name.html` | authored |
-| `tests/` | pytest, one file per concern (`test_address`, `_config`, `_links`, `_resolve`, `_expand`, `_check`, `_run`, `_server`, `_cli`); `conftest.py` builds the offline world | authored |
+| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_config`, `_links`, `_resolve`, `_expand`, `_check`, `_run`, `_server`, `_cli`); `conftest.py` builds the offline world | authored |
 | `tests/fixtures/registry/` | the registry repository's contents — **identical to the public repo at `v1`**; keep them in sync | authored |
 | `tests/fixtures/hello/hello.py` | one line, `# cttp: hello-world` | authored |
+| `tests/fixtures/thermo/` | a fake sensor package (`src/thermo/{__init__,decode,lm75}.py`) with every definition kind the extractor must handle; served in tests as `github.com/leorinaldi/thermo` | authored |
 | `docs/` | vision, spec, plan, this file; excluded from ruff | authored |
 | `scripts/make_local_registry.py` | builds an offline registry repo from the fixture | authored |
 | `bench/drivers/corpus/`, `bench/drivers/lm75-teardown/` | the benchmark corpus (736 Linux driver `.c` files) and the LM75 teardown; fetched by script, never committed | gitignored |
@@ -97,7 +113,15 @@ links to spec §8 in this private repo.
   `# cttp: hello-world@<12-hex rev> id=sha256:<12-hex identity>  "description"`. Stamps carry
   12-hex prefixes; the JSON objects carry full SHAs (`rev`, `identity_full`).
 - **Identity hashes the definition's own source, nothing it references.** So an address is
-  computable from one file offline, and `check` needs no network to detect drift.
+  computable from one file offline, and `check` needs no network to detect drift. The shape is
+  derived metadata beside it, never part of an address.
+- **A definition's references are the names it uses; a script's are every import it makes.**
+  Reference resolution is static and repository-local: an import or attribute chain becomes a
+  `Ref` only when the longest module prefix names a file at that rev; anything else is a
+  stdlib or third-party top-level module, decided by `sys.stdlib_module_names`. A parameter
+  shadows a module-level import.
+- **A `#symbol` travels the HTTP contract as `%23` in the existing route.** The contract grew
+  no route; spec §8's table does not yet say so (a follow-up in `PROGRESS.md`).
 - **No lockfile.** The document alone says what runs — web subresource-integrity, not pip. A link
   moves only when asked (`track=latest` and `cttp update` are in the plan, not yet built).
 - **Derived versus asserted.** `rev`, `identity`, `license` are derived by the tool from the
@@ -122,10 +146,18 @@ links to spec §8 in this private repo.
 - **stamp** — the pinned address plus identity that expansion writes onto the link line.
 - **link** — a `# cttp:` comment line. Later also `# cttp-from:` (derived from) and `# cttp-see:`
   (reference only); neither is recognised yet.
-- **page** — what an address resolves to: a definition or a script, with its normalized source.
-  Only whole-file scripts exist so far.
+- **page** — what an address resolves to: a definition (`function`, `class`, `constant`) or a
+  script, with its normalized source. A definition's source is its span, dedented.
+- **symbol** — the dotted name of a definition within a file: `reg_to_millicelsius`,
+  `LM75.read_temp`. Module-level defs, classes, constants and class members are addressable;
+  nested defs are not, and the error says which definition they are nested in.
+- **shape** — the identity's structural twin: same hash over the placeholder text. Equal shapes
+  with different identities mean a near-duplicate.
+- **ref** — a derived reference from a page to another file or definition in its repository,
+  emitted as a link with `relation: ref`, `origin: derived`.
 - **block** — the lines beneath a stamped link that `check` hashes. Currently: to the next link
-  line or EOF, trailing blanks dropped. The plan (P1-T4) defines it properly.
+  line or EOF, trailing blanks dropped — so **user code after an expanded definition reads as
+  drift** until the plan's P1-T4 defines the block properly.
 - **entry** — a registry's record for a name: target, description, owner, default, versions.
 - **locator** — `host/owner/repo`, no scheme. `split_target` splits an entry's target into
   locator and path.
@@ -168,6 +200,10 @@ links to spec §8 in this private repo.
 - **A declined `run` leaves nothing in the run cache.** The cache entry is the confirmation marker.
 - **`expand` refuses a page that itself contains `# cttp:` lines.** Closure expansion is P3-T1;
   until then the refusal is correct behaviour, not a bug.
+- **A non-Python file resolves with `shape: null` and `language: "text"`.** Not an error: only
+  Python has an extractor today. Asking for a `#symbol` in such a file is the error.
+- **The docstring is the first paragraph, joined into one line.** Not the first physical line —
+  a summary that wraps would be cut mid-sentence.
 - **The first run of `cttp` writes `~/.config/cttp/config.toml`.** That is the designed first-run
   experience, not a side effect to suppress.
 - **`run <file>` runs a copy, never the file.** The user's file is untouched; only `expand` writes
@@ -182,8 +218,9 @@ links to spec §8 in this private repo.
   the registry moved is this. Cure: `rm -rf ~/.cache/cttp`.
 - **`uv --directory` changes the working directory.** To run cttp against files elsewhere use
   `uv run --project ~/Claude/cttp cttp …` from that directory.
-- **`pkill -f 'cttp serve'` matches its own shell.** Find the pid with `pgrep -af 'cttp serve'`
-  and kill that, or the kill reports success having killed the wrong thing.
+- **`pkill -f 'cttp serve'` matches its own shell, and so does `kill $(pgrep -f …)` inside one
+  command.** Run `pgrep -af 'cttp serve'` first, read the pids, and kill them in a separate
+  command — otherwise the shell dies (exit 144) and the server survives.
 - **Port 3120 is usually already up.** Leo leaves the server running between sessions. Probe
   before starting; a second `cttp serve` fails to bind.
 - **The system `python3` has no cttp**, and the tests rely on that: `/usr/bin/python3 -I` is how
