@@ -701,6 +701,21 @@ so that hardening replaces bodies and never restructures.
 - **May touch:** `bench/agent/tasks/**`, `bench/agent/README.md`.
 - **Accept:** `uv run python -m bench.agent.harness --list` shows fifteen tasks; every grader runs
   against its own reference solution and passes, and against the unmodified repository and fails.
+  **Amended 2026-09-05, as built (done):** the repositories are `click`, `attrs` and `rich`
+  (`tomli-w` is too small to search, `httpx` needs a network stack to test), cloned by
+  `bench/agent/fetch.sh` under the gitignored `bench/agent/repos/`; their test-time needs are the
+  `bench` dependency group. In-repository tasks take the fix commit's tests and source straight
+  from the clone (`commit` + `paths` overlays), so no licensed code is copied here. The
+  cross-repository consumer is a small project of the task, the dependency is checked out at
+  `../deps/<name>` for both arms; the link check accepts a correct pinned *address* and only
+  requires the `id=` to be right when present — the identity hash is something only the links
+  arm can obtain, so requiring it would grade tool availability, not context. The impact answer is
+  compared with `who`'s **innermost definitions** (a class whose member is listed is dropped,
+  file pages left out), exact as a set. `graders.py` and `harness.py` grew the deps, the commit
+  overlays, the two checks and an optional test command (impact tasks run nothing) — beyond the
+  entry's "may touch", because nothing else could carry them. `bench/agent/README.md` §Tasks has
+  the tables and the two caveats (`who` misses `src/`-layout tests; the extractor's notion of a
+  use is the grader).
 
 ### P8-T3 · Run and report
 

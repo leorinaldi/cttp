@@ -1,0 +1,36 @@
+# Impact question over rich at commit 9d8f9a372cc5: the answer is graded exactly against `cttp who` on
+# the run's index (the innermost definitions; see graders.check_who and the README).
+
+name = "im-pick-bool-rich"
+family = "impact"
+summary = "rich: which definitions call `pick_bool`?"
+
+prompt = """
+We are about to change the signature of `pick_bool` (defined in `rich/_pick.py`) in this repository (rich). Before we
+do, list every definition whose code uses it: every function, method or class body that refers
+to the name `pick_bool`, in the package and in the tests.
+
+Write the list to a new file `impact.txt` at the repository root, one entry per line, in the
+form `<path>#<name>`, where `<path>` is the file's path from the repository root and `<name>`
+is the dotted name of the innermost definition containing the use — `pkg/mod.py#func` for a
+function, `pkg/mod.py#Class.method` for a method (name the method, not its class, unless the
+use is in the class body itself). Sort order does not matter. Do not list modules that merely
+import the name, do not list the definition itself, and do not change any other file. Nothing
+needs to be run.
+"""
+
+[repo]
+source = "bench/agent/repos/rich"
+locator = "github.com/Textualize/rich"
+url = "https://github.com/Textualize/rich.git"
+rev = "9d8f9a372cc5916fd4781fec207ced7ddac2f08f"
+
+[grade]
+# no command: the grader compares impact.txt with `cttp who` on the index built for the run
+[grade.who]
+answer = "impact.txt"
+path = "rich/_pick.py"
+symbol = "pick_bool"
+
+[solution]
+overlay = "solution"   # impact.txt, generated from `cttp who` (the innermost definitions)

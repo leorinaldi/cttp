@@ -20,6 +20,12 @@ cttp = "cttp.cli:app"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.5"]
+# What the P8-T2 task repositories need at test time (attrs: hypothesis; rich: pygments,
+# markdown-it-py; click: nothing). Installed by default so `--check-graders` and the runs work.
+bench = ["hypothesis>=6", "pygments>=2.17", "markdown-it-py>=3"]
+
+[tool.uv]
+default-groups = ["dev", "bench"]
 
 [build-system]
 requires = ["hatchling"]
@@ -38,7 +44,7 @@ markers = [
 ]
 
 [tool.ruff]
-extend-exclude = ["docs", "bench/drivers/corpus"]
+extend-exclude = ["docs", "bench/drivers/corpus", "bench/agent/repos", "bench/agent/tasks"]  # tasks: fixtures, copied code, deliberately incomplete consumers
 line-length = 100
 target-version = "py312"
 

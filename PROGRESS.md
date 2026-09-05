@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 7 COMPLETE, P8-T1 (THE HARNESS) DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). NEXT IS P8-T2 (THE TASK SET).** Phase 0
+**Status: PHASES 0 TO 7 COMPLETE, P8-T1 (THE HARNESS) AND P8-T2 (THE TASK SET) DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). NEXT IS P8-T3 (RUN AND REPORT).** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -44,34 +44,40 @@ them, the `CTTP_TOKEN` secret, enabling Pages, the DNS for `cttp.ai` and the two
 requests are Leo's, and are the open items of P7-T2/T3. Phase 8 (2026-09-05): **P8-T1 the
 harness** — `bench/agent/` drives Claude Code headless under Leo's login with two arms (the
 cttp MCP tools against the shell's search), per-run checkouts and indexes, records with usage,
-tool calls and grades, a `--replay` dry run, and the smoke task passing in both arms. 344 fast
-tests green plus 2 `slow` corpus tests (deselected by default), ruff clean.
+tool calls and grades, a `--replay` dry run, and the smoke task passing in both arms. **P8-T2 the
+task set** (2026-09-05) — fifteen tasks over `click`, `attrs` and `rich` (cloned by
+`bench/agent/fetch.sh`): five real merged fixes with the commit's tests as the hidden grader,
+five cross-repository reuses graded by hidden tests plus a link check, five impact questions
+graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). 358 fast tests
+green plus 17 `slow` (the corpus, and the graders' acceptance over the real clones), ruff clean.
 
-_Last updated: 2026-09-05, session end (P8-T1 done: the harness, the smoke run, the arm design amended on evidence; cttp.ai DNS pending, not blocking)._
+_Last updated: 2026-09-05, session end (P8-T2 done: the task set, the link and who graders, fetch.sh; first runs of one task per family recorded; cttp.ai DNS pending, not blocking)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: P8-T2 — the task set.** Read its entry in [`docs/plan.md`](docs/plan.md) in full,
-and `bench/agent/README.md` for how a task is shaped: `tasks/<name>/task.toml` (prompt, `repo`
-source + locator, the grade command) with `setup/`, `grade/` and `solution/` overlays;
-`--check-graders` is the acceptance. `graders.prepare_checkout` already takes a git repository
-as `repo.source` with `repo.rev` — what the three real repositories need — but it clones the
-source with `git clone`, so the repositories must be on disk (a bare clone under `bench/agent/`
-or the git cache) before a run; decide where they live and how they are fetched (a
-`fetch.sh` like `bench/drivers/`). **Design the tasks so that reading everything is the
-expensive path**: in the smoke run, with `Read` available, the links arm read the two files and
-never touched a cttp tool — on a two-file repository there is nothing to search for. The
-cross-repository tasks need the second repository indexed too (`prepare_index` crawls only the
-checkout today) and the impact questions need a grader that compares the agent's answer with
-`who` — neither exists yet. Keep `Read` in both arms (see the P8-T1 amendment in `plan.md`).
-
-**Before the full run (P8-T3):** the smoke numbers say a trivial task costs ~30–40k tokens and
-~13 s per arm on Opus 5; the five-hour window's utilization is in every record's `rate_limit`
-(the smoke runs moved it from 0.20 to about 0.25 across three runs, one of them 470k tokens).
-Estimate from the P8-T2 tasks' first runs, and tell Leo before starting ninety.
+**Start here: P8-T3 — run and report.** Read its entry in [`docs/plan.md`](docs/plan.md) in full
+and `bench/agent/README.md` (§Tasks, §What a record holds, §Caveats). The fifteen tasks are in
+place and `--check-graders` passes; `bash bench/agent/fetch.sh` must have run on the machine
+(the clones are gitignored). The first runs of one task per family are under
+`bench/agent/results/2026-09-05/` (`xr-filesize-rich`, `im-pick-bool-rich`,
+`ir-table-highlight-rich`, both arms, one run each) — **read the build-history entry below for
+their numbers and what they say about the prompts and graders before starting the ninety**, and
+estimate from them: tokens per run per family, how many fit in a five-hour window (every record's
+`rate_limit` has the window's utilization; the six runs, ~480k tokens, moved it 0.25 → 0.41, so
+ninety runs at ~80k median look like about two windows). **The links arm lost on tokens in all
+three families** — decide with Leo, before the ninety, whether to pull the lever the README
+names (a line telling the links arm the cttp tools are its search, replacing the denied
+`grep`), since that changes the arms and must be stated in the report either way. **Tell Leo the
+estimate and get his go-ahead before starting** `uv run python -m bench.agent.harness --runs 3
+--wait-for-reset`. Then
+`report.py` into `results/<date>/report.md`, `docs/benchmark.md` with the method, the table and
+the honest reading (the caveats: both arms inside Claude Code's harness; the link check accepts
+an unstamped address; the who check is the extractor's notion of a use; `who` misses
+`src/`-layout tests), registered in `CLAUDE.md`'s document map. Decide whether ninety streams
+(tens of MB) stay in git or only the records.
 
 Still Leo's, not blocking: the **DNS for `cttp.ai`** (apex `A` records 185.199.108.153,
 185.199.109.153, 185.199.110.153, 185.199.111.153, or an `ALIAS` to `leorinaldi.github.io`);
@@ -436,8 +442,21 @@ can be deleted.
   `--list`, `--task`, `--arm`, `--runs`, `--redo`, `--keep`. `report.py` renders the P8-T3 table
   (pass rate, median tokens, ratio, per task and family, result files listed). The smoke task
   `smoke-pyrepo` (pyrepo's `left` returns `x - 1`) and its two records from 2026-09-05 are
-  committed. `README.md` has all of it.
-- Tests: 344 fast + 2 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
+  committed. `README.md` has all of it. **P8-T2:** `tasks/` holds the fifteen real tasks —
+  `ir-*` (five merged fixes of click/attrs/rich: `repo.rev` is the parent commit, the `grade`
+  and `solution` overlays are paths taken from the fix commit), `xr-*` (five consumers with a
+  `[[deps]]` repository checked out at `../deps/<name>` and a `[grade.link]` check: an `is` link
+  in `app.py` resolving to the target's identity, any `id=` right), `im-*` (five impact questions
+  with a `[grade.who]` check and no command: `impact.txt` equals `who`'s innermost definitions).
+  `graders.py` grew `Repo`/`Overlay`/`LinkCheck`/`WhoCheck`, `apply_overlay`, per-dep clones
+  mapped in the config, `prepare_index` over every clone (moved here from the harness; the
+  harness indexes for the links arm and for any task whose grader needs it), `check_link`,
+  `check_who`, `innermost`, `parse_answer`, `Grade.checks` (in the record as `grade.checks`),
+  `Task.fetched`. `fetch.sh` clones the three repositories under the gitignored `repos/` and
+  verifies every pinned commit; `--list` marks an unfetched task and a run refuses to start
+  without the clones. `pyproject.toml`: a `bench` dependency group (hypothesis, pygments,
+  markdown-it-py) installed by default; `bench/agent/tasks` and `repos` excluded from ruff.
+- Tests: 358 fast + 17 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
   config,links,gitcache,resolve,objects,latest,closure,expand,check,update,fold,run,package,
   server,cli,index_crawl,index_queries,acceptance_move,acceptance_provenance,
   acceptance_drivers,schemas,mcp,name,registry_federation,export,bench_agent}.py`.
@@ -445,7 +464,15 @@ can be deleted.
   and its grader tells the bug from the fix, the checkout and config are as described, the arms
   are what the README says, the stream parser reads init, tool calls, denials and the result,
   a replay of each committed smoke record reproduces its numbers exactly (and the links record
-  shows cttp connected, the baseline none), and the report renders. `pyproject.toml` sets
+  shows cttp connected, the baseline none), and the report renders. **P8-T2:** the fifteen
+  tasks load five per family with the shape each family needs; an impact task has no Bash rule;
+  commit overlays grade a parent against its fix (a two-commit repo built in `tmp_path`); an
+  unfetched repository is reported; dependencies are cloned beside the checkout and mapped in
+  the config; the link check passes an unstamped or correctly stamped link to the target and
+  fails a wrong stamp, another definition or no link (thermo as the dependency, `@main`);
+  `innermost`/`parse_answer`; the who check crawls the checkout and compares (`LM75.read_temp`,
+  not `LM75`; no file pages). The `slow` acceptance runs `check_grader` for each real task,
+  skipped until `fetch.sh` has run. `pyproject.toml` sets
   `pythonpath = ["."]` so `bench.agent` imports under pytest. `test_extract_c.py` is P6-T1's acceptance over the
   `crepo` fixture (every kind, exact spans and signatures, one identity in two files, one shape
   under other names and literals, links in both C comment syntaxes, the crawl and the five
@@ -745,11 +772,33 @@ trigger that would schedule it.
 - **The links arm's deny list catches `| tail -40` and `| head`** in a pipeline with the test
   command (each subcommand is checked); the agent recovers by running the plain command, at
   the cost of a turn → **standing**; the read-only set has to stay denied
-- **`prepare_index` crawls only the task's checkout**; a cross-repository task needs the second
-  repository registered and crawled too, and an impact question needs a grader that compares
-  the answer with `who` → **P8-T2**
-- **`repo.source` as a git repository is cloned with `git clone`**, so the P8-T2 repositories
-  must be on disk before a run (nothing fetches them yet) → **P8-T2**
+- ~~`prepare_index` crawls only the task's checkout; cross-repository indexing and a `who`
+  grader are missing~~ — closed 2026-09-05 (P8-T2): every clone is indexed; `check_who`
+- ~~The P8-T2 repositories must be on disk before a run~~ — closed 2026-09-05: `fetch.sh`,
+  `Task.fetched`, `--list` marks them, a run refuses to start without them
+- **The closure keeps a function-local relative import** (`click.formatting.wrap_text` does
+  `from ._textwrap import TextWrapper` in its body; `expand` inlines `TextWrapper` and leaves
+  the line, which fails at run time — found writing `xr-textwrap-click`, which uses
+  `TextWrapper` directly instead). The closure should refuse it (a local import of a
+  repository module) or drop the statement when the closure binds the name → **unscheduled**;
+  trigger: the first real expansion of a definition with a local import (spec §3's refusal
+  list would grow one line)
+- **`who` misses a `src/` layout's tests and every re-export**: the extractor resolves an
+  absolute import against the importing file's ancestors, so `from click._compat import x` in
+  `tests/` never reaches `src/click/`, and `attr.fields` is a ref to `__init__.py`, not to the
+  definition. The five impact targets avoid both (grep agrees with `who`); the README says so →
+  **unscheduled**; trigger: wanting `who` right on a src-layout project (a source-root rule —
+  `src/`, or `pyproject.toml`'s package dirs — in `extract/python.py`'s reference resolution)
+- **`expand` writes hoisted imports without a blank line after preceding code** when the link
+  is at the end of the file, and before whatever `--at` points at (`import os` ends up after
+  the expanded function when the link is inserted above it) — valid Python, untidy →
+  **unscheduled**; trigger: someone reading an expanded file and minding
+- **The link check accepts an unstamped link**; the plan said "a correct `# cttp:` stamp". A
+  stamp needs the identity, which only the links arm can get; `stamped` is recorded per run so
+  the report can show how often each arm wrote one → **P8-T3** (state it in `docs/benchmark.md`)
+- **The links arm cannot run `cttp add`/`check`** (Bash is the test command only), so a
+  cross-repo task is copy-by-hand in both arms; giving both arms `cttp` in Bash would change
+  what is measured → **standing**, by design; note it in the report
 - **`results/` is committed** (the smoke run is 76 KB with its streams); ninety runs of real
   tasks will be tens of MB of streams — decide whether streams stay in git or only the records
   → **P8-T3**
@@ -758,6 +807,48 @@ trigger that would schedule it.
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
+
+- **2026-09-05 (eighteenth session) — P8-T2 built: the task set, with the graders it needed.**
+  The three repositories: `click` (12.7k lines, BSD-3), `attrs` (6.4k, MIT), `rich` (26.6k, MIT)
+  — `tomli-w` is too small to have anything to search, `httpx` needs a network stack to test;
+  full clones under the gitignored `bench/agent/repos/` by `fetch.sh`, their test-time needs
+  (`hypothesis`, `pygments`, `markdown-it-py`) a default-installed `bench` dependency group.
+  **In-repo:** twenty candidate fix commits since 2024 were probed (the commit's test file on the
+  parent and on the commit, under this venv's Python 3.12 and pytest); five chosen across the
+  three repos where the fix is small and the place must be found (`write_usage` empty args,
+  `Choice` metavar with `show_choices=False`, the slotted `__getattr__` and `cached_property`,
+  `add_row` columns and `highlight`, pretty-printing an unset dataclass field). The checkout is
+  the parent, the grader and solution are the commit's files taken from the clone (`commit` +
+  `paths` overlays) — no licensed code copied; the prompt is the bug report without the file
+  name. **Cross-repo:** the consumer is a small project of the task; the dependency clone sits at
+  `../deps/<name>` so both arms can reach it and is indexed with the checkout; the prompt names
+  the definition, repository and commit, not the file, and asks for `# cttp:` links. Targets
+  were probed with `cttp closure` for an inlinable closure: `TextWrapper` (5 defs across two
+  files; the hidden tests use ANSI widths, which stdlib `textwrap` gets wrong), `join_options`
+  (+`_split_opt`), `decimal`, `escape`, `to_bool`. The reference solutions were written with
+  `cttp add`, so they carry real stamps. **Decision — the link check accepts an unstamped
+  link** whose address resolves to the target and fails a wrong `id=`: the identity hash is
+  obtainable only through the links arm's `resolve`, so requiring it would grade tool
+  availability, not context; `stamped` is recorded. **Impact:** targets with `who` answers of
+  2–12 definitions across files, each verified against `grep`; **decision — the answer is
+  compared with `who`'s innermost definitions** (a class whose member is listed is dropped,
+  since the class page's refs include its methods'; file pages left out), exact as a set,
+  `missing`/`extra` recorded; the reference `impact.txt` is generated from `who`. Found on the
+  way: `who` misses `src/`-layout tests (absolute imports resolve against ancestors only) and
+  re-exports — so click/attrs targets were chosen that no test references; and `wrap_text`'s
+  function-local `from ._textwrap import TextWrapper` survives expansion and fails at run time
+  (the closure neither refuses nor drops it) — a cttp bug, logged, task switched to
+  `TextWrapper`. `graders.py`/`harness.py` grew deps, commit overlays, the two checks, an
+  optional command (impact tasks run nothing; `Bash` stays a tool for the baseline's search),
+  `Task.fetched`; `prepare_index` moved to graders and indexes every clone, for the links arm and
+  for any task whose grader reads the index. `--check-graders`: 16 ok in 2m20s. Tests: 8 new
+  offline tests (thermo/pyrepo fixtures) plus a `slow` parametrized acceptance over the real
+  clones. **First runs**, one task per family, both arms (README §The first runs): all six pass;
+  links/baseline tokens 77k/33k (in-repo), 71k/46k (cross-repo, the links arm stamped, the
+  baseline did not), 189k/68k (impact) — the links arm reaches for `grep` first and learns of
+  its tools from the denial, gets whole JSON pages back where `grep -A` returned lines, and on
+  the impact task read every definition `who` listed before answering. The five-hour window
+  went ~0.25 → 0.41 over the six runs (~480k tokens).
 
 - **2026-09-05 (seventeenth session) — P8-T1 built: the benchmark harness, and the arm design
   amended on evidence.** The flags were checked against `code.claude.com/docs/en/headless` and
@@ -877,32 +968,7 @@ is the archive, and a bloated history taxes every future session start.
   scratch `--mcp-config`) called `mcp__cttp__who` and answered correctly. Spec §9 amended
   (schemas, `closure` in both modes); `docs/json-schemas.md` registered in `CLAUDE.md`. Server
   restarted on the new code. 275 → 295 tests.
-- **2026-09-05 (thirteenth session) — spec §8 patched; Phase 4 end to end: P4-T1 the index
-  schema and crawl, P4-T2 the six queries, P4-T3 `--latest` rule 3 with acceptance tests 2 and
-  3, P4-T4 the viewer over the index.** Five commits. First the spec: §8 gained the
-  `%23<symbol>` route and a field table for the resolver's object, checked row by row against
-  the live server. Then the index. Load-bearing decisions: **identity is the key of
-  `definitions` and `locations` is its own table**, so "the same code in three places" is one
-  row plus three; **a Python file is a page too** (the whole-file page beside its definitions),
-  which is what makes a script snippet like `hello-world` indexable — and what made a file that
-  is exactly one definition share that definition's identity, so the definition's view (kind,
-  name, signature) wins the row and `dups` never pairs a file with its own only definition;
-  **an asserted link's source is the page it stands for** — the definition in the block beneath
-  it (spec §4), not the file — so a verbatim copy links back *as itself* and `who`, `rank` and
-  `--latest` all see provenance the same way; **the crawl never fetches a repository it was not
-  given**, so target identities are filled in afterwards from what the index knows (a stamp's
-  `id=`, a pinned locator seen at that rev, a name's snapshot) and left NULL otherwise, and
-  `who` falls back to place-matching only for those; **"current" means most recently crawled**,
-  with `rowid` breaking same-second ties for history order. `--latest` asks the index last: the
-  same identity at another repository's current revision first (derived, exact), then an
-  `is`/`from` backlink (`is` before `from`, newest commit first). Found on the way: a
-  documentation line that *looks* like a malformed link (`links.py`'s own docstring, spec §4's
-  grammar) made the crawler drop the whole file — now the line becomes a bare comment with a
-  skip note, and `--force` exists to crawl a revision again; two commits in the same second
-  need `rowid` to order; a label rev in a query address must be resolved for real; headless
-  Chrome here needs `--no-sandbox`. By hand on the real index: this repository and the public
-  registry crawled (670 identities, 1,093 links), `dups` finding `runner` ×13, `who hello-world`
-  listing spec §7's examples, every page at 1200px and 390px. 249 → 275 tests.
+
 ## How to run
 
 ```bash
@@ -992,8 +1058,9 @@ uv run cttp serve --export /tmp/site                       # the contract as sta
 Phase 8, the benchmark (uses Leo's Claude Code login; nothing else):
 
 ```bash
-uv run python -m bench.agent.harness --list                # the tasks
-uv run python -m bench.agent.harness --check-graders       # each grader fails the bug and passes the solution
+bash bench/agent/fetch.sh                                  # once per machine: click, attrs, rich under bench/agent/repos/
+uv run python -m bench.agent.harness --list                # the tasks (marks any whose repository is missing)
+uv run python -m bench.agent.harness --check-graders       # each grader fails the unmodified checkout and passes the solution (~2½ min)
 uv run python -m bench.agent.harness --task smoke-pyrepo   # both arms once; results/<today>/smoke-pyrepo/<arm>/1.json
 uv run python -m bench.agent.harness --runs 3 --wait-for-reset   # every task, both arms, three runs, sleeping through limits
 uv run python -m bench.agent.harness --replay bench/agent/results/2026-09-05/smoke-pyrepo/links/1.json   # no subscription used

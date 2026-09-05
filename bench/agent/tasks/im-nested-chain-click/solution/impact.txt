@@ -1,0 +1,2 @@
+src/click/core.py#CommandCollection.get_command
+src/click/core.py#Group.add_command

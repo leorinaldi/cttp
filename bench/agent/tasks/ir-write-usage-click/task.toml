@@ -1,0 +1,38 @@
+# In-repository fix, taken from pallets/click commit 0551bf5 ("Fix `HelpFormatter.write_usage`
+# producing spurious characters", issue #3360). The checkout is the parent commit; the hidden
+# grader is the commit's test file; the reference solution is the commit's source file.
+
+name = "ir-write-usage-click"
+family = "in-repo"
+summary = "click: `HelpFormatter.write_usage` with no args emits a blank line instead of `Usage: prog`"
+
+prompt = """
+Bug report for this repository (click):
+
+Calling `HelpFormatter.write_usage(prog, args)` with empty `args` writes only a blank line. The
+same shows end to end: a command with no parameters and `options_metavar=""` (or
+`options_metavar=None`) renders its `--help` with an empty first line where `Usage: cli` should
+be.
+
+Fix it so that, with no args, the usage prefix and the program name are still written — as a
+single line with no trailing space, honouring `current_indent` and keeping a caller-supplied
+(possibly ANSI-styled) `prefix` verbatim. Behaviour with non-empty args must not change.
+
+Change as little as possible and do not edit the tests. The test command is
+`python -m pytest -q -o pythonpath=src tests/test_formatting.py`; run it once at the end.
+"""
+
+[repo]
+source = "bench/agent/repos/click"
+locator = "github.com/pallets/click"
+url = "https://github.com/pallets/click.git"
+rev = "7c99ebe23b931f27562d926814423cce85fd9766"   # the parent of the fix
+
+[grade]
+command = "python -m pytest -q -o pythonpath=src tests/test_formatting.py"
+commit = "0551bf53588ae87f462d336f24f853a156fefe3a"
+paths = ["tests/test_formatting.py"]
+
+[solution]
+commit = "0551bf53588ae87f462d336f24f853a156fefe3a"
+paths = ["src/click/formatting.py"]

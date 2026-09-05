@@ -221,7 +221,8 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `docs/` | vision, spec, plan, this file; `json-schemas.md` is **generated** (`python -m cttp.schemas`); excluded from ruff | authored |
 | `scripts/make_local_registry.py` | builds an offline registry repo from the fixture | authored |
 | `bench/drivers/` | `fetch.sh` (the corpus: a sparse, blobless clone of `torvalds/linux` at **v7.3-rc1**, five directories' own files, 736 `.c`), `expected.json` (provenance, the duplicate groups of acceptance test 1, the measurement's numbers), `measure.py` (the line-level measurement), `README.md` | authored |
-| `bench/agent/` | the agent benchmark (plan P8): `harness.py` (Claude Code headless, the two arms, records, `--replay`), `graders.py` (tasks from `tasks/<name>/task.toml` + `setup/`/`grade/`/`solution/` overlays; the per-run checkout, config and grade), `report.py` (the table), `results/<date>/<task>/<arm>/<run>.json` + `.stream.jsonl` (committed), `README.md` (all of it) | authored |
+| `bench/agent/` | the agent benchmark (plan P8): `harness.py` (Claude Code headless, the two arms, records, `--replay`), `graders.py` (tasks from `tasks/<name>/task.toml`: a source repository at a commit, `[[deps]]`, `setup`/`grade`/`solution` overlays as directories or as paths from a commit; the per-run checkout with its dependency clones, config, index and grade — the test command, the link check, the who check), `report.py` (the table), `tasks/` (the fifteen P8-T2 tasks and the smoke task), `fetch.sh` (clones the three task repositories), `results/<date>/<task>/<arm>/<run>.json` + `.stream.jsonl` (committed), `README.md` (all of it) | authored |
+| `bench/agent/repos/` | full clones of `pallets/click`, `python-attrs/attrs`, `Textualize/rich` made by `fetch.sh`; every task pins a commit in them — never committed | gitignored |
 | `bench/drivers/corpus/`, `bench/drivers/corpus-preserved/`, `bench/drivers/lm75-teardown/` | the clone `fetch.sh` makes; the original raw-file copy it reproduces byte for byte; the LM75 teardown — never committed | gitignored |
 | `.local/` | local scratch, e.g. `serve.log` | gitignored |
 | `.venv/`, `uv.lock` | uv-managed environment; the lockfile is committed | `.venv` gitignored |
@@ -543,6 +544,18 @@ token would have broken claims by anyone but Leo.
 - **The system `python3` has no cttp**, and the tests rely on that: `/usr/bin/python3 -I` is how
   the no-runtime rule is checked. Do not install cttp system-wide.
 - **`uv` is at `~/.local/bin/uv`**, not on the default `PATH`; export it first.
+- **The `bench` dependency group is installed by default** (`[tool.uv] default-groups`): the
+  task repositories' test-time needs (`hypothesis`, `pygments`, `markdown-it-py`). `click` and
+  `attrs` are importable in the venv for other reasons (`typer`, `hypothesis`); the cross-repo
+  hidden tests check the agent did not import them.
+- **`who` does not see a `src/` layout's tests.** The extractor resolves an absolute import
+  against the importing file's ancestor directories, so `from click._compat import strip_ansi` in
+  `tests/` does not reach `src/click/_compat.py`, and a re-export (`attr.fields`) is not a
+  backlink of the definition. Rich (flat layout) is fine. The impact tasks avoid both cases.
+- **The closure keeps a function-local relative import.** `click.formatting.wrap_text` does
+  `from ._textwrap import TextWrapper` inside its body; `expand` inlines `TextWrapper` and leaves
+  the import line, which fails at run time. Pick definitions without local imports until this is
+  fixed (a follow-up in `PROGRESS.md`).
 - **Confirmation needs a terminal.** `cttp run <address>` with stdin not a tty prints the summary
   and exits 2. Scripts and tests pass `--yes`. To test the prompt by hand, use `script(1)` for a
   pty.
@@ -620,6 +633,7 @@ bash bench/drivers/fetch.sh               # the corpus (~60 MB); then index add 
 uv run pytest -m slow                     # acceptance test 1 and the measurement over the corpus (~2.5 min)
 uv run python bench/drivers/measure.py    # the vision's duplicate-line figures, recomputed
 
+bash bench/agent/fetch.sh                  # once: the three task repositories under bench/agent/repos/
 uv run python -m bench.agent.harness --list | --check-graders | --task <name> --runs N   # the benchmark, under the Claude Code login
 uv run python -m bench.agent.harness --replay bench/agent/results/<date>/<task>/<arm>/1.json   # a record from its stream, no login used
 uv run python -m bench.agent.report bench/agent/results/<date>    # the table

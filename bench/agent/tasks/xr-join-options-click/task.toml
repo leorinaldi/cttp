@@ -1,0 +1,51 @@
+# Cross-repository reuse: the consumer is a small project of this task; the definition comes from
+# click at commit 36baa15ff831, checked out beside the agent's working copy as ../deps/click and indexed
+# with it. Graded by the hidden tests and by the link check (graders.check_link).
+
+name = "xr-join-options-click"
+family = "cross-repo"
+summary = "reuse click's `join_options` (and the `_split_opt` it needs) in a help table"
+
+prompt = """
+This small project (`app.py`, tests in `tests/`) needs a new function in `app.py`:
+
+    format_option_names(names) -> str  and  uses_slash_prefix(names) -> bool
+
+`format_option_names` joins an option's names with `", "` ordered by the length of their prefix (`-v` before `--verbose`, ties in the given order); `uses_slash_prefix` says whether any name is a Windows-style `/option`. Both come from one helper that returns the joined string and that flag as a pair.
+
+Do not write it from scratch. The `click` library — repository `github.com/pallets/click`, checked out at commit
+`36baa15ff831b939a22bc527cd76ce653ef6f66d` in `../deps/click` — has a function `join_options` that does exactly this. Copy that function, and
+every definition it depends on, into `app.py` and call it from the new function. `click` is not
+a dependency of this project and must not be imported.
+
+Mark the copied code with cttp links so its origin stays traceable: directly above each copied
+definition put a comment line
+
+    # cttp: github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/<path of the file in that repository>#<name of the definition>
+
+and, if you know the definition's identity hash, append ` id=sha256:<hash>` to the line.
+
+Do not edit the tests. The test command is `python -m pytest -q tests/test_app.py`; run it once
+at the end.
+"""
+
+[repo]
+source = "bench/agent/tasks/xr-join-options-click/consumer"
+locator = "github.com/leorinaldi/xr-join-options-click"
+
+[[deps]]
+name = "click"
+source = "bench/agent/repos/click"
+locator = "github.com/pallets/click"
+url = "https://github.com/pallets/click.git"
+rev = "36baa15ff831b939a22bc527cd76ce653ef6f66d"
+
+[grade]
+command = "python -m pytest -q tests/test_app.py"
+overlay = "grade"
+[grade.link]
+file = "app.py"
+target = "github.com/pallets/click@36baa15ff831b939a22bc527cd76ce653ef6f66d/src/click/formatting.py#join_options"
+
+[solution]
+overlay = "solution"   # app.py written with `cttp add` plus the wrapper

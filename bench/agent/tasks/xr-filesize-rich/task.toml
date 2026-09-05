@@ -1,0 +1,51 @@
+# Cross-repository reuse: the consumer is a small project of this task; the definition comes from
+# rich at commit 9d8f9a372cc5, checked out beside the agent's working copy as ../deps/rich and indexed
+# with it. Graded by the hidden tests and by the link check (graders.check_link).
+
+name = "xr-filesize-rich"
+family = "cross-repo"
+summary = "reuse rich's `filesize.decimal` in a backup report"
+
+prompt = """
+This small project (`app.py`, tests in `tests/`) needs a new function in `app.py`:
+
+    human_size(size: int, precision: int = 1) -> str
+
+which formats a byte count with decimal (SI, powers of 1000) units: `human_size(1) == "1 byte"`, `human_size(999) == "999 bytes"`, `human_size(1500) == "1.5 kB"`, `human_size(30000, precision=2) == "30.00 kB"`.
+
+Do not write it from scratch. The `rich` library — repository `github.com/Textualize/rich`, checked out at commit
+`9d8f9a372cc5916fd4781fec207ced7ddac2f08f` in `../deps/rich` — has a function `decimal` that does exactly this. Copy that function, and
+every definition it depends on, into `app.py` and call it from the new function. `rich` is not
+a dependency of this project and must not be imported.
+
+Mark the copied code with cttp links so its origin stays traceable: directly above each copied
+definition put a comment line
+
+    # cttp: github.com/Textualize/rich@9d8f9a372cc5916fd4781fec207ced7ddac2f08f/<path of the file in that repository>#<name of the definition>
+
+and, if you know the definition's identity hash, append ` id=sha256:<hash>` to the line.
+
+Do not edit the tests. The test command is `python -m pytest -q tests/test_app.py`; run it once
+at the end.
+"""
+
+[repo]
+source = "bench/agent/tasks/xr-filesize-rich/consumer"
+locator = "github.com/leorinaldi/xr-filesize-rich"
+
+[[deps]]
+name = "rich"
+source = "bench/agent/repos/rich"
+locator = "github.com/Textualize/rich"
+url = "https://github.com/Textualize/rich.git"
+rev = "9d8f9a372cc5916fd4781fec207ced7ddac2f08f"
+
+[grade]
+command = "python -m pytest -q tests/test_app.py"
+overlay = "grade"
+[grade.link]
+file = "app.py"
+target = "github.com/Textualize/rich@9d8f9a372cc5916fd4781fec207ced7ddac2f08f/rich/filesize.py#decimal"
+
+[solution]
+overlay = "solution"   # app.py written with `cttp add` plus the wrapper

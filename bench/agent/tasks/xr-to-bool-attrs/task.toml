@@ -1,0 +1,51 @@
+# Cross-repository reuse: the consumer is a small project of this task; the definition comes from
+# attrs at commit 8f767776326f, checked out beside the agent's working copy as ../deps/attrs and indexed
+# with it. Graded by the hidden tests and by the link check (graders.check_link).
+
+name = "xr-to-bool-attrs"
+family = "cross-repo"
+summary = "reuse attrs' `converters.to_bool` for environment flags"
+
+prompt = """
+This small project (`app.py`, tests in `tests/`) needs a new function in `app.py`:
+
+    env_flag(name: str, default: bool = False) -> bool
+
+which reads environment variable `name` and converts it to a bool: `"true"`, `"t"`, `"yes"`, `"y"`, `"on"`, `"1"` (any case) are `True`; `"false"`, `"f"`, `"no"`, `"n"`, `"off"`, `"0"` are `False`; anything else raises `ValueError`; an unset variable gives `default`.
+
+Do not write it from scratch. The `attrs` library — repository `github.com/python-attrs/attrs`, checked out at commit
+`8f767776326faaed11e6c2974798787f6e19b343` in `../deps/attrs` — has a function `to_bool` that does exactly this. Copy that function, and
+every definition it depends on, into `app.py` and call it from the new function. `attrs` is not
+a dependency of this project and must not be imported.
+
+Mark the copied code with cttp links so its origin stays traceable: directly above each copied
+definition put a comment line
+
+    # cttp: github.com/python-attrs/attrs@8f767776326faaed11e6c2974798787f6e19b343/<path of the file in that repository>#<name of the definition>
+
+and, if you know the definition's identity hash, append ` id=sha256:<hash>` to the line.
+
+Do not edit the tests. The test command is `python -m pytest -q tests/test_app.py`; run it once
+at the end.
+"""
+
+[repo]
+source = "bench/agent/tasks/xr-to-bool-attrs/consumer"
+locator = "github.com/leorinaldi/xr-to-bool-attrs"
+
+[[deps]]
+name = "attrs"
+source = "bench/agent/repos/attrs"
+locator = "github.com/python-attrs/attrs"
+url = "https://github.com/python-attrs/attrs.git"
+rev = "8f767776326faaed11e6c2974798787f6e19b343"
+
+[grade]
+command = "python -m pytest -q tests/test_app.py"
+overlay = "grade"
+[grade.link]
+file = "app.py"
+target = "github.com/python-attrs/attrs@8f767776326faaed11e6c2974798787f6e19b343/src/attr/converters.py#to_bool"
+
+[solution]
+overlay = "solution"   # app.py written with `cttp add` plus the wrapper

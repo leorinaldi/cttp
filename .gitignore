@@ -22,6 +22,7 @@ npm-debug.log*
 # Benchmark corpora — bulk data, fetched by script, never committed
 bench/drivers/corpus/
 bench/drivers/lm75-teardown/
+bench/agent/repos/
 
 # Python
 .venv/

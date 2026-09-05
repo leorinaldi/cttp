@@ -1,0 +1,36 @@
+# Impact question over click at commit 36baa15ff831: the answer is graded exactly against `cttp who` on
+# the run's index (the innermost definitions; see graders.check_who and the README).
+
+name = "im-nested-chain-click"
+family = "impact"
+summary = "click: which definitions call `_check_nested_chain`?"
+
+prompt = """
+We are about to change the signature of `_check_nested_chain` (defined in `src/click/core.py`) in this repository (click). Before we
+do, list every definition whose code uses it: every function, method or class body that refers
+to the name `_check_nested_chain`, in the package and in the tests.
+
+Write the list to a new file `impact.txt` at the repository root, one entry per line, in the
+form `<path>#<name>`, where `<path>` is the file's path from the repository root and `<name>`
+is the dotted name of the innermost definition containing the use — `pkg/mod.py#func` for a
+function, `pkg/mod.py#Class.method` for a method (name the method, not its class, unless the
+use is in the class body itself). Sort order does not matter. Do not list modules that merely
+import the name, do not list the definition itself, and do not change any other file. Nothing
+needs to be run.
+"""
+
+[repo]
+source = "bench/agent/repos/click"
+locator = "github.com/pallets/click"
+url = "https://github.com/pallets/click.git"
+rev = "36baa15ff831b939a22bc527cd76ce653ef6f66d"
+
+[grade]
+# no command: the grader compares impact.txt with `cttp who` on the index built for the run
+[grade.who]
+answer = "impact.txt"
+path = "src/click/core.py"
+symbol = "_check_nested_chain"
+
+[solution]
+overlay = "solution"   # impact.txt, generated from `cttp who` (the innermost definitions)

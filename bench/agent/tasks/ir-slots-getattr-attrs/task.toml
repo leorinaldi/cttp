@@ -1,0 +1,39 @@
+# In-repository fix, taken from python-attrs/attrs commit 88e2896 ("Preserve AttributeError in
+# slotted classes with cached_property", issue #1230).
+
+name = "ir-slots-getattr-attrs"
+family = "in-repo"
+summary = "attrs: a slotted class with `cached_property` swallows an AttributeError raised by a property"
+
+prompt = """
+Bug report for this repository (attrs):
+
+In a `slots=True` class that has a `functools.cached_property`, attrs installs a generated
+`__getattr__` to compute cached properties on first access. When the cached property's body
+raises `AttributeError` itself (for example it reads a plain `@property` that raises
+`AttributeError("I am a property")`), the original error is lost: the generated code checks
+`hasattr(super(), '__getattr__')`, finds none, and raises its own "'A' object has no attribute
+'f'" instead.
+
+Fix the generated `__getattr__` so that it first tries `super().__getattribute__(item)` and, on
+`AttributeError`, re-raises the original error unless the base class defines a `__getattr__`,
+in which case that is called. Other cached properties on the same class must keep working.
+
+Change as little as possible and do not edit the tests. The test command is
+`python -m pytest -q -o pythonpath=src tests/test_slots.py`; run it once at the end.
+"""
+
+[repo]
+source = "bench/agent/repos/attrs"
+locator = "github.com/python-attrs/attrs"
+url = "https://github.com/python-attrs/attrs.git"
+rev = "82a14627fddbd0b2d802fbc574fa3b1ef010a801"
+
+[grade]
+command = "python -m pytest -q -o pythonpath=src tests/test_slots.py"
+commit = "88e2896ca9351cd48711bd320571a832ae122cd5"
+paths = ["tests/test_slots.py"]
+
+[solution]
+commit = "88e2896ca9351cd48711bd320571a832ae122cd5"
+paths = ["src/attr/_make.py"]

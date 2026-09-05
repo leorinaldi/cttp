@@ -1,0 +1,42 @@
+# In-repository fix, taken from Textualize/rich commit 6055e2d ("fix for missing field in
+# dataclass", issue #3417).
+
+name = "ir-pretty-dataclass-rich"
+family = "in-repo"
+summary = "rich: pretty-printing a dataclass whose `init=False` field was never set raises AttributeError"
+
+prompt = """
+Bug report for this repository (rich):
+
+Printing a dataclass instance with `Console().print(obj)` (or `pretty_repr`) raises
+`AttributeError` when one of its fields was declared with `field(init=False)` and never
+assigned, e.g.
+
+    @dataclass(eq=False)
+    class BadDataclass:
+        item: int = field(init=False)
+
+    console.print(BadDataclass())
+
+The pretty printer walks every field with `repr=True` and reads it off the instance. A field
+the instance does not actually have should simply be skipped, so the example prints
+`BadDataclass()`.
+
+Change as little as possible and do not edit the tests. The test command is
+`python -m pytest -q tests/test_pretty.py`; run it once at the end.
+"""
+
+[repo]
+source = "bench/agent/repos/rich"
+locator = "github.com/Textualize/rich"
+url = "https://github.com/Textualize/rich.git"
+rev = "b6f2f7aa5b27f612f391cd28212aff51ad0d42d1"
+
+[grade]
+command = "python -m pytest -q tests/test_pretty.py"
+commit = "6055e2d8ef98e5487949b9c6e5d0dfce6a5b9e28"
+paths = ["tests/test_pretty.py"]
+
+[solution]
+commit = "6055e2d8ef98e5487949b9c6e5d0dfce6a5b9e28"
+paths = ["rich/pretty.py"]

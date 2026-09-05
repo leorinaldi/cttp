@@ -1,0 +1,6 @@
+rich/rule.py#Rule.__rich_console__
+rich/rule.py#Rule._rule_line
+rich/segment.py#Segment.adjust_line_length
+rich/text.py#Text.truncate
+tests/test_cells.py#test_set_cell_size
+tests/test_cells.py#test_set_cell_size_infinite

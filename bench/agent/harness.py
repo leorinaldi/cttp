@@ -56,9 +56,11 @@ from bench.agent.graders import (
     Task,
     TaskError,
     check_grader,
+    cttp_env,
     grade,
     load_tasks,
     prepare_checkout,
+    prepare_index,
     venv_env,
     write_config,
 )
@@ -81,8 +83,8 @@ SHELL_READERS = [
 APPEND_SYSTEM_PROMPT = (
     "You are working in a checkout of a repository; the working directory is its root. "
     "Nobody can answer questions, so do not ask any: complete the task with the tools you have, "
-    "run the test command named in the task once when you are done, and then stop with a short "
-    "summary of the change."
+    "run the test command named in the task once when you are done (if it names one), and then "
+    "stop with a short summary of what you did."
 )
 
 
@@ -93,8 +95,12 @@ class Arm:
     mcp: bool  # attach the cttp MCP server
     deny_shell_readers: bool
 
-    def allowed(self, command: str) -> list[str]:
-        rules = ["Edit", "Write", f"Bash({command})", f"Bash({command} *)"]
+    def allowed(self, command: str | None) -> list[str]:
+        """The permission rules: the built-in tools, the test command (when the task has one —
+        an impact task has nothing to run), and the MCP tools for the links arm."""
+        rules = ["Edit", "Write"]
+        if command:
+            rules += [f"Bash({command})", f"Bash({command} *)"]
         if "Read" in self.tools:
             rules.insert(0, "Read")
         if self.mcp:
@@ -146,27 +152,6 @@ def effective_registries() -> list[str]:
     if proc.returncode != 0:
         raise HarnessError(f"cttp config failed: {proc.stderr.strip()}")
     return list(json.loads(proc.stdout)["registries"])
-
-
-def cttp_env(work: Path, config: Path) -> dict[str, str]:
-    return {
-        "CTTP_CONFIG": str(config),
-        "CTTP_INDEX": str(work / "index.db"),
-        "CTTP_HOME": str(work / "cache"),
-    }
-
-
-def prepare_index(checkout: Checkout, env: dict[str, str]) -> dict[str, object]:
-    """`cttp index add <checkout>` and `crawl` into the run's own index."""
-    out: dict[str, object] = {}
-    for args in (["index", "add", str(checkout.path)], ["index", "crawl"]):
-        proc = subprocess.run(
-            [str(CTTP), *args, "--json"], capture_output=True, text=True, env=venv_env(env)
-        )
-        if proc.returncode != 0:
-            raise HarnessError(f"cttp {' '.join(args)} failed: {proc.stderr.strip()}")
-        out[args[1]] = json.loads(proc.stdout)
-    return out
 
 
 def write_mcp_config(work: Path, env: dict[str, str]) -> Path:
@@ -452,8 +437,11 @@ def run_once(
         env = cttp_env(work, config)
         index = None
         mcp_config = None
-        if arm.mcp:
+        if arm.mcp or task.needs_index:
+            # the links arm's tools read the index; so does an impact task's grader, whichever
+            # arm ran — the index is built before the agent starts, from the committed checkout
             index = prepare_index(checkout, env)
+        if arm.mcp:
             mcp_config = write_mcp_config(work, env)
         argv = claude_argv(task, arm, settings, mcp_config)
         run = run_claude(argv, checkout.path, venv_env(env), settings.timeout, stream_path)
@@ -467,6 +455,7 @@ def run_once(
             "output": g.output[-4000:],
             "diff": g.diff[-20000:],
             "command": task.command,
+            "checks": g.checks,
         }
         record = build_record(
             task=task,
@@ -621,7 +610,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.list:
         for t in tasks:
-            print(f"{t.name:<24} {t.family:<12} {t.summary}")
+            note = "" if t.fetched else "  (source not on disk: bash bench/agent/fetch.sh)"
+            print(f"{t.name:<28} {t.family:<12} {t.summary}{note}")
         print(f"{len(tasks)} task(s)")
         return 0
     if args.replay:
@@ -644,6 +634,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if shutil.which("claude") is None:
         print("error: `claude` is not on PATH", file=sys.stderr)
+        return 2
+    unfetched = [t.name for t in tasks if not t.fetched]
+    if unfetched:
+        print(
+            f"error: source repositories not on disk for {', '.join(unfetched)}; "
+            "run `bash bench/agent/fetch.sh` first",
+            file=sys.stderr,
+        )
         return 2
     settings = Settings(args.model, args.max_turns, args.timeout, effective_registries())
     arms = [ARMS[a] for a in (args.arm or list(ARMS))]

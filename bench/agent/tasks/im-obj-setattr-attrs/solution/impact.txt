@@ -1,0 +1,12 @@
+src/attr/_funcs.py#assoc
+src/attr/_funcs.py#resolve_types
+src/attr/_make.py#Attribute.__init__
+src/attr/_make.py#Attribute._setattrs
+src/attr/_make.py#Attribute.evolve
+src/attr/_make.py#_ClassBuilder._create_slots_class
+src/attr/_make.py#_ClassBuilder._make_getstate_setstate
+src/attr/_make.py#_ClassBuilder._patch_original_class
+src/attr/_make.py#_ClassBuilder.add_setattr
+src/attr/_make.py#_make_cached_property_getattr
+src/attr/_make.py#_make_init_script
+src/attr/_make.py#_transform_attrs

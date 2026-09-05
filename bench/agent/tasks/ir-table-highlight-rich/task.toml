@@ -1,0 +1,36 @@
+# In-repository fix, taken from Textualize/rich commit 16b3830 ("fix(table): highlight columns
+# added by add_row", issue #3517).
+
+name = "ir-table-highlight-rich"
+family = "in-repo"
+summary = "rich: columns a `Table(highlight=True)` creates implicitly in `add_row` are not highlighted"
+
+prompt = """
+Bug report for this repository (rich):
+
+`Table(highlight=True)` highlights the cells of columns declared with `add_column`, but when a
+row passed to `add_row` has more cells than there are columns, the columns created on the fly
+for the extra cells do not inherit the table's `highlight` setting — `table.columns[i].highlight`
+is `False` for them, and their cells render unhighlighted (a `repr` string such as `'FOO'` is
+not coloured, while the same cell in a declared column is).
+
+Fix it so that columns created by `add_row` take the table's `highlight` value.
+
+Change as little as possible and do not edit the tests. The test command is
+`python -m pytest -q tests/test_table.py`; run it once at the end.
+"""
+
+[repo]
+source = "bench/agent/repos/rich"
+locator = "github.com/Textualize/rich"
+url = "https://github.com/Textualize/rich.git"
+rev = "5ba9cb56e68dcdf2db50c214d8f1412c8a50761b"
+
+[grade]
+command = "python -m pytest -q tests/test_table.py"
+commit = "16b3830408df98db41967774e59175a1f919ce25"
+paths = ["tests/test_table.py"]
+
+[solution]
+commit = "16b3830408df98db41967774e59175a1f919ce25"
+paths = ["rich/table.py"]

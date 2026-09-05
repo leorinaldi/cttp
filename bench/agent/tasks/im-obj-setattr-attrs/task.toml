@@ -1,0 +1,36 @@
+# Impact question over attrs at commit 8f767776326f: the answer is graded exactly against `cttp who` on
+# the run's index (the innermost definitions; see graders.check_who and the README).
+
+name = "im-obj-setattr-attrs"
+family = "impact"
+summary = "attrs: which definitions use the `_OBJ_SETATTR` constant?"
+
+prompt = """
+We are about to rename `_OBJ_SETATTR` (defined in `src/attr/_make.py`) in this repository (attrs). Before we
+do, list every definition whose code uses it: every function, method or class body that refers
+to the name `_OBJ_SETATTR`, in the package and in the tests.
+
+Write the list to a new file `impact.txt` at the repository root, one entry per line, in the
+form `<path>#<name>`, where `<path>` is the file's path from the repository root and `<name>`
+is the dotted name of the innermost definition containing the use — `pkg/mod.py#func` for a
+function, `pkg/mod.py#Class.method` for a method (name the method, not its class, unless the
+use is in the class body itself). Sort order does not matter. Do not list modules that merely
+import the name, do not list the definition itself, and do not change any other file. Nothing
+needs to be run.
+"""
+
+[repo]
+source = "bench/agent/repos/attrs"
+locator = "github.com/python-attrs/attrs"
+url = "https://github.com/python-attrs/attrs.git"
+rev = "8f767776326faaed11e6c2974798787f6e19b343"
+
+[grade]
+# no command: the grader compares impact.txt with `cttp who` on the index built for the run
+[grade.who]
+answer = "impact.txt"
+path = "src/attr/_make.py"
+symbol = "_OBJ_SETATTR"
+
+[solution]
+overlay = "solution"   # impact.txt, generated from `cttp who` (the innermost definitions)
