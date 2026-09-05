@@ -4,35 +4,36 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASE 0 COMPLETE (P0-T1..T5). NEXT IS STAGE 4 — WRITE `docs/overview.md` — THEN
-PHASE 1.** All on 2026-09-04: Leo confirmed the spec and agreed the plan; the spike was built; the
-public registry `github.com/leorinaldi/cttp-registry` was published and tagged `v1`; the resolver
-runs off `~/.config/cttp/config.toml` with an ordered registry list and `[remotes]`; the registry
-is an **HTTP contract** (`http://localhost:3120` first, the local clone second); and `run` asks
-before the first run of an address. The spec's acceptance test 4 is a pytest test, verbatim, and
-was walked by hand. 55 tests green, ruff clean.
+**Status: PHASE 0 COMPLETE; `docs/overview.md` WRITTEN (Stage 4); PHASE 1 STARTED — P1-T1 DONE.
+NEXT IS P1-T2 (shape hash).** All on 2026-09-04: the spike, the public registry
+`github.com/leorinaldi/cttp-registry` tagged `v1`, the config with an ordered registry list and
+`[remotes]`, the registry as an **HTTP contract** (`http://localhost:3120` first, the local clone
+second), `run` asking before the first run, and now the **full address grammar** — name, locator
+and identity forms in one `Address` type, with `cttp resolve` taking a locator straight through
+git. The start-sequence document is retired; `docs/plan.md` is the only source of next steps.
+113 tests green, ruff clean.
 
 _Last updated: 2026-09-04._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
-> only *where we are*: state, next steps, follow-ups and recent history. (`overview.md` is blank
-> until Stage 4 of [`docs/project-start-sequence.md`](docs/project-start-sequence.md); that is
-> expected.)
+> only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: Stage 4 — write [`docs/overview.md`](docs/overview.md).** It is still the blank
-skeleton. Per [`docs/project-start-sequence.md`](docs/project-start-sequence.md) it is the lay of
-the land for an agent who has never seen the repo: what exists, the module map under `src/cttp/`,
-the config and cache locations, the invariants (no runtime component, derived vs asserted, no
-lockfile, tests never touch the network), the deliberate oddities (the server opens registries
-`local_only`; a fetch is skipped for a cached SHA; `--json` in both positions), and the traps that
-cost time today (the spike's poisoned cache, `uv --directory` changing cwd, `pkill -f` matching
-its own shell). Conclusions only, no dates. Source: this file's **Current state** and
-**Environment**, then delete the "not written yet" blockquote. After that: **Phase 1** —
-P1-T1 (the full address grammar) is first; read its plan entry in full.
+**Start here: P1-T2 — identity and shape hashing.** Read its entry in
+[`docs/plan.md`](docs/plan.md) in full. Identity normalization is already exact (`normalize()`
+in `address.py`, the `print("hello world!")` constant pinned in `tests/test_address.py`); the
+new work is the **shape** hash — the normalized text with identifiers replaced by positional
+placeholders and literals by typed placeholders via `tokenize`, keywords and builtins kept —
+exposed as `shape(text)` beside `identity(text)`, full and 12-hex forms. The plan allows a new
+`hashing.py`; `address.py` is 190 lines and mostly grammar now, so moving `normalize`, `identity`,
+`short` and the new `shape` into `hashing.py` is the reasonable call (keep re-exports so the
+imports in `expand.py`, `resolve.py` and the tests keep working, or update them).
 
-If Leo wants to play with the spike first, the demo is in **How to run** below.
+Then **P1-T3** (Python definitions via `ast`, so `#symbol` resolves) and **P1-T4** (the block
+beneath a link defined properly; `cttp-from` and `cttp-see`).
+
+If Leo wants to play, the demo is in **How to run** below; a locator link works there too now.
 
 ## Current state — working & verified
 
@@ -44,9 +45,18 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
   the defaults: `http://localhost:3120`, then `~/.local/share/cttp/registry`, no remotes.
   `--registry <entry>` or `CTTP_REGISTRY` replaces the list with that one entry (remotes kept).
   `cttp config [--json]` prints the effective result.
-- `address.py` — name form only (`hello-world`, `@rev|label`, `#symbol` parsed but not resolvable);
-  spec §2 normalization and SHA-256 identity. The identity of `print("hello world!")` is pinned
-  in `tests/test_address.py` (`75a27070015e…`).
+- `address.py` — **P1-T1.** All three spec §2 forms in one frozen `Address` (`form`, `name`,
+  `locator`, `path`, `rev`, `symbol`, `identity`): `parse()` accepts the optional `cttp:` marker,
+  lower-cases the host and hex, turns backslashes into slashes, drops a trailing slash, rejects
+  `.`/`..` segments; `str()` is the canonical text and `format(marker=True)` restores the
+  marker — every spec example round-trips byte for byte. `is_pinned` = identity form or a SHA
+  rev (`is_sha`, 12–40 hex; `gitcache` imports it). `parse_pinned()` rejects a tag or branch
+  where a stamp needs a SHA. Errors name the offending part (label, version, symbol part, host,
+  owner, rev, path segment, hex length). **In a locator, the first `/` after `@` starts the
+  path**, so a branch with a slash cannot be a locator rev (name-form revs may have slashes).
+  Also `normalize()` and `identity()`; the identity of `print("hello world!")` is pinned in
+  `tests/test_address.py` (`75a27070015e…`). Symbols and identity addresses parse but
+  `resolve` refuses them (P1-T3, P2-T2).
 - `extract/python.py` — a whole file as a script page only.
 - `gitcache.py` — bare clones under `$CTTP_HOME` (default `~/.cache/cttp`)`/repos/<locator>`,
   cloned from `config.url_for(locator)`; rev-parse, blob at rev, license from the first line of
@@ -60,10 +70,17 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
   `MissingRegistry` stands in for a configured path with nothing at it (a miss that says how to
   clone). `Registries(local_only=True)` is what the **server** uses — it must never ask an HTTP
   registry, which could be itself. `create_local_registry()` builds one from the fixture.
-- `resolve.py` — `resolve()` asks each registry in turn: an HTTP one yields
+- `resolve.py` — `resolve()` for a **name** asks each registry in turn: an HTTP one yields
   `Resolved.from_json(...)` with `registry` set to the URL; a local one goes through
-  `resolve_entry()`: entry → locator → git → extract → hash. `to_json()` adds `origin` fields.
+  `resolve_entry()`: entry → locator → git → extract → hash. For a **locator** (P1-T1)
+  `resolve_locator()` goes straight to git through `[remotes]` — the contract has no locator
+  route, so HTTP registries are not asked; `Registries.entry_for_target()` finds a local entry
+  naming the same target and lends its `name`, `description` and `registry`, else those are
+  `None` (`Resolved.name` and `.registry` are now `str | None`). The pinned address of a locator
+  is `host/owner/repo@<12-hex>/path`. `to_json()` adds `origin` fields.
 - `links.py` — parse and write `# cttp:` lines (stamp, `key=value` fields, quoted description).
+  `format_stamped(pinned_address, id12, description)` takes the pinned address in any form, so a
+  locator link expands to `# cttp: host/owner/repo@<sha12>/path id=sha256:… "…"`.
 - `expand.py` — `expand` (one link, no closure; a page that itself contains `# cttp:` lines is
   refused with `ExpandError` until P3-T1), `check` (unexpanded / drift / unresolvable / ok),
   `run` for an address (`~/.cache/cttp/run/<pin>/main.py`) or a file (copy, expand, run). **The
@@ -75,7 +92,12 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
   Jinja2 templates with derived/asserted tags. Looked at in a headless browser: renders correctly.
 - `cli.py` — `cttp --version | config | resolve | serve | expand | check | run`; `--json` is
   accepted before or after the subcommand.
-- Tests: 55 in `tests/` — `test_{address,config,links,resolve,expand,check,run,server,cli}.py`.
+- Tests: 113 in `tests/` — `test_{address,config,links,resolve,expand,check,run,server,cli}.py`.
+  `test_address.py` is table-driven: the spec §2 examples round-trip, ~22 valid and ~30 invalid
+  inputs with the message fragment each must carry. Locator coverage: `test_resolve.py` (same
+  page as the name, README with no entry, errors), `test_cli.py` (the plan's acceptance command
+  returns the same object as the name form except `address`), `test_check.py` (a locator link
+  expands, pins a SHA, checks ok).
   `test_expand.py::test_acceptance_test_4_hello_world` is spec §12 test 4 verbatim through the
   CLI. `conftest.py` builds, in `tmp_path`, a registry repo, a **bare clone of it under
   `remotes/github.com/leorinaldi/cttp-registry`**, and a config whose `[remotes]` maps the prefix
@@ -88,15 +110,16 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
 **Corners the spike cut (each is closed by the named task):**
 - `[remotes]` exists but there is no license matcher beyond the first-line map, and no mirror
   has been exercised outside the tests → **P2-T1**
-- No object cache; no symbols; no locator/identity address forms → **P2-T2 / P1-T1 / P1-T3**
+- No object cache; no symbols; identity addresses parse but do not resolve → **P2-T2 / P1-T3**
 - Stamps use 12-hex for rev and identity (the plan's choice), full SHA returned in JSON → keep
 - The block beneath a link runs to the next link line or EOF → **P1-T4** defines it properly
 - License detection is a two-entry first-line map → **P2-T1**
 - `# cttp-from:` and `# cttp-see:` are not recognised → **P1-T4**
 
 **Docs**
-- `docs/vision.md` agreed, `docs/spec.md` confirmed as written, `docs/plan.md` agreed — all on
-  2026-09-04. `docs/overview.md` still a blank skeleton (Stage 4, after Phase 0).
+- `docs/vision.md` agreed, `docs/spec.md` confirmed as written, `docs/plan.md` agreed,
+  `docs/overview.md` written — all on 2026-09-04. `docs/project-start-sequence.md` retired (deleted,
+  per its own Stage 5; `git log` has it). `CLAUDE.md` now points at `docs/plan.md` for next steps.
 
 **Environment**
 - Git on `main`, remote `origin` → `github.com/leorinaldi/cttp` (**private**).
@@ -119,6 +142,7 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
   `drivers/{gpio,hwmon,iio,rtc}`), copied from the fisheye session's scratchpad. The measurement
   scripts and the Linux commit did **not** survive; P6-T2 reconstructs them. The LM75 teardown
   files are at `bench/drivers/lm75-teardown/` (gitignored).
+- The server was restarted on the P1-T1 code on 2026-09-04 (`.local/serve.log`).
 - A headless Chromium exists at `~/.cache/ms-playwright/chromium-1223/chrome-linux/chrome`
   (`--headless=new --screenshot=…`); system Firefox's headless screenshot did not work.
 
@@ -136,6 +160,9 @@ trigger that would schedule it.
   making `cttp` public, or publishing the spec on `cttp.ai` (P7-T3), whichever first
 - Editor extension that folds cttp blocks on open and shows a link's page on hover →
   **unscheduled**; trigger: first real use of expanded files by a person in an editor
+- A branch containing `/` (`release/1.0`) cannot be a locator rev — the first `/` after `@`
+  starts the path; only the name form reaches such refs → **unscheduled**; trigger: a real
+  target whose only useful ref is a slashed branch (an escape such as `@{release/1.0}` would do)
 - Starlette warns that `httpx` with its test client is deprecated in favour of `httpx2` →
   **unscheduled**; trigger: the warning becomes an error on upgrade
 
@@ -144,6 +171,19 @@ trigger that would schedule it.
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-04 (ninth session) — Stage 4 `overview.md`; start sequence retired; P1-T1 the full
+  address grammar.** The overview was written from the code, not from memory: architecture,
+  repo map, load-bearing decisions, vocabulary, invariants, the oddities not to "fix", the traps,
+  how to run. Reaching Stage 5 retired `docs/project-start-sequence.md` exactly as it asked
+  (two CLAUDE.md steps repointed at the plan, its row dropped from the map, the file deleted).
+  Then P1-T1: one `Address` type for all three forms, canonical round-trip, `parse_pinned`,
+  errors that name the part, a table of valid/invalid inputs. Decisions: a locator resolves
+  through git without a registry (the contract has no locator route) and borrows name and
+  description from a local entry with the same target; a `/` after `@` in a locator starts the
+  path, so slashed branches are name-form only; hex and hosts are lower-cased on parse; stamps
+  now carry the pinned address in any form (`format_stamped` signature changed). Acceptance
+  walked by hand from `/tmp`: the plan's locator command, a locator link expanded, run under
+  `python3 -I`, and checked ok. 55 → 113 tests. Server restarted on the new code.
 - **2026-09-04 (eighth session) — P0-T5: first-run confirmation; test 4 as tests; Phase 0 done.**
   `run` now asks before the first run of a pinned address (source, identity, license, registry)
   and exits 2 with "pass --yes" when there is no terminal; the run-cache entry is the confirmed
@@ -192,22 +232,13 @@ is the archive, and a bloated history taxes every future session start.
   the driver corpus was rescued from the old scratchpad into `bench/drivers/corpus/`; `uv`
   installed; `ruff format` was found to reformat code blocks in `docs/*.md` and `docs/` is now
   excluded in `pyproject.toml`.
-- **2026-09-04 (third session) — Vision agreed; spec written and reshaped around hello world.**
-  Leo agreed the vision after one question: how linked code actually runs without a new compiler.
-  Answer: the tool acts at edit time and the runtime only ever sees ordinary source. The spec was
-  drafted, then a long discussion moved it in Leo's direction: no `import cttp` anywhere; the link
-  expands in place beneath the comment; links follow latest only on opt-in (web
-  subresource-integrity precedent); therefore no lockfile; expansion once at edit time, `cttp run`
-  as a launcher; expanded on disk, folded in view; a one-line description rides on the link line;
-  editing a copy is a fork (`cttp-from`); the registry is an HTTP contract served on localhost
-  first, `cttp.ai` later (Leo bought the domain during the session).
 
 ## How to run
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"          # uv lives here
 uv sync                                        # once; creates .venv
-uv run pytest -q                               # 21 tests, no network
+uv run pytest -q                               # 113 tests, no network
 uv run ruff check . && uv run ruff format --check .
 
 git clone https://github.com/leorinaldi/cttp-registry ~/.local/share/cttp/registry   # once
@@ -228,6 +259,7 @@ uv run cttp run hello-world                    # runs with no file at all; asks 
 uv run cttp check hello.py                     # exit 0
 sed -i 's/hello world!/goodbye/' hello.py && uv run cttp check hello.py   # drift, exit 1
 uv run cttp --json resolve hello-world         # what an agent sees
+uv run cttp resolve cttp:github.com/leorinaldi/cttp-registry@main/snippets/hello_world.py   # the locator form, no registry needed
 ```
 
 `scripts/make_local_registry.py` still builds an offline registry from the fixture if needed.
