@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 7 COMPLETE (the `cttp.ai` DNS is Leo's; localhost stands in until then). NEXT IS P8-T1 (THE HARNESS).** Phase 0
+**Status: PHASES 0 TO 7 COMPLETE, P8-T1 (THE HARNESS) DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). NEXT IS P8-T2 (THE TASK SET).** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -41,41 +41,46 @@ responses; the default registry list now `https://cttp.ai`, `localhost:3120`, th
 version **3**). The registry repository's `verify` and `pages` workflows, the `hello-world`
 declaration and the README are on an **unpushed `p7` branch of the registry clone** — pushing
 them, the `CTTP_TOKEN` secret, enabling Pages, the DNS for `cttp.ai` and the two test pull
-requests are Leo's, and are the open items of P7-T2/T3. 334 fast tests green plus 2 `slow`
-corpus tests (deselected by default), ruff clean.
+requests are Leo's, and are the open items of P7-T2/T3. Phase 8 (2026-09-05): **P8-T1 the
+harness** — `bench/agent/` drives Claude Code headless under Leo's login with two arms (the
+cttp MCP tools against the shell's search), per-run checkouts and indexes, records with usage,
+tool calls and grades, a `--replay` dry run, and the smoke task passing in both arms. 344 fast
+tests green plus 2 `slow` corpus tests (deselected by default), ruff clean.
 
-_Last updated: 2026-09-05, session end (Phase 7 done; P8 re-planned onto Claude Code headless; cttp.ai DNS pending, not blocking)._
+_Last updated: 2026-09-05, session end (P8-T1 done: the harness, the smoke run, the arm design amended on evidence; cttp.ai DNS pending, not blocking)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: P8-T1 — the benchmark harness.** Phase 7 is finished but for one item that is
-Leo's alone and does not block anything: the **DNS for `cttp.ai`** (apex `A` records
-185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153, or an `ALIAS` to
-`leorinaldi.github.io`). Pages is enabled with `cname = cttp.ai` and every push to the registry's
-`main` deploys; today `https://cttp.ai/hello-world.json` answers 404 from whatever the domain
-points at now, which the tool treats as a miss, so **localhost:3120 stands in for cttp.ai** and
-everything works. When the records exist: `gh api -X PUT repos/leorinaldi/cttp-registry/pages -f
-https_enforced=true`, then `curl -s https://cttp.ai/hello-world.json` against
-`localhost:3120/hello-world.json`, and the fresh-config run below again with `registry` naming
-`https://cttp.ai`.
+**Start here: P8-T2 — the task set.** Read its entry in [`docs/plan.md`](docs/plan.md) in full,
+and `bench/agent/README.md` for how a task is shaped: `tasks/<name>/task.toml` (prompt, `repo`
+source + locator, the grade command) with `setup/`, `grade/` and `solution/` overlays;
+`--check-graders` is the acceptance. `graders.prepare_checkout` already takes a git repository
+as `repo.source` with `repo.rev` — what the three real repositories need — but it clones the
+source with `git clone`, so the repositories must be on disk (a bare clone under `bench/agent/`
+or the git cache) before a run; decide where they live and how they are fetched (a
+`fetch.sh` like `bench/drivers/`). **Design the tasks so that reading everything is the
+expensive path**: in the smoke run, with `Read` available, the links arm read the two files and
+never touched a cttp tool — on a two-file repository there is nothing to search for. The
+cross-repository tasks need the second repository indexed too (`prepare_index` crawls only the
+checkout today) and the impact questions need a grader that compares the agent's answer with
+`who` — neither exists yet. Keep `Read` in both arms (see the P8-T1 amendment in `plan.md`).
 
-**Then P8-T1 — the benchmark harness.** Read its entry in [`docs/plan.md`](docs/plan.md) in
-full — **amended 2026-09-05**: the harness drives **Claude Code headless (`claude -p
---output-format json`) under Leo's subscription login**, not the Anthropic SDK (the API bills
-per token; the login is included, and the docs say ordinary individual use of Claude Code and
-the Agent SDK is what it is for). Two arms differing only in `--allowedTools` /
-`--disallowedTools` and `--mcp-config`; usage from the result object; results under
-`bench/agent/results/`; a dry-run mode replaying a recorded result. No `.env`, no `anthropic`
-dependency. Check the flags against `code.claude.com/docs/en/headless` and the CLI reference
-before writing, and keep `~/.claude` (hooks, memory, the user-scope cttp MCP server) out of both
-arms with `--settings` and `--strict-mcp-config`. The caveat for the report: both arms run
-inside Claude Code's harness, so the result compares tool sets inside Claude Code.
+**Before the full run (P8-T3):** the smoke numbers say a trivial task costs ~30–40k tokens and
+~13 s per arm on Opus 5; the five-hour window's utilization is in every record's `rate_limit`
+(the smoke runs moved it from 0.20 to about 0.25 across three runs, one of them 470k tokens).
+Estimate from the P8-T2 tasks' first runs, and tell Leo before starting ninety.
 
-Also pending Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced byte for byte by
-`fetch.sh`) can be deleted.
+Still Leo's, not blocking: the **DNS for `cttp.ai`** (apex `A` records 185.199.108.153,
+185.199.109.153, 185.199.110.153, 185.199.111.153, or an `ALIAS` to `leorinaldi.github.io`);
+today the domain points at a parking host and `https://cttp.ai/hello-world.json` is a 404 the
+tool treats as a miss. When the records exist: `gh api -X PUT
+repos/leorinaldi/cttp-registry/pages -f https_enforced=true`, then compare
+`curl -s https://cttp.ai/hello-world.json` with `localhost:3120/hello-world.json`. Also pending
+Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced byte for byte by `fetch.sh`)
+can be deleted.
 
 ## Current state — working & verified
 
@@ -158,7 +163,10 @@ Also pending Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced b
   comes first; MIT, ISC, BSD-2/3-Clause by their grant. Anything else is `None`; LGPL, AGPL and
   Unlicense deliberately return `None`. Verified against the twelve canonical SPDX texts. **A
   fetch is skipped when the wanted rev is a SHA already in the cache**, so `check` on an expanded
-  file is offline once the repo is cached; labels always fetch.
+  file is offline once the repo is cached; labels always fetch. **P8-T1:** a clone goes into a
+  temporary sibling directory and is renamed into place, so two callers cloning one repository
+  at once (the MCP server answering `resolve` and `closure` from one turn) both get it, and a
+  crash never leaves a half clone.
 - `registry.py` — `Registries`: the configured list, asked in order; a `RegistryError` from
   one is a miss and the next is asked; when all miss, the error names them all with each reason.
   `LocalRegistry` reads `cttp.toml` + `names/*.toml` (an empty `description = ""` is no
@@ -403,10 +411,42 @@ Also pending Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced b
   groups acceptance test 1 checks; the measurement's numbers), `measure.py` (the line-level
   measurement, `--json`), `README.md` (all of it in prose). `corpus-preserved/` is the original
   raw-file copy, moved aside, identical to what `fetch.sh` produces.
-- Tests: 321 fast + 2 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
+- `bench/agent/` — **P8-T1.** `harness.py` runs **Claude Code headless** (`claude -p … --output-format
+  stream-json --verbose`, never `--bare`) under Leo's login with two arms — `links`: the cttp
+  MCP server through `--mcp-config` + `--strict-mcp-config`, `Read`, `Edit`, `Write`, `Bash`
+  allowed for the task's test command only, the shell's readers denied by rule; `baseline`: the
+  same without the server and with the read-only shell commands `dontAsk` auto-approves — and
+  the same model (`--model opus`), `--max-turns 40`, `--append-system-prompt`,
+  `--permission-mode dontAsk --permission-prompts none`, `--setting-sources ""`,
+  `--no-session-persistence`, stdin `/dev/null`, a per-run timeout. `graders.py` loads
+  `tasks/<name>/task.toml` and builds each run's world in a scratch directory: the source
+  committed as `main`, a bare "remote", the working clone the agent edits (its `origin` the bare
+  repo), the `setup/` overlay committed on top, a per-run `cttp.toml` mapping the task's locator
+  to the bare repo through `[remotes]` — the test suite's pattern; the links arm gets its own
+  `index.db` (`cttp index add` + `crawl`) and `CTTP_HOME`. The grade copies `grade/` over the
+  checkout and runs the command (exit 0 = pass), keeping the agent's diff. Records under
+  `results/<date>/<task>/<arm>/<run>.json` with the stream beside them: `usage` and its sum
+  `tokens`, `model_usage`, `total_cost_usd`, `num_turns`, `wall_seconds`, `permission_denials`,
+  every tool call (name, input, denied, error, result size), `tools_available` and
+  `mcp_servers` from `system/init`, the last `rate_limit` event (window utilizations), the grade,
+  `argv`. `status` is `pass | fail | limited | timeout | error`; `limited` stops the driver (or
+  `--wait-for-reset` sleeps to the reset), and an existing record is skipped so the same
+  command resumes. `--replay <run.json>` rebuilds a record from its stream (the dry run);
+  `--check-graders` proves each grader fails the unmodified checkout and passes `solution/`;
+  `--list`, `--task`, `--arm`, `--runs`, `--redo`, `--keep`. `report.py` renders the P8-T3 table
+  (pass rate, median tokens, ratio, per task and family, result files listed). The smoke task
+  `smoke-pyrepo` (pyrepo's `left` returns `x - 1`) and its two records from 2026-09-05 are
+  committed. `README.md` has all of it.
+- Tests: 344 fast + 2 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
   config,links,gitcache,resolve,objects,latest,closure,expand,check,update,fold,run,package,
   server,cli,index_crawl,index_queries,acceptance_move,acceptance_provenance,
-  acceptance_drivers,schemas,mcp}.py`. `test_extract_c.py` is P6-T1's acceptance over the
+  acceptance_drivers,schemas,mcp,name,registry_federation,export,bench_agent}.py`.
+  `test_bench_agent.py` is the P8-T1 acceptance without the subscription: the smoke task loads
+  and its grader tells the bug from the fix, the checkout and config are as described, the arms
+  are what the README says, the stream parser reads init, tool calls, denials and the result,
+  a replay of each committed smoke record reproduces its numbers exactly (and the links record
+  shows cttp connected, the baseline none), and the report renders. `pyproject.toml` sets
+  `pythonpath = ["."]` so `bench.agent` imports under pytest. `test_extract_c.py` is P6-T1's acceptance over the
   `crepo` fixture (every kind, exact spans and signatures, one identity in two files, one shape
   under other names and literals, links in both C comment syntaxes, the crawl and the five
   queries over C, `--latest` rule 2 on a moved C function) plus the corpus's `lm75_reg_to_mc`
@@ -697,11 +737,51 @@ trigger that would schedule it.
 - **`resolve` through the index for a file that is its one definition says `kind: function`**
   (the definition's view won the `definitions` row) where git would say `script` for the file
   address — same text, same identity → **unscheduled**; trigger: it confuses someone
+- **The links arm did not reach for a cttp tool once `Read` was available** (smoke run: two
+  `Read`s, one `Edit`, the test) — on a two-file repository there is nothing to search for. The
+  tools must earn their keep on repositories where reading everything is the expensive path;
+  if they still go unused, an arm-specific line in the prompt naming them is the next lever,
+  and a confound to state in the report → **P8-T2** (task design), **P8-T3** (the caveat)
+- **The links arm's deny list catches `| tail -40` and `| head`** in a pipeline with the test
+  command (each subcommand is checked); the agent recovers by running the plain command, at
+  the cost of a turn → **standing**; the read-only set has to stay denied
+- **`prepare_index` crawls only the task's checkout**; a cross-repository task needs the second
+  repository registered and crawled too, and an impact question needs a grader that compares
+  the answer with `who` → **P8-T2**
+- **`repo.source` as a git repository is cloned with `git clone`**, so the P8-T2 repositories
+  must be on disk before a run (nothing fetches them yet) → **P8-T2**
+- **`results/` is committed** (the smoke run is 76 KB with its streams); ninety runs of real
+  tasks will be tens of MB of streams — decide whether streams stay in git or only the records
+  → **P8-T3**
 
 ## Build history
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
+
+- **2026-09-05 (seventeenth session) — P8-T1 built: the benchmark harness, and the arm design
+  amended on evidence.** The flags were checked against `code.claude.com/docs/en/headless` and
+  the CLI reference and probed on Claude Code 2.1.261 with two haiku runs before writing:
+  `--tools` restricts the built-ins and keeps MCP tools; `--disallowedTools "Bash(cat *)"`
+  beats `dontAsk`'s read-only auto-approval; `--setting-sources ""` drops `~/.claude`'s
+  settings; a `rate_limit_event` in the stream carries the five-hour and seven-day
+  utilizations; the result object's `usage` is the main thread's cumulative count and
+  `modelUsage` adds side requests. Decisions: **stream-json, not json**, so `system/init` (tools,
+  MCP status), every tool call, denials and the rate-limit event are recorded with the result
+  (the last line is the same result object); the per-run world is built the test suite's way
+  (bare remote + clone + `[remotes]`) so the checkout has a locator without a network; the
+  links arm gets a per-run index and cache; results are committed with their streams. **The
+  smoke run changed the plan's arms:** without `Read`, the links arm found the bug through
+  `fold`, `search`, `closure`, `resolve` and `who` and then could not apply it — `Edit` and
+  `Write` refuse a file the session has not read — and burned 41 turns and 471k tokens; both
+  arms now have `Read` and differ in how code is *found* (the cttp tools against the shell's
+  `grep`/`find`/`cat`, which this Claude Code has no `Grep`/`Glob` tool for). With `Read`: links
+  pass, 36,787 tokens, 6 turns; baseline pass, 29,428 tokens, 5 turns — and the links arm
+  never called a cttp tool. Found and fixed on the way: two MCP calls in one turn raced to clone
+  one repository into the git cache ("destination path already exists"); `gitcache._clone` now
+  clones into a temporary sibling and renames. `tests/test_bench_agent.py` (10 tests, one a
+  replay of each committed record) and a concurrent-clone test. `pythonpath = ["."]` in
+  `pyproject.toml`. The plan's P8-T1 entry carries the amendment.
 
 - **2026-09-05 (sixteenth session) — Phase 7 built: P7-T1 `name show` and `name claim`,
   P7-T2 `name verify` and federation, P7-T3 `serve --export` and the cttp.ai default.** Three
@@ -823,32 +903,12 @@ is the archive, and a bloated history taxes every future session start.
   Chrome here needs `--no-sandbox`. By hand on the real index: this repository and the public
   registry crawled (670 identities, 1,093 links), `dups` finding `runner` ×13, `who hello-world`
   listing spec §7's examples, every page at 1200px and 390px. 249 → 275 tests.
-- **2026-09-05 (eleventh session) — P1-T4, P2-T1, P2-T2, P2-T3: Phases 1 and 2 done.**
-  Four task commits. P1-T4 rewrote `links.py` around one regex for any comment syntax, three
-  relations, ordered fields and a recorded block (`start`/`end`, beginning after the link's
-  stack, ending at the next link, a blank line before a line no deeper than the link, or EOF);
-  `expand` writes beneath the stack and adds a blank line before what follows, so user code after
-  an expanded definition stopped reading as drift; the derived `~"…"` description arrived.
-  Decisions: stacked links share one block; `check` hashes only `is` links; a page's own inner
-  links still refuse expansion until the closure exists. P2-T1: `cat-file` for blobs, an SPDX
-  matcher by title-in-head for versioned licenses and by grant for the rest — the GNU family
-  told apart by which title comes first, because the LGPL/AGPL preambles and the GPL-2's own
-  preamble all name other GNU licenses; symbol search across a repository for a name without a
-  path; `Mismatch` with both hashes; a socket guard so tests provably never reach the network.
-  P2-T2: `objects.py`, every resolution stored, identity addresses answered from it with all
-  their locations, `cttp cache status|clear`. P2-T3: `latest()` with rules 1 and 2 and the
-  plain "rule 3 needs the index" answer; a rename is a different identity (test says so). By
-  hand against real repositories: itsdangerous now reads BSD-3-Clause, requests at a tag pins
-  and reads Apache-2.0, git's COPYING reads GPL-2.0 (a preamble longer than the first head size
-  tried — widened to 2,000 chars), the twelve canonical SPDX texts all classify as intended, and
-  `--latest` followed itsdangerous from tag 2.1.2 to head. 138 → 205 tests.
-
 ## How to run
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"          # uv lives here
 uv sync                                        # once; creates .venv
-uv run pytest -q                               # 334 tests, no network; -m slow adds the corpus tests (~2.5 min)
+uv run pytest -q                               # 344 tests, no network; -m slow adds the corpus tests (~2.5 min)
 uv run ruff check . && uv run ruff format --check .
 
 git clone https://github.com/leorinaldi/cttp-registry ~/.local/share/cttp/registry   # once
@@ -927,6 +987,17 @@ uv run cttp name claim <name> --target host/owner/repo/path.py --description "�
 uv run cttp name claim <name> --target host/owner/repo/path.py    # the same on a claim/<name> branch + `gh pr create`
 uv run cttp name verify                                    # every name's checks; exit 1 on a failure (the registry's CI)
 uv run cttp serve --export /tmp/site                       # the contract as static files (what pages.yml publishes)
+```
+
+Phase 8, the benchmark (uses Leo's Claude Code login; nothing else):
+
+```bash
+uv run python -m bench.agent.harness --list                # the tasks
+uv run python -m bench.agent.harness --check-graders       # each grader fails the bug and passes the solution
+uv run python -m bench.agent.harness --task smoke-pyrepo   # both arms once; results/<today>/smoke-pyrepo/<arm>/1.json
+uv run python -m bench.agent.harness --runs 3 --wait-for-reset   # every task, both arms, three runs, sleeping through limits
+uv run python -m bench.agent.harness --replay bench/agent/results/2026-09-05/smoke-pyrepo/links/1.json   # no subscription used
+uv run python -m bench.agent.report bench/agent/results/2026-09-05   # the table; writes report.md there
 ```
 
 `scripts/make_local_registry.py` still builds an offline registry from the fixture if needed.

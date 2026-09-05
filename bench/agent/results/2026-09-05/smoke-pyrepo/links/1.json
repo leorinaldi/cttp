@@ -1,0 +1,364 @@
+{
+  "schema": 1,
+  "task": "smoke-pyrepo",
+  "family": "in-repo",
+  "arm": "links",
+  "run": 1,
+  "status": "pass",
+  "passed": true,
+  "model": "opus",
+  "model_used": "claude-opus-5",
+  "claude_code_version": "2.1.261",
+  "max_turns": 40,
+  "tokens": 36787,
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9548,
+    "cache_read_input_tokens": 26426,
+    "output_tokens": 805,
+    "output_tokens_details": {
+      "thinking_tokens": 166
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 9548,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 89,
+        "cache_read_input_tokens": 9412,
+        "cache_creation_input_tokens": 136,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 136
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "model_usage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 964,
+      "outputTokens": 13,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001029,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-haiku-4-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    },
+    "claude-opus-5": {
+      "inputTokens": 8,
+      "outputTokens": 805,
+      "cacheReadInputTokens": 26426,
+      "cacheCreationInputTokens": 9548,
+      "webSearchRequests": 0,
+      "costUSD": 0.128858,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "thinkingTokens": 166,
+      "canonicalModel": "claude-opus-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "stream_usage": {
+    "input_tokens": 8,
+    "cache_read_input_tokens": 26426,
+    "cache_creation_input_tokens": 9548
+  },
+  "requests": 4,
+  "total_cost_usd": 0.129887,
+  "num_turns": 6,
+  "duration_ms": 12545,
+  "duration_api_ms": 13216,
+  "wall_seconds": 13.662,
+  "returncode": 0,
+  "timed_out": false,
+  "subtype": "success",
+  "is_error": false,
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01QavnjryHy7mQq8ZcijhsQe",
+      "tool_input": {
+        "command": "ls -la /tmp/cttp-bench-smoke-pyrepo-links-ygc8oorw/w/repo",
+        "description": "List repo files"
+      }
+    }
+  ],
+  "tool_counts": {
+    "Bash": 2,
+    "Read": 2,
+    "Edit": 1
+  },
+  "tool_calls": [
+    {
+      "id": "toolu_01QavnjryHy7mQq8ZcijhsQe",
+      "name": "Bash",
+      "input": {
+        "command": "ls -la /tmp/cttp-bench-smoke-pyrepo-links-ygc8oorw/w/repo",
+        "description": "List repo files"
+      },
+      "denied": true,
+      "error": true,
+      "result_chars": 110
+    },
+    {
+      "id": "toolu_01CwFeuYKQqTozdGNySaN3QE",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-smoke-pyrepo-links-ygc8oorw/w/repo/lib.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 815
+    },
+    {
+      "id": "toolu_01X11SG4r5dJ7pJj769D4uBR",
+      "name": "Read",
+      "input": {
+        "file_path": "/tmp/cttp-bench-smoke-pyrepo-links-ygc8oorw/w/repo/test_lib.py"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 126
+    },
+    {
+      "id": "toolu_011Te8qo9nNp6rkeFxmRC3QD",
+      "name": "Edit",
+      "input": {
+        "replace_all": false,
+        "file_path": "/tmp/cttp-bench-smoke-pyrepo-links-ygc8oorw/w/repo/lib.py",
+        "old_string": "def left(x: int) -> int:\n    return x - 1",
+        "new_string": "def left(x: int) -> int:\n    return x + 1"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 163
+    },
+    {
+      "id": "toolu_01JDtDEHQCBzUzYdsrGB7RWt",
+      "name": "Bash",
+      "input": {
+        "command": "python -m pytest -q test_lib.py",
+        "description": "Run the test suite"
+      },
+      "denied": false,
+      "error": false,
+      "result_chars": 97
+    }
+  ],
+  "mcp_servers": [
+    {
+      "name": "cttp",
+      "status": "connected"
+    }
+  ],
+  "cttp_connected": true,
+  "tools_available": [
+    "Bash",
+    "Edit",
+    "Read",
+    "Write",
+    "mcp__cttp__closure",
+    "mcp__cttp__dups",
+    "mcp__cttp__fold",
+    "mcp__cttp__resolve",
+    "mcp__cttp__search",
+    "mcp__cttp__who"
+  ],
+  "rate_limit": {
+    "status": "allowed",
+    "resetsAt": 1788634800,
+    "rateLimitType": "five_hour",
+    "overageStatus": "rejected",
+    "overageDisabledReason": "out_of_credits",
+    "isUsingOverage": false,
+    "unifiedWindows": {
+      "five_hour": {
+        "utilization": 0.27,
+        "resetsAt": 1788634800
+      },
+      "seven_day": {
+        "utilization": 0.38,
+        "resetsAt": 1788840000
+      }
+    }
+  },
+  "session_id": "90affd5d-f9b7-4e8d-8e1b-0b263dc4eda2",
+  "final_text": "`left` computed `x - 1` while `right` (`deep(x) - 1`) already matched the expected `right(3) == 5`, so `top(3)` came out 7 instead of 9. Changed `left` to `x + 1` (lib.py:12). Test passes.",
+  "grade": {
+    "passed": true,
+    "returncode": 0,
+    "timed_out": false,
+    "output": "..                                                                       [100%]\n2 passed in 0.00s\n",
+    "diff": "diff --git a/lib.py b/lib.py\nindex cf481fa..5fc0981 100644\n--- a/lib.py\n+++ b/lib.py\n@@ -9,7 +9,7 @@ def deep(x: int) -> int:\n \n \n def left(x: int) -> int:\n-    return x - 1\n+    return x + 1\n \n \n def right(x: int) -> int:\n",
+    "command": "python -m pytest -q test_lib.py"
+  },
+  "base_sha": "11b97503fa8a2d0bda745d28dfefd15b908fa55d",
+  "index": {
+    "add": {
+      "schema_version": 3,
+      "repo": "github.com/leorinaldi/pyrepo",
+      "local_path": "/tmp/cttp-bench-smoke-pyrepo-links-ygc8oorw/w/repo",
+      "default_branch": "main",
+      "status": "added"
+    },
+    "crawl": {
+      "schema_version": 3,
+      "crawled": [
+        {
+          "repo": "github.com/leorinaldi/pyrepo",
+          "sha": "11b97503fa8a2d0bda745d28dfefd15b908fa55d",
+          "status": "crawled",
+          "files": 5,
+          "pages": 63,
+          "definitions": 63,
+          "links": 57,
+          "skipped": []
+        }
+      ]
+    }
+  },
+  "argv": [
+    "claude",
+    "-p",
+    "The test file `test_lib.py` in this repository fails. Find the bug in `lib.py` and fix it,\nchanging as little as possible. Do not edit the tests. The test command is\n`python -m pytest -q test_lib.py`; run it once at the end to confirm, then stop.",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "opus",
+    "--max-turns",
+    "40",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+    "--strict-mcp-config",
+    "--append-system-prompt",
+    "You are working in a checkout of a repository; the working directory is its root. Nobody can answer questions, so do not ask any: complete the task with the tools you have, run the test command named in the task once when you are done, and then stop with a short summary of the change.",
+    "--tools",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "--allowedTools",
+    "mcp__cttp__resolve",
+    "mcp__cttp__who",
+    "mcp__cttp__closure",
+    "mcp__cttp__search",
+    "mcp__cttp__dups",
+    "mcp__cttp__fold",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash(python -m pytest -q test_lib.py)",
+    "Bash(python -m pytest -q test_lib.py *)",
+    "--disallowedTools",
+    "Bash(cat)",
+    "Bash(cat *)",
+    "Bash(head)",
+    "Bash(head *)",
+    "Bash(tail)",
+    "Bash(tail *)",
+    "Bash(less)",
+    "Bash(less *)",
+    "Bash(more)",
+    "Bash(more *)",
+    "Bash(grep)",
+    "Bash(grep *)",
+    "Bash(egrep)",
+    "Bash(egrep *)",
+    "Bash(fgrep)",
+    "Bash(fgrep *)",
+    "Bash(rg)",
+    "Bash(rg *)",
+    "Bash(ag)",
+    "Bash(ag *)",
+    "Bash(find)",
+    "Bash(find *)",
+    "Bash(ls)",
+    "Bash(ls *)",
+    "Bash(tree)",
+    "Bash(tree *)",
+    "Bash(sed)",
+    "Bash(sed *)",
+    "Bash(awk)",
+    "Bash(awk *)",
+    "Bash(wc)",
+    "Bash(wc *)",
+    "Bash(stat)",
+    "Bash(stat *)",
+    "Bash(file)",
+    "Bash(file *)",
+    "Bash(diff)",
+    "Bash(diff *)",
+    "Bash(git)",
+    "Bash(git *)",
+    "Bash(od)",
+    "Bash(od *)",
+    "Bash(xxd)",
+    "Bash(xxd *)",
+    "Bash(strings)",
+    "Bash(strings *)",
+    "Bash(nl)",
+    "Bash(nl *)",
+    "Bash(cut)",
+    "Bash(cut *)",
+    "Bash(sort)",
+    "Bash(sort *)",
+    "Bash(uniq)",
+    "Bash(uniq *)",
+    "Bash(tac)",
+    "Bash(tac *)",
+    "Bash(rev)",
+    "Bash(rev *)",
+    "Bash(column)",
+    "Bash(column *)",
+    "Bash(paste)",
+    "Bash(paste *)",
+    "Bash(fold)",
+    "Bash(fold *)",
+    "Bash(pr)",
+    "Bash(pr *)",
+    "Bash(fmt)",
+    "Bash(fmt *)",
+    "Bash(look)",
+    "Bash(look *)",
+    "Bash(locate)",
+    "Bash(locate *)",
+    "Bash(which)",
+    "Bash(which *)",
+    "Bash(type)",
+    "Bash(type *)",
+    "Bash(printf)",
+    "Bash(printf *)",
+    "Bash(echo)",
+    "Bash(echo *)",
+    "--mcp-config",
+    "/tmp/cttp-bench-smoke-pyrepo-links-ygc8oorw/mcp.json"
+  ],
+  "stream_file": "1.stream.jsonl",
+  "recorded_at": "2026-09-05T17:58:39+00:00",
+  "replayed_from": null,
+  "stderr": ""
+}

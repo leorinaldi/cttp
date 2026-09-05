@@ -88,9 +88,31 @@ def ensure_repo(locator: str, url: str, want: str | None = None) -> Path:
             cwd=dest,
         )
     else:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        _git("clone", "--bare", "--quiet", url, str(dest))
+        _clone(url, dest)
     return dest
+
+
+def _clone(url: str, dest: Path) -> None:
+    """Clone into a sibling temporary directory and move it into place, so two callers cloning
+    one repository at once (the MCP server answering `resolve` and `closure` in the same turn)
+    both end with a whole clone at `dest`, and a crash never leaves a half clone there."""
+    import shutil
+    import tempfile
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists():  # a half clone from a crash — no HEAD, so nothing to keep
+        shutil.rmtree(dest)
+    tmp = Path(tempfile.mkdtemp(prefix=f".{dest.name}-", dir=dest.parent))
+    try:
+        target = tmp / "clone"
+        _git("clone", "--bare", "--quiet", url, str(target))
+        try:
+            os.rename(target, dest)
+        except OSError:
+            if not (dest / "HEAD").exists():  # not another caller's clone: a real failure
+                raise
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _has_commit(repo: Path, sha: str) -> bool:

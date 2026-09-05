@@ -669,6 +669,16 @@ so that hardening replaces bodies and never restructures.
   and says so; `--resume-run` picks up where a run stopped. Consult the Claude Code docs
   (`code.claude.com/docs/en/headless`, `cli-reference`) for the flags — not memory — and the
   `claude-api` skill only if a model or effort question comes up.
+  **Amended 2026-09-05, after the smoke run (done):** `Read` is in **both** arms — Claude Code's
+  `Edit` and `Write` refuse a file the session has not read, so the links arm as first written
+  found the bug through the cttp tools and could not apply it. Claude Code 2.1.261 has no
+  `Grep`/`Glob` tools: the baseline searches with `grep`/`find`/`cat` through `Bash` (the
+  read-only set `dontAsk` auto-approves), and the links arm denies those by rule. The arms
+  therefore differ in how code is *found*, not in whether the edited file can be read. The
+  output format is `stream-json` (the result object is its last line) so `system/init`, every
+  tool call and the rate-limit events are recorded; isolation is `--setting-sources ""` +
+  `--strict-mcp-config` + `--no-session-persistence`, and resuming is "a record that exists is
+  skipped". `bench/agent/README.md` is the reference.
 - **Preconditions:** P5-T2 (the tools) and P4-T2 (the queries). Leo logged in to Claude Code on
   this machine (`claude auth status`); no `.env`.
 - **May touch:** `bench/agent/{harness,graders,report}.py`, `bench/agent/README.md`.

@@ -1,0 +1,30 @@
+# The P8-T1 smoke task: one wrong sign in a four-function chain.
+
+name = "smoke-pyrepo"
+family = "in-repo"
+summary = "Fix a one-line bug in pyrepo's `left` so `test_lib.py` passes"
+
+prompt = """
+The test file `test_lib.py` in this repository fails. Find the bug in `lib.py` and fix it,
+changing as little as possible. Do not edit the tests. The test command is
+`python -m pytest -q test_lib.py`; run it once at the end to confirm, then stop.
+"""
+
+[repo]
+# A directory of this repository, copied and committed as the task's base; the checkout's
+# origin is a bare clone reachable as `locator` through `[remotes]`, as the tests do it.
+source = "tests/fixtures/pyrepo"
+locator = "github.com/leorinaldi/pyrepo"
+
+[setup]
+# Copied over the checkout and committed before the agent runs: the bug and the visible test.
+overlay = "setup"
+
+[grade]
+# Copied over the checkout after the run (never committed): the hidden tests. Pass = exit 0.
+overlay = "grade"
+command = "python -m pytest -q test_lib.py"
+
+[solution]
+# The reference fix; `--check-graders` expects setup+solution+grade to pass and setup+grade to fail.
+overlay = "solution"

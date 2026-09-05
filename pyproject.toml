@@ -30,6 +30,7 @@ packages = ["src/cttp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # the benchmark harness (`bench.agent`) is imported by its tests
 addopts = "-m 'not slow'"  # `uv run pytest -m slow` runs the corpus crawl (about two minutes)
 markers = [
   "network: the test talks to a closed local port; the no-socket guard is lifted",

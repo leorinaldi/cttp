@@ -43,7 +43,10 @@ with spec §12's acceptance test 1 and the line-level measurement behind the vis
 and the **registry as a service** — `cttp name show | claim | verify` (proof of control: the
 target's `cttp.toml` declares the name; a claim is a pull request), federation (registries in
 order, first match wins), and `cttp serve --export` writing the contract as static files for
-`cttp.ai`. The benchmark is still ahead — [`plan.md`](plan.md) lays out the phases.
+`cttp.ai`; and the **benchmark harness** (`bench/agent/`) — Claude Code run headless under a
+subscription login with two arms, the cttp tools against the shell's search, each run in its own
+checkout with its own index, every run a record. The task set and the run itself are still ahead
+— [`plan.md`](plan.md) lays out the phases.
 
 ## 2. Architecture
 
@@ -209,7 +212,7 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `src/cttp/schemas.py`, `src/cttp/mcp.py` | the agent interface: the `--json` schemas and the MCP server; see §2 | authored |
 | `src/cttp/server/export.py` | the static export of the contract (`cttp serve --export`), what `cttp-registry`'s `pages.yml` publishes to `cttp.ai` | authored |
 | `src/cttp/server/templates/` | `base.html` (the one layout and stylesheet), `_macros.html` (tags, backlinks, locations, history), `index.html`, `name.html`, `definition.html`, `repo.html`, `dups.html` | authored |
-| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_extract_c`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`, `_index_crawl`, `_index_queries`, `_acceptance_move`, `_acceptance_provenance`, `_acceptance_drivers` (`slow`), `_schemas`, `_mcp`, `_name`, `_registry_federation`, `_export`); `conftest.py` builds the offline world, forbids sockets (and non-`file` git protocols), and points `CTTP_INDEX` at `tmp_path` | authored |
+| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_extract_c`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`, `_index_crawl`, `_index_queries`, `_acceptance_move`, `_acceptance_provenance`, `_acceptance_drivers` (`slow`), `_schemas`, `_mcp`, `_name`, `_registry_federation`, `_export`, `_bench_agent`); `conftest.py` builds the offline world, forbids sockets (and non-`file` git protocols), and points `CTTP_INDEX` at `tmp_path` | authored |
 | `tests/fixtures/registry/` | the registry repository's contents — **identical to the public repo's `main`** (minus its `.github/` and README); keep them in sync | authored |
 | `tests/fixtures/hello/hello.py` | one line, `# cttp: hello-world` | authored |
 | `tests/fixtures/thermo/` | a fake sensor package (`src/thermo/{__init__,decode,lm75}.py`) with every definition kind the extractor must handle; served in tests as `github.com/leorinaldi/thermo` | authored |
@@ -218,6 +221,7 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `docs/` | vision, spec, plan, this file; `json-schemas.md` is **generated** (`python -m cttp.schemas`); excluded from ruff | authored |
 | `scripts/make_local_registry.py` | builds an offline registry repo from the fixture | authored |
 | `bench/drivers/` | `fetch.sh` (the corpus: a sparse, blobless clone of `torvalds/linux` at **v7.3-rc1**, five directories' own files, 736 `.c`), `expected.json` (provenance, the duplicate groups of acceptance test 1, the measurement's numbers), `measure.py` (the line-level measurement), `README.md` | authored |
+| `bench/agent/` | the agent benchmark (plan P8): `harness.py` (Claude Code headless, the two arms, records, `--replay`), `graders.py` (tasks from `tasks/<name>/task.toml` + `setup/`/`grade/`/`solution/` overlays; the per-run checkout, config and grade), `report.py` (the table), `results/<date>/<task>/<arm>/<run>.json` + `.stream.jsonl` (committed), `README.md` (all of it) | authored |
 | `bench/drivers/corpus/`, `bench/drivers/corpus-preserved/`, `bench/drivers/lm75-teardown/` | the clone `fetch.sh` makes; the original raw-file copy it reproduces byte for byte; the LM75 teardown — never committed | gitignored |
 | `.local/` | local scratch, e.g. `serve.log` | gitignored |
 | `.venv/`, `uv.lock` | uv-managed environment; the lockfile is committed | `.venv` gitignored |
@@ -571,6 +575,18 @@ token would have broken claims by anyone but Leo.
 - **The corpus clone is blobless.** Anything outside the sparse checkout (`git show HEAD:MAINTAINERS`
   is fine, root files are in; `git show HEAD:kernel/fork.c` is not) fetches from GitHub on demand.
   `GIT_ALLOW_PROTOCOL=none` in the environment turns that into an error.
+- **Claude Code's `Edit` and `Write` refuse a file the session has not `Read`.** An agent arm
+  without `Read` cannot change a file, whatever else it can see; the benchmark's links arm
+  learned this the expensive way. Both arms have `Read`.
+- **Claude Code 2.1.261 has no `Grep` or `Glob` tool**; searching is `grep`/`find` through
+  `Bash`, and `--permission-mode dontAsk` auto-approves the read-only command set. To keep the
+  shell's readers out of an arm, deny them by rule (`--disallowedTools "Bash(cat *)" …`);
+  `--tools` restricts the built-in tools and leaves MCP tools alone.
+- **A headless run is isolated from `~/.claude` with `--setting-sources ""`,
+  `--strict-mcp-config` and `--no-session-persistence`**, not with `--bare`: bare mode reads no
+  OAuth credentials and needs an API key. Give it `< /dev/null`, or it waits on stdin.
+- **Two MCP calls in one turn can hit the git cache at once.** `gitcache._clone` clones into a
+  temporary sibling directory and renames it into place for that reason; keep it that way.
 
 ## 9. Running and testing
 
@@ -603,6 +619,10 @@ uv run python -m cttp.schemas             # regenerate docs/json-schemas.md afte
 bash bench/drivers/fetch.sh               # the corpus (~60 MB); then index add bench/drivers/corpus && index crawl (~2 min)
 uv run pytest -m slow                     # acceptance test 1 and the measurement over the corpus (~2.5 min)
 uv run python bench/drivers/measure.py    # the vision's duplicate-line figures, recomputed
+
+uv run python -m bench.agent.harness --list | --check-graders | --task <name> --runs N   # the benchmark, under the Claude Code login
+uv run python -m bench.agent.harness --replay bench/agent/results/<date>/<task>/<arm>/1.json   # a record from its stream, no login used
+uv run python -m bench.agent.report bench/agent/results/<date>    # the table
 ```
 
 Site: **http://localhost:3120** — the viewer and the registry contract, nothing else. The product

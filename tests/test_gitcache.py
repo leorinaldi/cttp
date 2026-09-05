@@ -127,3 +127,17 @@ def test_no_test_connects_a_socket():
 
     with pytest.raises(RuntimeError, match="never connect sockets"), socket.socket() as s:
         s.connect(("127.0.0.1", 1))
+
+
+def test_two_callers_cloning_one_repository_at_once_both_get_it(registry, tmp_path):
+    """The MCP server answers `resolve` and `closure` from one turn concurrently; the second
+    clone used to fail with "destination path already exists"."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    locator = add_remote_repo(tmp_path, "raced", {"a.py": "x = 1\n"})
+    url = registry.url_for(locator)
+    with ThreadPoolExecutor(4) as pool:
+        repos = list(pool.map(lambda _: gitcache.ensure_repo(locator, url), range(4)))
+    assert len(set(repos)) == 1 and (repos[0] / "HEAD").exists()
+    assert gitcache.show(repos[0], gitcache.rev_parse(repos[0], "main"), "a.py") == "x = 1\n"
+    assert [p.name for p in repos[0].parent.iterdir()] == ["raced"]  # no temp dirs left
