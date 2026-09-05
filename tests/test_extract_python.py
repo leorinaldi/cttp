@@ -175,14 +175,20 @@ def test_the_contract_serves_a_symbol_percent_encoded(registry, tmp_path):
 
 def test_a_symbol_link_expands_and_checks(registry, tmp_path):
     f = tmp_path / "use.py"
-    # nothing after the link: until P1-T4 the block beneath a link runs to the end of the file
-    f.write_text(f"# cttp: {DECODE}#reg_to_millicelsius\n")
+    f.write_text(f"# cttp: {DECODE}#reg_to_millicelsius\nprint(reg_to_millicelsius(0x1900))\n")
     reports = expand_file(f, registry)
     assert [r.status for r in reports] == ["expanded"]
     lines = f.read_text().split("\n")
     assert lines[0].startswith(f"# cttp: {THERMO}@")
     assert "/src/thermo/decode.py#reg_to_millicelsius id=sha256:" in lines[0]
+    # no registry description: the stamp carries one derived from the page, marked `~`
+    assert lines[0].endswith(
+        '  ~"def reg_to_millicelsius(reg: int) -> int — Convert a raw temperature register to '
+        'millidegrees Celsius."'
+    )
     assert lines[1] == "def reg_to_millicelsius(reg: int) -> int:"
+    # the user's code after the definition, separated by the blank line expand wrote, is not drift
+    assert lines[-3:] == ["", "print(reg_to_millicelsius(0x1900))", ""]
     assert [r.status for r in check_file(f, registry)] == ["ok"]
 
 

@@ -10,6 +10,7 @@ import typer
 from cttp import __version__, gitcache
 from cttp.address import AddressError
 from cttp.config import ConfigError, load_config
+from cttp.links import LinkError
 from cttp.registry import RegistryError, open_registries
 from cttp.resolve import Resolved, ResolveError
 
@@ -21,7 +22,7 @@ RegistryOpt = Annotated[
     typer.Option("--registry", help="Use only this registry (a local registry repository)."),
 ]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Emit JSON.")]
-ERRORS = (RegistryError, ResolveError, AddressError, gitcache.GitError, ConfigError)
+ERRORS = (RegistryError, ResolveError, AddressError, gitcache.GitError, ConfigError, LinkError)
 NOT_RUN = 2  # exit code of `run` when the first run of an address is not confirmed
 
 

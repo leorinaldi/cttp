@@ -15,7 +15,7 @@ from pathlib import Path
 from cttp import gitcache
 from cttp.address import AddressError, parse
 from cttp.hashing import identity, short
-from cttp.links import LINK_RE, Link, find_links, format_stamped
+from cttp.links import Link, find_links, format_stamped
 from cttp.registry import Registries, RegistryError
 from cttp.resolve import Resolved, ResolveError, resolve
 
@@ -34,36 +34,54 @@ class Report:
     address: str
     status: str  # expanded | unchanged | ok | unexpanded | drift | unresolvable
     detail: str | None = None
+    relation: str = "is"
 
     def to_json(self) -> dict:
         return {
             "line": self.line,
+            "relation": self.relation,
             "address": self.address,
             "status": self.status,
             "detail": self.detail,
         }
 
 
-def block_end(lines: list[str], start: int) -> int:
-    """The block beneath a link runs to the next link line or EOF, trailing blanks dropped."""
-    end = start
-    while end < len(lines) and not LINK_RE.match(lines[end]):
-        end += 1
-    while end > start and lines[end - 1].strip() == "":
-        end -= 1
-    return end
+def describe(r: Resolved) -> tuple[str | None, bool]:
+    """The description for a stamp: the entry's, asserted; else one derived from the page."""
+    if r.description is not None:
+        return r.description, False
+    if r.signature is None:
+        return None, False
+    head = r.signature
+    if r.kind == "function":  # the signature reads as code: `def greet(name) -> str`
+        head = (
+            head.replace("async ", "async def ", 1) if head.startswith("async ") else f"def {head}"
+        )
+    elif r.kind == "class":
+        head = f"class {head}"
+    return head + (f" — {r.docstring}" if r.docstring else ""), True
 
 
 def expand_text(text: str, registry: Registries) -> tuple[str, list[Report]]:
+    """Expand every unstamped `is` link. Its source goes beneath the link's stack, followed by a
+    blank line when something non-blank follows, so the block is delimited as spec §4 requires."""
     lines = text.split("\n")
+    links = {k.line: k for k in find_links(lines)}
     out: list[str] = []
     reports: list[Report] = []
+    pending: list[str] = []  # expanded source waiting for the end of the current stack
     for i, line in enumerate(lines):
-        link = next((k for k in find_links([line])), None)
-        if link is None or link.stamped:
+        link = links.get(i)
+        if link is None:
+            if pending and line.strip():
+                pending.append("")
+            out.extend(pending)
+            pending = []
             out.append(line)
-            if link is not None:
-                reports.append(Report(i + 1, link.address, "unchanged"))
+            continue
+        if link.relation != "is" or link.stamped:
+            out.append(line)
+            reports.append(Report(i + 1, link.address, "unchanged", relation=link.relation))
             continue
         r = resolve(link.address, registry)
         if inner := find_links(r.source.split("\n")):
@@ -71,10 +89,14 @@ def expand_text(text: str, registry: Registries) -> tuple[str, list[Report]]:
                 f"{link.address} resolves to a page that links to {len(inner)} other page(s) "
                 f"(first: {inner[0].address}); closure expansion arrives in P3-T1"
             )
-        stamp = format_stamped(r.address, short(r.identity_full), r.description)
+        description, derived = describe(r)
+        stamp = format_stamped(
+            r.address, short(r.identity_full), description, derived, link.comment
+        )
         out.append(link.indent + stamp)
-        out.extend(link.indent + s if s else s for s in r.source.rstrip("\n").split("\n"))
+        pending.extend(link.indent + s if s else s for s in r.source.rstrip("\n").split("\n"))
         reports.append(Report(i + 1, link.address, "expanded", r.address))
+    out.extend(pending)
     return "\n".join(out), reports
 
 
@@ -87,21 +109,24 @@ def expand_file(path: Path, registry: Registries) -> list[Report]:
 
 
 def _check_one(lines: list[str], link: Link, registry: Registries) -> Report:
+    """An `is` link must be stamped and its block must hash to its id; every link must resolve.
+    `from` and `see` links are never checked for identity (spec §4)."""
     n = link.line + 1
-    if not link.stamped:
-        return Report(n, link.address, "unexpanded")
-    block = lines[link.line + 1 : block_end(lines, link.line + 1)]
-    if not block:
-        return Report(n, link.address, "drift", "nothing beneath the link")
-    claimed = link.fields["id"].removeprefix("sha256:")
-    actual = identity("\n".join(block) + "\n")
-    if not actual.startswith(claimed):
-        return Report(n, link.address, "drift", f"code hashes to sha256:{short(actual)}")
+    if link.relation == "is":
+        if not link.stamped:
+            return Report(n, link.address, "unexpanded")
+        block = link.block(lines)
+        if not block:
+            return Report(n, link.address, "drift", "nothing beneath the link")
+        claimed = link.fields["id"].removeprefix("sha256:")
+        actual = identity("\n".join(block) + "\n")
+        if not actual.startswith(claimed):
+            return Report(n, link.address, "drift", f"code hashes to sha256:{short(actual)}")
     try:
         resolve(link.address, registry)
     except (ResolveError, RegistryError, AddressError, gitcache.GitError) as e:
-        return Report(n, link.address, "unresolvable", str(e))
-    return Report(n, link.address, "ok")
+        return Report(n, link.address, "unresolvable", str(e), link.relation)
+    return Report(n, link.address, "ok", relation=link.relation)
 
 
 def check_file(path: Path, registry: Registries) -> list[Report]:
