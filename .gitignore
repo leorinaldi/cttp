@@ -22,3 +22,13 @@ npm-debug.log*
 # Benchmark corpora — bulk data, fetched by script, never committed
 bench/drivers/corpus/
 bench/drivers/lm75-teardown/
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local scratch (the spike's local registry lives here)
+.local/

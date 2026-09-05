@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}cttp{% endblock %}</title>
+<style>
+  :root { --fg: #1a1a1a; --muted: #6b6b6b; --bg: #fbfbf9; --line: #e3e1da; --asserted: #1f5f8b; --derived: #7a5c00; }
+  body { margin: 0; padding: 2rem 1.25rem; background: var(--bg); color: var(--fg);
+         font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 52rem; margin-inline: auto; }
+  header a { color: inherit; text-decoration: none; font-weight: 600; }
+  header small { color: var(--muted); margin-left: .5rem; }
+  h1 { font-size: 1.6rem; margin: 1.5rem 0 .25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: #fff; border: 1px solid var(--line); padding: 1rem; overflow-x: auto;
+        font: 13.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; }
+  dt { color: var(--muted); }
+  .tag { font-size: .72rem; padding: 0 .35rem; border-radius: 3px; border: 1px solid; margin-left: .4rem; vertical-align: middle; }
+  .asserted { color: var(--asserted); } .derived { color: var(--derived); }
+  h2 { font-size: 1rem; margin-top: 2rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  ul.names { list-style: none; padding: 0; } ul.names li { padding: .4rem 0; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<header><a href="/">cttp</a><small>registry · {{ registry }}</small></header>
+{% block body %}{% endblock %}
+</body>
+</html>

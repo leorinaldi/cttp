@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ r.name }} · cttp{% endblock %}
+{% block body %}
+<h1>cttp:{{ r.name }}</h1>
+{% if r.description %}<p>{{ r.description }}<span class="tag asserted">asserted</span></p>{% endif %}
+
+<h2>Resolves to</h2>
+<dl>
+  <dt>pinned address</dt><dd><code>{{ r.address }}</code><span class="tag derived">derived</span></dd>
+  <dt>identity</dt><dd><code>{{ r.identity }}</code><span class="tag derived">derived</span></dd>
+  <dt>kind</dt><dd>{{ r.kind }} · {{ r.language }}<span class="tag derived">derived</span></dd>
+  <dt>license</dt><dd>{{ r.license if r.license is not none else "not available" }}<span class="tag derived">derived</span></dd>
+  <dt>target</dt><dd><code>{{ r.target }}</code><span class="tag asserted">asserted</span></dd>
+  <dt>versions</dt><dd>{% for label, ref in entry.versions.items() %}<code>{{ label }}</code> → <code>{{ ref }}</code>{{ ", " if not loop.last }}{% endfor %}
+      (default <code>{{ entry.default }}</code>)<span class="tag asserted">asserted</span></dd>
+  <dt>json</dt><dd><a href="/{{ r.name }}.json"><code>/{{ r.name }}.json</code></a></dd>
+</dl>
+
+<h2>Source</h2>
+<pre>{{ r.source }}</pre>
+
+<h2>Use it</h2>
+<pre># cttp: {{ r.name }}</pre>
+<p>Write that line in a Python file and run <code>cttp expand</code>. Or just <code>cttp run {{ r.name }}</code>.</p>
+{% endblock %}

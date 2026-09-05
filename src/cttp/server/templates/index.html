@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}cttp registry{% endblock %}
+{% block body %}
+<h1>names</h1>
+<ul class="names">
+{% for e in entries %}
+  <li><a href="/{{ e.name }}"><code>{{ e.name }}</code></a>
+      {% if e.description %}— {{ e.description }}{% endif %}</li>
+{% else %}
+  <li>No names yet.</li>
+{% endfor %}
+</ul>
+{% endblock %}

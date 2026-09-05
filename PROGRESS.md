@@ -4,12 +4,11 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: STAGE 1 EXITING — VISION AGREED, SPEC DRAFTED AND DISCUSSED, AWAITING LEO'S FINAL READ.**
-On 2026-09-04 Leo agreed the vision, and the spec was written and then reshaped in conversation
-around his hello-world picture: a program can be a single line, `# cttp: hello-world`; the tool
-expands the link **in place**, once, at edit time, stamping the line with version and hash; there is
-**no lockfile**; the registry is an HTTP contract served on localhost first and later at **cttp.ai**,
-which Leo now owns. Nothing is built and no code exists.
+**Status: STAGE 3 — PHASE 0 UNDER WAY. P0-T1 (THE SPIKE) IS DONE: HELLO WORLD RUNS END TO END.**
+On 2026-09-04 Leo confirmed the spec and agreed the plan; the spike was built the same evening.
+`cttp serve` answers on 3120, `cttp expand` turns `# cttp: hello-world` into a stamped line plus
+`print("hello world!")`, plain `python3 -I` runs it, `cttp run hello-world` runs it with no file,
+and `cttp check` passes and then catches drift. 21 tests green, ruff clean.
 
 _Last updated: 2026-09-04._
 
@@ -20,122 +19,149 @@ _Last updated: 2026-09-04._
 
 ## Next session — suggested next steps
 
-**Start here: confirm the spec stands, then write [`docs/plan.md`](docs/plan.md) (Stage 2).** Leo
-read the spec's substance through conversation on 2026-09-04 and said "all of this makes sense";
-he has not yet read the final text line by line. Ask whether it stands as written. If yes, Stage 1
-exits and the plan is next.
+**Start here: P0-T2 — create the public registry repository `github.com/leorinaldi/cttp-registry`.**
+Read its entry in [`docs/plan.md`](docs/plan.md) in full. Its contents are already written and
+committed here under `tests/fixtures/registry/` (that is exactly what the spike serves locally);
+the task is to publish them, tag `v1`, and verify an anonymous clone. **Ask Leo before creating
+it — it is public.** After that: P0-T3 (config file, `[remotes]`, proper resolver), P0-T4 (HTTP
+registry backend), P0-T5 (acceptance test 4 as a full test suite with first-run confirmation),
+then **write `docs/overview.md` (Stage 4)** before Phase 1.
 
-The plan's Phase 0 is fixed by the spec's fourth acceptance test (section 12): a `uv` project with
-a `cttp` console script, `cttp serve` answering on **http://localhost:3120** with the registry
-contract (`/<name>`, `/<name>.json`) over a local registry repo containing `hello-world`, and
-`cttp expand` turning a file holding only `# cttp: hello-world` into the stamped line plus
-`print("hello world!")`, run by plain `python`. Phase 1 onward should follow the spec's layer
-order: address grammar and hashing → Python extractor → resolver and object cache → `expand`,
-`check`, `fold`, `run` → index and `who`/`dups` → MCP server → tree-sitter read side and the driver
-corpus test → the benchmark. Decisions the plan has to make that the spec left to it: the model and
-harness for the benchmark (consult the `claude-api` skill), the task set, and where the first
-registry repo lives (spec suggests `github.com/leorinaldi/cttp-registry`, holding the first
-snippets too).
+If Leo wants to play with the spike first, the demo is in **How to run** below.
 
 ## Current state — working & verified
 
+**Code — the P0-T1 spike (`src/cttp/`), 2026-09-04.** Real modules in minimal form:
+- `address.py` — name form only (`hello-world`, `@rev|label`, `#symbol` parsed but not resolvable);
+  spec §2 normalization and SHA-256 identity. The identity of `print("hello world!")` is pinned
+  in `tests/test_address.py` (`75a27070015e…`).
+- `extract/python.py` — a whole file as a script page only.
+- `gitcache.py` — bare clones under `$CTTP_HOME` (default `~/.cache/cttp`)`/repos/<locator>`,
+  rev-parse, blob at rev, license from the first line of `LICENSE*`/`COPYING`.
+- `registry.py` — a **local registry repository** (`cttp.toml` + `names/*.toml`); labels map to
+  refs; `create_local_registry()` builds one from `tests/fixtures/registry/`.
+- `resolve.py` — name → registry → git → extract → hash → `Resolved` with `origin` fields.
+- `links.py` — parse and write `# cttp:` lines (stamp, `key=value` fields, quoted description).
+- `expand.py` — `expand` (one link, no closure), `check` (unexpanded / drift / unresolvable / ok),
+  `run` for an address (`~/.cache/cttp/run/<pin>/main.py`) or a file (copy, expand, run).
+- `server/app.py` — FastAPI on **3120**: `/`, `/<name>`, `/<name>.json`, `/<name>@<version>.json`;
+  Jinja2 templates with derived/asserted tags. Looked at in a headless browser: renders correctly.
+- `cli.py` — `cttp --version | resolve | serve | expand | check | run`, all with `--json`.
+- Tests: 21 in `tests/`, all against a `tmp_path` registry repo with caches redirected via
+  `CTTP_HOME`; no network. `test_no_runtime_component` guards the no-runtime rule.
+
+**Corners the spike cut (each is closed by the named task):**
+- No config file; registry chosen by `--registry`, `CTTP_REGISTRY`, or the default path
+  `~/.local/share/cttp/registry` → **P0-T3**
+- No `[remotes]`; the only locator that resolves is the registry repo's own (declared as `repo =`
+  in its `cttp.toml`), served from its local path; anything else would try `https://<locator>.git`
+  → **P0-T3 / P2-T1**
+- No HTTP registry backend — `cttp resolve` reads the registry repo directly, not the server →
+  **P0-T4**
+- No object cache; no symbols; no locator/identity address forms → **P2-T2 / P1-T1 / P1-T3**
+- `run` never asks for confirmation (`--yes` is accepted and ignored) → **P0-T5**
+- Stamps use 12-hex for rev and identity (the plan's choice), full SHA returned in JSON → keep
+- The block beneath a link runs to the next link line or EOF → **P1-T4** defines it properly
+- License detection is a two-entry first-line map → **P2-T1**
+- `# cttp-from:` and `# cttp-see:` are not recognised → **P1-T4**
+
 **Docs**
-- `CLAUDE.md` — session procedure only. `AGENTS.md` — pointer to it.
-- `docs/vision.md` — **agreed by Leo 2026-09-04.** Stage 0 exit done; the name `cttp` was
-  re-confirmed by use (folder renamed, domain bought).
-- `docs/spec.md` — **second draft, 556 lines, 14 sections**, written 2026-09-04 and amended the
-  same day after discussion. Load-bearing decisions: people write the short form
-  (`cttp:hello-world`), the tool writes the pinned form (`@rev id=sha256:…`); a link is a
-  substitute for the code at that address; expansion is in place, once, at edit time, never at run
-  time; expanded on disk, folded in view; no lockfile (the stamped line is the record — web
-  subresource-integrity precedent, not pip/npm); pinned by default, `track=latest` opt-in; editing
-  a copy is a fork recorded as `# cttp-from:`; a one-line description rides on the link line
-  (asserted from the registry, or derived and marked `~`); pages are definitions or scripts;
-  content-addressed object cache under `~/.cache/cttp/objects/`; registry is an HTTP contract, git
-  repo of pointer files behind it, proof of control via `cttp.toml` in the target repo, localhost
-  first then `cttp.ai`; `cttp run` as a launcher with first-run confirmation; vendored package only
-  as the fallback for oversized closures; stack pinned (Python 3.12, uv, typer, ast, tree-sitter,
-  SQLite, FastAPI + Jinja2 on 3120, MCP SDK, pytest, ruff). Section 14 lists what is deliberately
-  open.
-- `docs/plan.md`, `docs/overview.md` — **blank skeletons.**
-  `docs/project-start-sequence.md` — the build arc; retires at Stage 5.
-- The evidence behind the vision (the 736-file driver measurement) is quoted in `vision.md`; the
-  scripts are not in the repo. See follow-ups.
+- `docs/vision.md` agreed, `docs/spec.md` confirmed as written, `docs/plan.md` agreed — all on
+  2026-09-04. `docs/overview.md` still a blank skeleton (Stage 4, after Phase 0).
 
 **Environment**
 - Git on `main`, remote `origin` → `github.com/leorinaldi/cttp` (**private**).
-- Folder is `~/Claude/cttp` (renamed by Leo between the two 2026-09-04 sessions). The project
-  kit's `PORTS.md` entry was renamed to match this session.
-- **Domain `cttp.ai` registered by Leo, 2026-09-04.** Nothing points at it yet.
-- Web port **3120** (nothing serves it yet). No API or database tier by design.
-- `uv` is **not installed** on this machine (`which uv` fails); Phase 0 needs it.
+- `uv` 0.12.10 installed at `~/.local/bin/uv` (2026-09-04). Python 3.12.3 system interpreter at
+  `/usr/bin/python3` has no cttp, which the tests rely on.
+- Domain `cttp.ai` registered by Leo; nothing points at it yet.
+- Driver corpus preserved at `bench/drivers/corpus/` (gitignored, 13 MB, 736 `.c` files under
+  `drivers/{gpio,hwmon,iio,rtc}`), copied from the fisheye session's scratchpad. The measurement
+  scripts and the Linux commit did **not** survive; P6-T2 reconstructs them. The LM75 teardown
+  files are at `bench/drivers/lm75-teardown/` (gitignored).
+- A headless Chromium exists at `~/.cache/ms-playwright/chromium-1223/chrome-linux/chrome`
+  (`--headless=new --screenshot=…`); system Firefox's headless screenshot did not work.
 
 ## Known follow-ups (deferred)
 
 Every item carries a target: the phase that will close it, `→ standing`, or `→ unscheduled` with the
 trigger that would schedule it.
 
-- Install `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`) → **Phase 0**, first step
-- Check the measurement scripts and the driver corpus into `bench/drivers/`, or reproduce them, so
-  the numbers in `vision.md` and the expected duplicate groups for acceptance test 1 are
-  reproducible; the originals live in the 2026-09-04 second session's scratchpad if it survived →
-  **plan**, as the first benchmark task
-- Name collision check: GitHub (`leorinaldi/cttp`) and `cttp.ai` are ours; **PyPI and npm not yet
-  checked** — do so before the first package is published → **Stage 1 of the path**, first publish
-- Decide the home of the first registry repo and create it (spec suggests
-  `github.com/leorinaldi/cttp-registry`; a `cttp` GitHub org if free, but nothing depends on it) →
-  **Phase 0**
-- Point `cttp.ai` at a static render of the registry (GitHub Pages) once the registry repo and
-  `cttp serve` exist → **unscheduled**; trigger: the local registry contract passes acceptance
-  test 4
-- Editor extension that folds cttp blocks on open and shows a link's page on hover → **unscheduled**;
-  trigger: first real use of expanded files by a person in an editor
+- Identify the Linux commit the preserved corpus came from and write `bench/drivers/fetch.sh`;
+  re-derive `expected.json` → **P6-T2**
+- Name collision check on PyPI and npm before the first package is published → **unscheduled**;
+  trigger: deciding to publish `cttp` to PyPI (not in the plan)
+- Point `cttp.ai` at the static export → **P7-T3**
+- Editor extension that folds cttp blocks on open and shows a link's page on hover →
+  **unscheduled**; trigger: first real use of expanded files by a person in an editor
+- Starlette warns that `httpx` with its test client is deprecated in favour of `httpx2` →
+  **unscheduled**; trigger: the warning becomes an error on upgrade
 
 ## Build history
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-04 (fourth session) — Spec confirmed; plan written and agreed; P0-T1 spike built.**
+  Leo confirmed the spec as written. The plan was drafted (nine phases, 32 tasks, decisions the
+  spec delegated: public registry repo at `leorinaldi/cttp-registry`, 12-hex stamps, XDG config
+  with `[remotes]`, benchmark on `claude-opus-5` through the SDK tool runner, `cttp.ai` as a
+  static export). Leo asked for a quick-and-dirty working version before going further, so the
+  plan was amended: **P0-T1 became a one-session spike** and P0-T2..T5 became its hardening. The
+  spike was then built in one go — real modules, minimal bodies — and acceptance test 4 walked
+  by hand: serve on 3120, expand, `python3 -I`, `cttp run hello-world`, check pass then drift.
+  Load-bearing choices in the spike: the registry repo declares its own locator (`repo =` in
+  `cttp.toml`) so the spike can serve it from a local path without a remotes table; `check`
+  hashes the block beneath a link up to the next link line; `run` caches by pinned address. Also:
+  the driver corpus was rescued from the old scratchpad into `bench/drivers/corpus/`; `uv`
+  installed; `ruff format` was found to reformat code blocks in `docs/*.md` and `docs/` is now
+  excluded in `pyproject.toml`.
 - **2026-09-04 (third session) — Vision agreed; spec written and reshaped around hello world.**
   Leo agreed the vision after one question: how linked code actually runs without a new compiler.
   Answer: the tool acts at edit time and the runtime only ever sees ordinary source. The spec was
-  drafted (address grammar, extractors, link convention, resolver, index, materializer, registry,
-  surfaces, stack, acceptance tests, benchmark, non-goals, open questions), then a long discussion
-  moved it in Leo's direction. His picture: hello world is the single line `cttp:hello-world`, and
-  `cttp.ai/hello-world` holds the code; links upon links give extreme sparsity, like the web.
-  Decisions that came out of it, in order: (1) no `import cttp` anywhere — cttp is a developer tool
-  on the PATH like `gh`, plus an MCP server for Claude Code; (2) the link expands **in place**
-  beneath the comment rather than into a vendored package, which was the spec's original default;
-  (3) links follow latest only on opt-in — Leo asked whether dynamic updating was right, and the
-  precedent survey (pip/npm/Go/Cargo lockfiles, Deno's version-in-URL, Unison's hash-as-name, the
-  web's subresource integrity) landed on the web's model: pin in the reference itself, so two
-  files that read the same behave the same; (4) therefore **no lockfile**; (5) expansion happens
-  once at edit time and is stored in the file, `cttp run` is a launcher with first-run
-  confirmation; (6) expanded on disk, folded in view — sparsity for agents via `fold`, for humans
-  via editor folding; (7) a one-line description rides on the link line so a folded file reads as
-  what it does; (8) editing a copy is a fork, recorded as `cttp-from`, never overwritten by
-  `update`; (9) the registry is an HTTP contract served on localhost first, `cttp.ai` later (Leo
-  bought the domain during the session; a GitHub org is optional and non-load-bearing). Also
-  finished the folder-rename follow-up in the kit's `PORTS.md`.
+  drafted, then a long discussion moved it in Leo's direction: no `import cttp` anywhere; the link
+  expands in place beneath the comment; links follow latest only on opt-in (web
+  subresource-integrity precedent); therefore no lockfile; expansion once at edit time, `cttp run`
+  as a launcher; expanded on disk, folded in view; a one-line description rides on the link line;
+  editing a copy is a fork (`cttp-from`); the registry is an HTTP contract served on localhost
+  first, `cttp.ai` later (Leo bought the domain during the session).
 - **2026-09-04 (second session) — Direction changed; project renamed to cttp; vision rewritten.**
-  Honest assessment of the fisheye vision found the read side commoditized and the experiment on
-  record a warning. Working from first principles — where lines in giant codebases come from, a
-  teardown of the Linux LM75 driver, a measurement across 736 driver files — landed on a protocol:
-  definitions get addresses, references are links, an index computes backlinks, files remain the
-  rendered form. Load-bearing: protocol over language; links over imports; identity by content,
-  discovery by location; a link never means execution; derived and asserted labelled; Python write
-  side first, then many languages, then the opportunity for a native language; a registry named as
-  a concept with its shape left to the spec. Renamed every doc; created the private remote.
+  Honest assessment of the fisheye vision found the read side commoditized. Working from first
+  principles — a teardown of the Linux LM75 driver, a measurement across 736 driver files — landed
+  on a protocol: definitions get addresses, references are links, an index computes backlinks,
+  files remain the rendered form. Renamed every doc; created the private remote.
 - **2026-09-04 (first session) — Project created and fisheye vision drafted.** Scaffolded from
   `~/Claude/new-project`: session procedure, document skeleton under `docs/`, web port **3120**
-  allocated. The fisheye vision (level-of-detail views, typed holes, a leaf-or-composite lint) was
-  superseded the same day.
+  allocated. The fisheye vision was superseded the same day.
 
 ## How to run
 
-**Not built yet.** Once Phase 0 lands, `cttp serve` runs the local registry and viewer at
-**http://localhost:3120**. Record the actual bring-up commands here as soon as they exist.
+```bash
+export PATH="$HOME/.local/bin:$PATH"          # uv lives here
+uv sync                                        # once; creates .venv
+uv run pytest -q                               # 21 tests, no network
+uv run ruff check . && uv run ruff format --check .
+
+uv run python scripts/make_local_registry.py   # once: ~/.local/share/cttp/registry from tests/fixtures/registry
+uv run cttp serve                              # http://localhost:3120  (Ctrl-C to stop)
+```
+
+The demo (acceptance test 4), from any directory with the server up or down:
+
+```bash
+printf '# cttp: hello-world\n' > hello.py
+uv run cttp expand hello.py && cat hello.py    # stamped line + print("hello world!")
+/usr/bin/python3 -I hello.py                   # runs with cttp uninstalled
+uv run cttp run hello-world                    # runs with no file at all
+uv run cttp check hello.py                     # exit 0
+sed -i 's/hello world!/goodbye/' hello.py && uv run cttp check hello.py   # drift, exit 1
+uv run cttp --json resolve hello-world         # what an agent sees
+```
+
+The server was left running in the background by the fourth session (`.local/serve.log`); probe
+`curl -s -o /dev/null -w '%{http_code}' http://localhost:3120/` before starting another.
 
 ## Config / secrets
 
 - `.env` — not created. Gitignored by design; never commit it.
+- `CTTP_HOME` (default `~/.cache/cttp`) and `CTTP_REGISTRY` (default `~/.local/share/cttp/registry`)
+  are the only environment knobs; tests set both to `tmp_path`.
