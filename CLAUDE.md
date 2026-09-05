@@ -127,14 +127,15 @@ Trigger: Leo says **"end session"**, **"wrap up"**, **"done for today"**, or sim
 ## Repository
 
 - **`main` only.** No feature branches, no PRs — commit straight to `main`.
-- **Remote:** `origin` → `https://github.com/leorinaldi/cttp.git` (**private**, GitHub account
-  `leorinaldi`).
+- **Remote:** `origin` → `https://github.com/leorinaldi/cttp.git` (**public** since 2026-09-05,
+  GitHub account `leorinaldi`). Anything committed is visible to everyone — the secrets rule
+  below is not optional.
 - **If there is no remote yet**, offer to create one — don't do it unasked:
   ```bash
   gh auth status                        # confirm the leorinaldi account first
-  gh repo create leorinaldi/cttp --private --source=. --remote=origin --push
+  gh repo create leorinaldi/cttp --public --source=. --remote=origin --push
   ```
-  That creates the private repo, wires up `origin`, and pushes `main` in one step. Afterwards
+  That creates the public repo, wires up `origin`, and pushes `main` in one step. Afterwards
   `git push origin main` is all any session needs. If `gh` is not authenticated, ask Leo to run
   `! gh auth login` himself.
 - **Commit identity:** author **Leo <leorinaldi@gmail.com>**; keep the `Co-Authored-By: Claude`

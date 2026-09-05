@@ -224,10 +224,11 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `pyproject.toml` | hatchling build, `cttp` entry point, ruff and pytest config | authored |
 
 Outside the repo: the public registry `github.com/leorinaldi/cttp-registry`, whose `README.md`
-links to spec §8 in this private repo, and whose `.github/workflows/` hold `verify.yml` (runs
+links to spec §8 here, and whose `.github/workflows/` hold `verify.yml` (runs
 `cttp name verify --registry .` on every PR touching `names/`) and `pages.yml` (publishes
-`cttp serve --export` to GitHub Pages as `cttp.ai` on every push to `main`). Both install cttp
-from this private repo with a `CTTP_TOKEN` secret.
+`cttp serve --export` to GitHub Pages as `cttp.ai` on every push to `main`). Both `pip install`
+cttp straight from this repository, which is **public** — a fork's PR gets no secrets, so a
+token would have broken claims by anyone but Leo.
 
 ## 4. The data model — load-bearing decisions
 

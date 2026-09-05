@@ -55,9 +55,9 @@ _Last updated: 2026-09-05 (Phase 7 built; its publish steps pending)._
 **Environment** below for the exact state):
 1. Push the registry clone's `p7` branch and merge it to `main` (`verify.yml`, `pages.yml`,
    `cttp.toml` declaring `hello-world`, README with the claiming instructions).
-2. Add the `CTTP_TOKEN` secret to `cttp-registry` (a fine-grained token with read access to the
-   private `cttp` repo — the workflows `pip install` the tool from it) — or make `cttp` public,
-   which removes the need.
+2. ~~The `CTTP_TOKEN` secret~~ — not needed: `cttp` went **public** on 2026-09-05 and the
+   workflows install from it directly (a fork's PR gets no secrets, so a token would have broken
+   every claim but Leo's own).
 3. Enable Pages from GitHub Actions (`gh api -X POST repos/leorinaldi/cttp-registry/pages -f
    build_type=workflow`), set the custom domain `cttp.ai`, and point the DNS at Pages (apex `A`
    records 185.199.108.153 / .109 / .110 / .111, or the `ALIAS` the registrar offers).
@@ -493,11 +493,11 @@ Also pending Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced b
   per its own Stage 5; `git log` has it). `CLAUDE.md` now points at `docs/plan.md` for next steps.
 
 **Environment**
-- Git on `main`, remote `origin` → `github.com/leorinaldi/cttp` (**private**).
+- Git on `main`, remote `origin` → `github.com/leorinaldi/cttp` (**public** since 2026-09-05;
+  history scanned for secrets first — none).
 - **Registry repo:** `github.com/leorinaldi/cttp-registry` (**public**), first commit
-  `d29352a4fbf1` tagged `v1`. The README links to spec §8 in this private repo — a dead link
-  for the public until cttp is opened. **Unpushed (2026-09-05):** the clone at
-  `~/.local/share/cttp/registry` has a local branch **`p7`** (two commits on top of `origin/main`,
+  `d29352a4fbf1` tagged `v1`. **Unpushed (2026-09-05):** the clone at
+  `~/.local/share/cttp/registry` has a local branch **`p7`** (three commits on top of `origin/main`,
   worktree at the session scratchpad, since removed — `git worktree prune` if it lingers) with
   `.github/workflows/verify.yml`, `.github/workflows/pages.yml`, `cttp.toml` declaring
   `names = ["hello-world"]` (identical to `tests/fixtures/registry/cttp.toml`) and the README's
@@ -557,8 +557,8 @@ trigger that would schedule it.
 - Name collision check on PyPI and npm before the first package is published → **unscheduled**;
   trigger: deciding to publish `cttp` to PyPI (not in the plan)
 - Point `cttp.ai` at the static export → **P7-T3**
-- The registry README links to spec §8 in the private `cttp` repo → **unscheduled**; trigger:
-  making `cttp` public, or publishing the spec on `cttp.ai` (P7-T3), whichever first
+- ~~The registry README links to spec §8 in the private `cttp` repo~~ — closed 2026-09-05:
+  `cttp` is public
 - Editor extension that folds cttp blocks on open and shows a link's page on hover →
   **unscheduled**; trigger: first real use of expanded files by a person in an editor
 - A branch containing `/` (`release/1.0`) cannot be a locator rev — the first `/` after `@`
@@ -659,9 +659,6 @@ trigger that would schedule it.
   viewer answered 500 for the two minutes a corpus crawl held the lock; fixed this session
   (readers skip the script; 5 s busy timeout) — a test with a concurrent writer is still missing
   → **unscheduled**; trigger: the next change to `open_index`
-- **The registry workflows install cttp from a private repository** (`pip install git+https://
-  x-access-token:${CTTP_TOKEN}@github.com/leorinaldi/cttp.git`), so `cttp-registry` needs a
-  `CTTP_TOKEN` secret until `cttp` is public or on PyPI → **next session** (Leo's call which)
 - **The exported site's header links to `/dups`, search and `/d/…`**, which need an index a
   static host does not have (404 on Pages), and shows the registry's path (the CI checkout's);
   the name page's *who links here* is whatever index the exporting machine had → **unscheduled**;
@@ -707,8 +704,10 @@ is the archive, and a bloated history taxes every future session start.
   forever, visible the moment `--export` returned. The export goes through the ASGI app with
   the test client so "identical to the live responses" is by construction, not by a second
   renderer; the running dev server, started last session, printed `schema_version: 2` against
-  the export's 3 — restarted. The workflows install cttp from the private repo with a token
-  secret; `pages.yml` writes `CNAME` and `.nojekyll` itself so the export stays host-neutral.
+  the export's 3 — restarted. The workflows first installed cttp from the private repo with a
+  token secret; a fork's PR gets no secrets, which would have broken every outside claim, so
+  **`cttp` was made public** (history scanned for secrets first) and the token dropped.
+  `pages.yml` writes `CNAME` and `.nojekyll` itself so the export stays host-neutral.
   Outward-facing steps (push, secret, Pages, DNS, the two acceptance PRs) were not done: the
   plan says ask first.
 - **2026-09-05 (fifteenth session) — Phase 6 end to end: P6-T1 the tree-sitter extractor,
