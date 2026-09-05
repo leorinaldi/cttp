@@ -10,7 +10,7 @@ from pathlib import Path
 from cttp import gitcache
 from cttp.address import AddressError, identity, parse_name, short
 from cttp.links import LINK_RE, Link, find_links, format_stamped
-from cttp.registry import LocalRegistry, RegistryError
+from cttp.registry import Registries, RegistryError
 from cttp.resolve import ResolveError, resolve
 
 
@@ -40,7 +40,7 @@ def block_end(lines: list[str], start: int) -> int:
     return end
 
 
-def expand_text(text: str, registry: LocalRegistry) -> tuple[str, list[Report]]:
+def expand_text(text: str, registry: Registries) -> tuple[str, list[Report]]:
     lines = text.split("\n")
     out: list[str] = []
     reports: list[Report] = []
@@ -59,7 +59,7 @@ def expand_text(text: str, registry: LocalRegistry) -> tuple[str, list[Report]]:
     return "\n".join(out), reports
 
 
-def expand_file(path: Path, registry: LocalRegistry) -> list[Report]:
+def expand_file(path: Path, registry: Registries) -> list[Report]:
     text = path.read_text(encoding="utf-8")
     new, reports = expand_text(text, registry)
     if new != text:
@@ -67,7 +67,7 @@ def expand_file(path: Path, registry: LocalRegistry) -> list[Report]:
     return reports
 
 
-def _check_one(lines: list[str], link: Link, registry: LocalRegistry) -> Report:
+def _check_one(lines: list[str], link: Link, registry: Registries) -> Report:
     n = link.line + 1
     if not link.stamped:
         return Report(n, link.address, "unexpanded")
@@ -85,7 +85,7 @@ def _check_one(lines: list[str], link: Link, registry: LocalRegistry) -> Report:
     return Report(n, link.address, "ok")
 
 
-def check_file(path: Path, registry: LocalRegistry) -> list[Report]:
+def check_file(path: Path, registry: Registries) -> list[Report]:
     lines = path.read_text(encoding="utf-8").split("\n")
     return [_check_one(lines, link, registry) for link in find_links(lines)]
 
@@ -96,7 +96,7 @@ def _run_dir(key: str) -> Path:
     return d
 
 
-def run_address(text: str, registry: LocalRegistry) -> int:
+def run_address(text: str, registry: Registries) -> int:
     """Expand an address into the run cache once and run it with the host runtime."""
     r = resolve(text, registry)
     main = _run_dir(r.address) / "main.py"
@@ -106,7 +106,7 @@ def run_address(text: str, registry: LocalRegistry) -> int:
     return subprocess.run([sys.executable, str(main)]).returncode
 
 
-def run_file(path: Path, registry: LocalRegistry) -> int:
+def run_file(path: Path, registry: Registries) -> int:
     """Expand a copy of the file into the run cache and run that, leaving the file untouched."""
     key = "file-" + hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:12]
     copy = _run_dir(key) / path.name

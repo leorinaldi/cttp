@@ -1,11 +1,11 @@
-"""The resolver: an address → the page it names, pinned and hashed. Spec §5. Spike: names only."""
+"""The resolver: an address → the page it names, pinned and hashed. Spec §5. Names only so far."""
 
 from dataclasses import asdict, dataclass
 
 from cttp import gitcache
 from cttp.address import identity, parse_name, short
 from cttp.extract.python import extract_script
-from cttp.registry import LocalRegistry, split_target
+from cttp.registry import Registries, ref_for, split_target
 
 
 class ResolveError(LookupError):
@@ -39,16 +39,16 @@ class Resolved:
         return d
 
 
-def resolve(text: str, registry: LocalRegistry) -> Resolved:
+def resolve(text: str, registries: Registries) -> Resolved:
     n = parse_name(text)
     if n.symbol:
         raise ResolveError("symbols are not resolvable yet (P1-T3)")
-    entry = registry.lookup(n.name)
+    entry, registry = registries.lookup(n.name)
     locator, path = split_target(entry.target)
     if path is None:
         raise ResolveError(f"{n.name!r} names a whole repository; symbol search arrives in P2-T1")
-    repo = gitcache.ensure_repo(locator, registry.url_for(locator))
-    ref = registry.ref_for(entry, n.rev)
+    ref = ref_for(entry, n.rev)
+    repo = gitcache.ensure_repo(locator, registries.url_for(locator), want=ref)
     try:
         sha = gitcache.rev_parse(repo, ref)
     except gitcache.GitError as e:

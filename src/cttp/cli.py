@@ -9,16 +9,24 @@ import typer
 
 from cttp import __version__, gitcache
 from cttp.address import AddressError
-from cttp.registry import RegistryError, open_registry
+from cttp.config import ConfigError, load_config
+from cttp.registry import RegistryError, open_registries
 from cttp.resolve import ResolveError
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, rich_markup_mode=None)
 state = {"json": False}
 
 RegistryOpt = Annotated[
-    Path | None, typer.Option("--registry", help="Path to a local registry repository.")
+    Path | None,
+    typer.Option("--registry", help="Use only this registry (a local registry repository)."),
 ]
-ERRORS = (RegistryError, ResolveError, AddressError, gitcache.GitError)
+JsonOpt = Annotated[bool, typer.Option("--json", help="Emit JSON.")]
+ERRORS = (RegistryError, ResolveError, AddressError, gitcache.GitError, ConfigError)
+
+
+def want_json(flag: bool) -> None:
+    """`--json` is accepted both before and after the subcommand."""
+    state["json"] = state["json"] or flag
 
 
 def emit(data: dict | list, text: str) -> None:
@@ -52,12 +60,13 @@ def main(
 
 
 @app.command()
-def resolve(address: str, registry: RegistryOpt = None) -> None:
+def resolve(address: str, registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
     """Resolve an address to the page it names."""
+    want_json(json_)
     from cttp.resolve import resolve as _resolve
 
     try:
-        r = _resolve(address, open_registry(registry))
+        r = _resolve(address, open_registries(registry))
     except ERRORS as e:
         fail(str(e))
     emit(
@@ -68,32 +77,51 @@ def resolve(address: str, registry: RegistryOpt = None) -> None:
 
 
 @app.command()
+def config(registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
+    """Show the effective configuration: the file, the registry list, the remotes."""
+    want_json(json_)
+    try:
+        cfg = load_config(registry)
+    except ERRORS as e:
+        fail(str(e))
+    lines = [f"config: {cfg.path or 'not present; defaults'}", "registries:"]
+    lines += [f"  {r}" for r in cfg.registries]
+    lines.append("remotes:" + ("" if cfg.remotes else " (none)"))
+    lines += [f"  {k} -> {v}" for k, v in cfg.remotes.items()]
+    emit(cfg.to_json(), "\n".join(lines))
+
+
+@app.command()
 def serve(
     port: Annotated[int, typer.Option("--port")] = 3120,
     registry: RegistryOpt = None,
+    json_: JsonOpt = False,
 ) -> None:
     """Serve the registry contract and the viewer on http://localhost:3120."""
+    want_json(json_)
     import os
 
     import uvicorn
 
     try:
-        reg = open_registry(registry)
+        reg = open_registries(registry)
     except ERRORS as e:
         fail(str(e))
-    os.environ["CTTP_REGISTRY"] = str(reg.path)
+    if registry:
+        os.environ["CTTP_REGISTRY"] = str(registry)
     typer.echo(f"cttp registry {reg.describe()} — http://localhost:{port}", err=True)
     uvicorn.run("cttp.server.app:app", host="127.0.0.1", port=port, log_level="warning")
 
 
 @app.command()
-def expand(files: list[Path], registry: RegistryOpt = None) -> None:
+def expand(files: list[Path], registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
     """Expand every unexpanded `# cttp:` link in the given files, in place."""
+    want_json(json_)
     from cttp.expand import expand_file
 
     results = {}
     try:
-        reg = open_registry(registry)
+        reg = open_registries(registry)
         for f in files:
             results[str(f)] = expand_file(f, reg)
     except ERRORS as e:
@@ -110,13 +138,14 @@ def expand(files: list[Path], registry: RegistryOpt = None) -> None:
 
 
 @app.command()
-def check(files: list[Path], registry: RegistryOpt = None) -> None:
+def check(files: list[Path], registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
     """Verify every link: stamped, code hashes to its id, resolvable. Exit 1 on any failure."""
+    want_json(json_)
     from cttp.expand import check_file
 
     results = {}
     try:
-        reg = open_registry(registry)
+        reg = open_registries(registry)
         for f in files:
             results[str(f)] = check_file(f, reg)
     except ERRORS as e:
@@ -142,12 +171,14 @@ def run(
     yes: Annotated[
         bool, typer.Option("--yes", help="Skip confirmation (spike: always skipped).")
     ] = False,
+    json_: JsonOpt = False,
 ) -> None:
     """Run an address, or a file with links, without touching the file."""
+    want_json(json_)
     from cttp.expand import is_address, run_address, run_file
 
     try:
-        reg = open_registry(registry)
+        reg = open_registries(registry)
         code = run_address(target, reg) if is_address(target) else run_file(Path(target), reg)
     except ERRORS as e:
         fail(str(e))

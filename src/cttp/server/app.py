@@ -1,6 +1,6 @@
 """`cttp serve`: the registry contract (spec §8) and the viewer (spec §9) on port 3120.
 
-Spike: the three name routes and an index page, over the local registry repository.
+The three name routes and an index page, over the configured registries (HTTP backend: P0-T4).
 """
 
 from pathlib import Path
@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from cttp import __version__, gitcache
 from cttp.address import AddressError
-from cttp.registry import RegistryError, open_registry
+from cttp.registry import RegistryError, open_registries
 from cttp.resolve import ResolveError, resolve
 
 app = FastAPI(title="cttp registry", version=__version__)
@@ -22,8 +22,8 @@ templates = jinja2.Environment(
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    reg = open_registry()
-    entries = [reg.lookup(n) for n in reg.names()]
+    reg = open_registries()
+    entries = [reg.lookup(n)[0] for n in reg.names()]
     return templates.get_template("index.html").render(entries=entries, registry=reg.describe())
 
 
@@ -33,10 +33,10 @@ def name_page(slug: str):
     if want_json:
         slug = slug[: -len(".json")]
     name, _, version = slug.partition("@")
-    reg = open_registry()
+    reg = open_registries()
     try:
         r = resolve(f"{name}@{version}" if version else name, reg)
-        entry = reg.lookup(name)
+        entry, _ = reg.lookup(name)
     except (RegistryError, ResolveError, AddressError, gitcache.GitError) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     if want_json:

@@ -28,10 +28,20 @@ def _git(*args: str, cwd: Path | None = None) -> str:
     return proc.stdout
 
 
-def ensure_repo(locator: str, url: str) -> Path:
-    """Clone `url` as a bare repo for `locator`, or fetch it if already cached."""
+def is_sha(ref: str) -> bool:
+    return len(ref) >= 12 and all(c in "0123456789abcdef" for c in ref.lower())
+
+
+def ensure_repo(locator: str, url: str, want: str | None = None) -> Path:
+    """Clone `url` as a bare repo for `locator`, or fetch it if already cached.
+
+    A fetch is skipped when `want` is a commit SHA the cache already has: pinned addresses never
+    move, so `check` on an expanded file needs no network once the repository is cached.
+    """
     dest = repos_dir() / locator
     if (dest / "HEAD").exists():
+        if want and is_sha(want) and _has_commit(dest, want):
+            return dest
         _git(
             "fetch",
             "--quiet",
@@ -44,6 +54,14 @@ def ensure_repo(locator: str, url: str) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
         _git("clone", "--bare", "--quiet", url, str(dest))
     return dest
+
+
+def _has_commit(repo: Path, sha: str) -> bool:
+    try:
+        rev_parse(repo, sha)
+    except GitError:
+        return False
+    return True
 
 
 def rev_parse(repo: Path, ref: str) -> str:

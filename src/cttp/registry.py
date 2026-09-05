@@ -1,13 +1,15 @@
-"""The registry: names → addresses. Spike: a local registry repository only (spec §8).
+"""The registry: names → addresses (spec §8).
 
-P0-T4 adds the HTTP backend; P0-T3 adds the config file that lists registries.
+An ordered list of registries from the config, first match wins. Each is a **local registry
+repository** (`cttp.toml` + `names/*.toml`) or an HTTP registry (P0-T4).
 """
 
-import os
 import subprocess
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from cttp.config import Config, is_url, load_config
 
 
 class RegistryError(LookupError):
@@ -32,6 +34,12 @@ def split_target(target: str) -> tuple[str, str | None]:
     return "/".join(parts[:3]), (parts[3] if len(parts) == 4 else None)
 
 
+def ref_for(entry: Entry, version: str | None = None) -> str:
+    """A version label maps to a ref of the target repository; anything else is a ref itself."""
+    label = version or entry.default
+    return entry.versions.get(label, label)
+
+
 class LocalRegistry:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -39,7 +47,7 @@ class LocalRegistry:
         if not meta_file.exists():
             raise RegistryError(f"{self.path} is not a registry repository (no cttp.toml)")
         meta = tomllib.loads(meta_file.read_text(encoding="utf-8"))
-        self.repo: str | None = meta.get("repo")
+        self.name: str | None = meta.get("name")
 
     def describe(self) -> str:
         return str(self.path)
@@ -61,29 +69,71 @@ class LocalRegistry:
             versions=dict(d.get("versions", {})),
         )
 
-    def ref_for(self, entry: Entry, version: str | None = None) -> str:
-        """A version label maps to a ref of the target repository; anything else is a ref itself."""
-        label = version or entry.default
-        return entry.versions.get(label, label)
+
+class HttpRegistry:
+    """A registry served over the spec §8 contract. The client arrives in P0-T4."""
+
+    def __init__(self, url: str):
+        self.url = url.rstrip("/")
+
+    def describe(self) -> str:
+        return self.url
+
+    def names(self) -> list[str]:
+        return []
+
+    def lookup(self, name: str) -> Entry:
+        raise RegistryError(f"{name!r}: HTTP registry {self.url} is not supported yet (P0-T4)")
+
+
+Registry = LocalRegistry | HttpRegistry
+
+
+class Registries:
+    """The configured registries, in order. The first that knows a name answers for it."""
+
+    def __init__(self, config: Config):
+        self.config = config
+        self.items: list[Registry] = []
+        for entry in config.registries:
+            if is_url(entry):
+                self.items.append(HttpRegistry(entry))
+            else:
+                p = Path(entry)
+                if not p.exists():
+                    raise RegistryError(
+                        f"no registry at {p}; clone one there (git clone "
+                        "https://github.com/leorinaldi/cttp-registry "
+                        f"{p}) or set `registries` in {config.path or 'the config file'}"
+                    )
+                self.items.append(LocalRegistry(p))
+
+    def describe(self) -> str:
+        return ", ".join(r.describe() for r in self.items)
+
+    def names(self) -> list[str]:
+        return sorted({n for r in self.items for n in r.names()})
+
+    def lookup(self, name: str) -> tuple[Entry, Registry]:
+        errors: list[str] = []
+        for r in self.items:
+            try:
+                return r.lookup(name), r
+            except RegistryError as e:
+                errors.append(str(e))
+        if len(errors) == 1:
+            raise RegistryError(errors[0])
+        raise RegistryError(
+            f"{name!r} is not a name in any registry asked: {self.describe()}"
+            + "".join(f"\n  {e}" for e in errors)
+        )
 
     def url_for(self, locator: str) -> str:
-        """Spike: the registry repo itself is served from its local path; all else from https."""
-        if self.repo and locator == self.repo:
-            return str(self.path)
-        return f"https://{locator}.git"
+        return self.config.url_for(locator)
 
 
-def default_registry_path() -> Path:
-    return Path.home() / ".local" / "share" / "cttp" / "registry"
-
-
-def open_registry(path: str | Path | None = None) -> LocalRegistry:
-    chosen = Path(path or os.environ.get("CTTP_REGISTRY") or default_registry_path())
-    if not chosen.exists():
-        raise RegistryError(
-            f"no registry at {chosen}; run scripts/make_local_registry.py or pass --registry"
-        )
-    return LocalRegistry(chosen)
+def open_registries(registry: str | Path | None = None) -> Registries:
+    return Registries(load_config(registry))
 
 
 def create_local_registry(dest: Path, files: Path) -> Path:

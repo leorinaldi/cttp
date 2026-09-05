@@ -26,3 +26,9 @@ def test_check_exit_codes(registry, tmp_path):
     assert runner.invoke(app, ["check", str(f)]).exit_code == 1
     assert runner.invoke(app, ["expand", str(f)]).exit_code == 0
     assert runner.invoke(app, ["check", str(f)]).exit_code == 0
+
+
+def test_json_flag_after_the_subcommand(registry):
+    res = runner.invoke(app, ["resolve", "hello-world", "--json"])
+    assert res.exit_code == 0, res.output
+    assert json.loads(res.stdout)["address"].startswith("hello-world@")
