@@ -131,11 +131,19 @@ def test_the_command_line_isolates_the_run(tmp_path):
     ):
         assert flag in text, flag
     assert "--bare" not in argv
-    assert argv[argv.index("--append-system-prompt") + 1] == harness.APPEND_SYSTEM_PROMPT
+    given = argv[argv.index("--append-system-prompt") + 1]
+    assert given.startswith(harness.APPEND_SYSTEM_PROMPT)
+    assert given.endswith(harness.SEARCH_NOTES["links"])
+    assert "cttp MCP tools" in given and "grep" in given
     with pytest.raises(harness.HarnessError):
         harness.claude_argv(task, harness.ARMS["links"], settings, None)
     base = harness.claude_argv(task, harness.ARMS["baseline"], settings, None)
     assert "--mcp-config" not in base and "--disallowedTools" not in base
+    # Both arms are told what their search is; only the note differs.
+    base_prompt = base[base.index("--append-system-prompt") + 1]
+    assert base_prompt.startswith(harness.APPEND_SYSTEM_PROMPT)
+    assert base_prompt.endswith(harness.SEARCH_NOTES["baseline"])
+    assert base_prompt != given
 
 
 def test_the_stream_parser_reads_init_tool_calls_denials_and_the_result():

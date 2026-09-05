@@ -15,7 +15,13 @@ key) — with two **arms** that differ only in the tools the agent has:
 `Read` is in both arms because `Edit` and `Write` refuse a file the session has not read; see
 `ARMS`. The arms differ in how the agent finds code, not in whether it can read what it edits.
 
-Same model, same `--append-system-prompt`, same `--max-turns`, `--permission-mode dontAsk` with
+The appended system prompt is shared but for one sentence per arm naming that arm's search — the
+cttp tools for `links`, the shell for `baseline` (`SEARCH_NOTES`). Without it the links arm spent
+a turn per run discovering its tool set from a permission denial, which measures the deny list
+and not the tools; the note is symmetric so neither arm has to find its search by trial. Each
+run records the exact text it was given as `system_prompt`.
+
+Same model, same `--max-turns`, `--permission-mode dontAsk` with
 `--permission-prompts none`, run from a fresh checkout under a scratch directory with
 `--setting-sources ""` and `--no-session-persistence`, so nothing in `~/.claude` (hooks, plugins,
 memory, the user-scope cttp MCP server) reaches either arm.
@@ -83,9 +89,34 @@ SHELL_READERS = [
 APPEND_SYSTEM_PROMPT = (
     "You are working in a checkout of a repository; the working directory is its root. "
     "Nobody can answer questions, so do not ask any: complete the task with the tools you have, "
-    "run the test command named in the task once when you are done (if it names one), and then "
+    "run the test command named in the task once when you are done (if it names one), exactly as "
+    "the task writes it and without piping it into anything else, and then "
     "stop with a short summary of what you did."
 )
+
+# Each arm is told what its search is. Without this the links arm learned of its tools from a
+# denial — it reached for `grep` first in every one of the P8-T2 first runs, spending a turn to
+# discover its own tool set, which measures the deny list rather than the tools. The note is
+# given to *both* arms so the treatment is symmetric: neither has to find its search by trial.
+# Stated in `docs/benchmark.md`; the exact text of each run is recorded as `system_prompt`.
+SEARCH_NOTES = {
+    "links": (
+        "Your search is the cttp MCP tools, not the shell: `search` finds a definition by name "
+        "or docstring, `resolve` returns one definition's text by address, `who` lists what "
+        "links to a definition, `closure` what a definition needs to run, `fold` reads a file "
+        "as its links, `dups` finds copies. The shell's file readers (grep, cat, find, ls, sed) "
+        "are denied; `Read` reads a file whose path you already know."
+    ),
+    "baseline": (
+        "Your search is the shell through Bash: grep, find, ls, cat, sed and the other usual "
+        "readers; `Read` reads a file whose path you already know."
+    ),
+}
+
+
+def system_prompt_for(arm: Arm) -> str:
+    """The shared instruction plus the arm's search note (see `SEARCH_NOTES`)."""
+    return f"{APPEND_SYSTEM_PROMPT} {SEARCH_NOTES[arm.name]}"
 
 
 @dataclass(frozen=True)
@@ -177,7 +208,7 @@ def claude_argv(task: Task, arm: Arm, settings: Settings, mcp_config: Path | Non
         "--setting-sources", "",
         "--no-session-persistence",
         "--strict-mcp-config",
-        "--append-system-prompt", APPEND_SYSTEM_PROMPT,
+        "--append-system-prompt", system_prompt_for(arm),
         "--tools", *arm.tools,
         "--allowedTools", *arm.allowed(task.test_command),
     ]  # fmt: skip
@@ -380,6 +411,7 @@ def build_record(
         "family": task.family,
         "arm": arm.name,
         "run": run_number,
+        "system_prompt": system_prompt_for(arm),
         "status": status,
         "passed": graded.get("passed"),
         "model": settings.model,

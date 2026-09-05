@@ -60,6 +60,15 @@ Two facts about Claude Code 2.1.261 shaped this:
   rules, because `dontAsk` mode auto-approves the read-only command set and would otherwise let
   them through.
 
+- **An arm that is not told what its search is discovers it by denial.** In the first runs the
+  links arm reached for `grep` or `cat` in every single run and learned of its own tools from
+  the permission denial — a wasted turn per run, sometimes two, which measures the deny list
+  rather than the tools. Since 2026-09-05 the appended system prompt carries **one sentence per
+  arm naming that arm's search** (`SEARCH_NOTES` in `harness.py`): the six cttp tools and what
+  each answers for `links`, the shell's readers for `baseline`. The treatment is symmetric —
+  neither arm has to find its search by trial — and every record carries the exact text it was
+  given as `system_prompt`. The report states this, because it is a change to the arms.
+
 Every tool call of every run is in the record (`tool_calls`, `tool_counts`), so a leak — a
 reader that slipped past the deny list, a cttp tool the baseline somehow reached — is visible,
 and `permission_denials` counts what the rules stopped.
@@ -250,9 +259,11 @@ benchmark on well-known code cannot avoid; say so in the report. The five-hour w
 about 0.25 to 0.41 over these six runs (~480k tokens), which puts ninety runs at roughly two
 windows.
 
-Levers before the full run, if the pattern holds: tell the links arm in the prompt or system
-prompt that the cttp tools are its search (the follow-up P8-T1 recorded), and note in the report
-that a tool's JSON payload is counted as context whatever the agent needed from it.
+**The lever was pulled before the full run** (2026-09-05): both arms are now told what their
+search is, one sentence each (`SEARCH_NOTES`; see §The arms). These six runs therefore predate
+the arms as they now stand and are **not** part of P8-T3's ninety — they are kept as the record
+of why the note exists. The other reading stands whatever the prompt says: a tool's JSON payload
+is counted as context whatever the agent needed out of it, and the report says so.
 
 ## Caveats for the report
 
@@ -260,3 +271,7 @@ Both arms run inside Claude Code's harness, so the comparison is between tool se
 Code, under its system prompt and its agent loop — not between "with cttp" and "without" in the
 abstract. The token counts are what Claude Code reports; cache reads are counted as context
 consumed because the model attended to them, whatever they cost.
+
+Each arm is told in one sentence what its search is, so neither discovers its tool set from a
+permission denial; the two notes are in `SEARCH_NOTES` and in every record's `system_prompt`.
+That is a deliberate intervention on both arms, and the report names it.
