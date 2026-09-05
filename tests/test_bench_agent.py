@@ -212,7 +212,9 @@ def test_a_replay_reproduces_the_recorded_numbers(record_path, tmp_path):
     assert replayed["replayed_from"] == str(record_path)
     written = json.loads((tmp_path / "out" / record_path.name).read_text())
     assert harness.numbers(written) == harness.numbers(recorded)
-    assert (tmp_path / "out" / recorded["stream_file"]).exists()
+    # The stream is copied under the name it actually has: committed streams are gzipped.
+    copied = tmp_path / "out" / recorded["stream_file"]
+    assert copied.exists() or copied.with_suffix(copied.suffix + ".gz").exists()
     # what the record says about isolation and the arm
     init_tools = set(recorded["tools_available"])
     if recorded["arm"] == "links":
