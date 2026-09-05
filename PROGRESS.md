@@ -36,10 +36,8 @@ the hook an identity address falls through to, and `Resolved.links` / `Page.link
 page's asserted links with line numbers. The `pyrepo` fixture (`tests/fixtures/pyrepo/`) is the
 one the P4-T1 acceptance names; a consumer fixture linking to it is still to be made.
 
-Before that, two small things worth a look: (1) `docs/spec.md` §8 does not yet list the fields
-the contract grew in Phases 1–3 (`%23<symbol>` route, `refs[].name`, `imports.statements`,
-`links`, `unresolved`) — Leo's call whether to edit the spec now or at P7-T3; (2) the viewer
-(`name.html`) does not show a page's `links` or `unresolved` names yet — P4-T4 rewrites it anyway.
+One small thing worth a look: the viewer (`name.html`) does not show a page's `links` or
+`unresolved` names yet — P4-T4 rewrites it anyway.
 
 If Leo wants to play, the demo is in **How to run** below. New since last time: `cttp closure
 <address>`, `cttp add`, `cttp expand --package`, `cttp check --fix`, `cttp update`, `cttp fold`,
@@ -325,9 +323,6 @@ trigger that would schedule it.
   target whose only useful ref is a slashed branch (an escape such as `@{release/1.0}` would do)
 - Starlette warns that `httpx` with its test client is deprecated in favour of `httpx2` →
   **unscheduled**; trigger: the warning becomes an error on upgrade
-- The `%23<symbol>` extension of the registry contract is in the code and `overview.md` but not
-  in spec §8's route table → **unscheduled**; trigger: the next spec edit, or publishing the spec
-  on `cttp.ai` (P7-T3)
 - A **script page with a blank line followed by a non-indented statement** ends its block early
   under spec §4's delimiter, so `check` reports drift on it; no fixture hits this yet →
   **unscheduled**; trigger: the first real script page with an internal blank line (a fix would
@@ -348,9 +343,6 @@ trigger that would schedule it.
 - `latest()` resolves the pinned page and then the head page through `resolve()`, so **`--latest`
   stores both in the object cache** — intended, but it means the head page's location is
   recorded as "seen" without anyone linking to it → **standing**, revisit at P4
-- **The registry contract grew fields the spec does not list** — `refs[].name`,
-  `imports.statements`, `links`, `unresolved` (Phase 3), `%23<symbol>` (Phase 1); `from_json`
-  tolerates their absence → **unscheduled**; trigger: the next spec edit, or P5-T1's schema freeze
 - **`update` on a vendored module does not follow through to the user's `vendor=` link**: after
   the module's root moves, `check` on the user's file reports drift ("the module holds X; the
   link says Y") and the person re-expands → **unscheduled**; trigger: the first real `--package`

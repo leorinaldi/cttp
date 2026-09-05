@@ -190,7 +190,9 @@ not.
 
 `cttp resolve <address>` returns the definition or script: its pinned address, source text,
 language, kind, name, signature, docstring, license (from the repository's license file, derived),
-the span, and the identity and shape hashes.
+the span, the identity and shape hashes, its derived references and imports, the link lines it
+asserts, and its free names. Section 8 lists the fields; the registry contract serves the same
+object.
 
 **Decision — the resolver is git, locally, behind a content-addressed cache.** Resolution fetches
 the repository into a local cache (`~/.cache/cttp/repos/<host>/<owner>/<repo>`) with plain `git`,
@@ -352,6 +354,36 @@ that answers, for a name:
 | `GET /<name>` | the page: source, language, kind, license, the pinned address it currently resolves to, version labels, history, who links here |
 | `GET /<name>.json` | the same as JSON, in the resolver's schema |
 | `GET /<name>@<version>.json` | the resolution for one version label or ref |
+| `GET /<name>[@<version>]%23<symbol>.json` | the resolution for one definition of the target: the `#symbol` of section 2, percent-encoded, on the same route |
+
+There is no locator route and no identity route: the contract answers names only. A locator goes
+straight to git and an identity to the object cache and the index (section 5), neither needing a
+registry. There is no listing route either; a registry is asked about a name, never enumerated.
+
+**The resolver's object.** The JSON the contract returns is what `cttp resolve --json` prints —
+**the server resolves, the client asks.** Every field is present, `null` when not available:
+
+| Field | Meaning |
+|---|---|
+| `name`, `address` | the registry name, or `null` for a bare locator; the pinned address (section 2: a 12-hex rev, the `#symbol` kept) |
+| `rev` | the full commit SHA |
+| `identity`, `identity_full` | `sha256:<12 hex>` and the full hex of the identity hash |
+| `shape`, `shape_full` | the same for the shape hash; `null` when the language has no extractor |
+| `kind`, `language` | `function`, `class`, `constant` or `script`; `python`, or `text` for a file with no extractor |
+| `symbol`, `signature`, `docstring`, `span` | for a definition: its dotted name, its signature without the keyword, the first docstring paragraph as one line, `[first, last]` lines in the origin file |
+| `source` | the page's own text, normalized (section 2), with its link lines taken out (section 4) |
+| `description` | the entry's one line, asserted; `null` when the entry has none |
+| `license` | the SPDX id of the repository's license file at the rev, or `null` |
+| `target`, `path`, `registry` | the entry's `host/owner/repo/path`, the path within it, and which registry answered |
+| `refs` | derived references to files and definitions in the same repository: `{address, name, relation: "ref", origin: "derived"}`, the address a pinned locator at the same rev, `name` the text the page reaches it by (`REG_BITS`, `decode.STEP`, `r2m`) — what decides whether it can be inlined (section 7) |
+| `imports` | `{stdlib, third_party, statements}`: the outside modules a definition needs, split by `sys.stdlib_module_names`, and the import statements that bind them |
+| `links` | the link lines found in the page's text, asserted: `{address, relation, fields, description, derived, line, indent, origin: "asserted"}` |
+| `unresolved` | the page's free names: used, bound by nothing in it — what a closure must bind |
+| `origin` | which fields are derived and which asserted (section 10), and `location`: `repository` or `cache` |
+
+`links` and `unresolved` may be absent from an older server; a client treats a missing one as
+empty. The object the tool prints for an identity address adds `locations` and `via`; those
+describe the cache that answered and are not part of the contract.
 
 `cttp serve` provides this contract at **http://localhost:3120** from a local registry repository
 and the local index, and the tool's default registry is that URL until changed. **`cttp.ai`**,

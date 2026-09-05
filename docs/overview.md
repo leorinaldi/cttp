@@ -187,7 +187,7 @@ links to spec §8 in this private repo.
   stdlib or third-party top-level module, decided by `sys.stdlib_module_names`. A parameter
   shadows a module-level import.
 - **A `#symbol` travels the HTTP contract as `%23` in the existing route.** The contract grew
-  no route; spec §8's table does not yet say so (a follow-up in `PROGRESS.md`).
+  no route; spec §8's table lists it, and the resolver's object beneath the table.
 - **The block beneath a link is recorded, never guessed.** It begins after the link's *stack*
   (consecutive link lines share one block) and ends at the next link line, at a blank line
   followed by a line indented no deeper than the link, or at EOF. `find_links()` writes it onto
