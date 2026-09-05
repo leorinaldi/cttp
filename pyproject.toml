@@ -30,9 +30,10 @@ packages = ["src/cttp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"  # `uv run pytest -m slow` runs the corpus crawl (about two minutes)
 markers = [
   "network: the test talks to a closed local port; the no-socket guard is lifted",
-  "slow: reads the driver corpus under bench/; skipped when it is not fetched",
+  "slow: crawls the driver corpus under bench/ (minutes); deselected by default, skipped when it is not fetched",
 ]
 
 [tool.ruff]

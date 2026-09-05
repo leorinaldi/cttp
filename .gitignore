@@ -32,3 +32,4 @@ __pycache__/
 
 # Local scratch (the spike's local registry lives here)
 .local/
+bench/drivers/corpus-preserved/

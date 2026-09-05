@@ -1,0 +1,45 @@
+{
+  "corpus": {
+    "repository": "github.com/torvalds/linux",
+    "tag": "v7.3-rc1",
+    "commit": "cee9395acd8043be0644b25c34bfa86623f2b935",
+    "directories": [
+      "drivers/gpio",
+      "drivers/hwmon",
+      "drivers/iio/accel",
+      "drivers/iio/temperature",
+      "drivers/rtc"
+    ],
+    "c_files": 736,
+    "how_identified": "The preserved copy (fetched 2026-09-04 from raw.githubusercontent.com/torvalds/linux/master, its urls.txt files say so) was hashed file by file as git blobs and compared with the GitHub contents API listing of each directory: every source file is identical to the tree at every first-parent commit of master from 275bc4eedf2c (2026-08-28, the rtc merge, the last change to any of the five directories) through 4d7d9486c04d (2026-09-05). The tag v7.3-rc1 (2026-08-30) lies in that window and is the pin. The original fetch took each directory's own files only, never a subdirectory, and skipped Kconfig, Makefile and TODO; fetch.sh reproduces exactly that."
+  },
+  "derivation": "Derived on 2026-09-05 by crawling the corpus (`cttp index add bench/drivers/corpus && cttp index crawl`) and running `cttp dups --shape --json` and `cttp dups --json`, then confirmed by reading every function listed. The tool was given no hint. The vision's sentence about a decoder written four times across three subsystems, two copies for the same silicon, came from the measurement session's own reading and was not preserved; what the tool finds, at the granularity of a whole definition, is recorded here instead: four eight-bit temperature decoders of one shape in four hwmon drivers, and verbatim copies of a decoder in two drivers (twice over). See README.md.",
+  "groups": [
+    {
+      "by": "shape",
+      "what": "the eight-bit temperature decoder `(s8)reg * 1000`, written four times under three names, once with spaces for tabs",
+      "locations": [
+        "drivers/hwmon/asb100.c#TEMP_FROM_REG",
+        "drivers/hwmon/lm93.c#LM93_TEMP_FROM_REG",
+        "drivers/hwmon/smsc47b397.c#temp_from_reg",
+        "drivers/hwmon/w83627hf.c#TEMP_FROM_REG"
+      ]
+    },
+    {
+      "by": "identity",
+      "what": "`static inline long temp_from_reg(s8 reg) { return reg * 1000; }`, byte for byte, in two Nuvoton drivers",
+      "locations": [
+        "drivers/hwmon/nct6694-hwmon.c#temp_from_reg",
+        "drivers/hwmon/w83795.c#temp_from_reg"
+      ]
+    },
+    {
+      "by": "identity",
+      "what": "`static inline int TEMP_FROM_REG(s8 val) { return val * 1000; }`, byte for byte, in two drivers",
+      "locations": [
+        "drivers/hwmon/lm78.c#TEMP_FROM_REG",
+        "drivers/hwmon/smsc47m192.c#TEMP_FROM_REG"
+      ]
+    }
+  ]
+}

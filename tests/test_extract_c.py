@@ -252,7 +252,6 @@ def test_latest_follows_a_moved_c_function_by_identity(registry, tmp_path):
 # --- the corpus: plan P6-T1's acceptance ---------------------------------------------------------
 
 
-@pytest.mark.slow
 @pytest.mark.skipif(not (CORPUS / "hwmon" / "lm75.c").exists(), reason="the corpus is not fetched")
 def test_the_lm75_decoder_from_the_corpus(registry, tmp_path):
     files = {

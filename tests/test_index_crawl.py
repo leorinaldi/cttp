@@ -6,7 +6,7 @@ import json
 import subprocess
 
 import pytest
-from conftest import add_remote_repo, commit_to_remote
+from conftest import LOCATOR_PREFIX, add_remote_repo, commit_to_remote
 from typer.testing import CliRunner
 
 from cttp import objects
@@ -232,3 +232,28 @@ def test_a_malformed_link_line_costs_the_line_not_the_file(registry, index, tmp_
     assert again.status == "crawled" and counts(conn) == before
     res = runner.invoke(app, ["index", "crawl", "--force"])
     assert res.exit_code == 0 and "2 skipped" in res.stdout and "ignored" in res.stdout
+
+
+def test_a_sparse_clone_is_crawled_as_the_files_it_has(registry, index, tmp_path):
+    """A blobless sparse clone (the driver corpus) has only its checked-out files' blobs; the crawl
+    reads those and the root files, nothing beyond. A detached HEAD at a tag is named by the tag."""
+    locator = add_remote_repo(
+        tmp_path,
+        "sparse",
+        {"a/x.py": "X = 1\n", "b/y.py": "Y = 2\n", "README.md": "sparse\n"},
+    )
+    bare = tmp_path / "remotes" / LOCATOR_PREFIX / "sparse"
+    work = tmp_path / "work" / "sparse"
+    work.parent.mkdir(parents=True)
+    subprocess.run(["git", "clone", "-q", "--sparse", str(bare), str(work)], check=True)
+    subprocess.run(["git", "-C", str(work), "sparse-checkout", "set", "a"], check=True)
+    subprocess.run(["git", "-C", str(work), "checkout", "-q", "v1"], check=True)
+    # a `clone --branch <tag>` knows no origin HEAD; then the checked-out tag names the revision
+    subprocess.run(["git", "-C", str(work), "remote", "set-head", "origin", "-d"], check=True)
+    assert (work / "a" / "x.py").exists() and not (work / "b").exists()
+    conn = open_index(index)
+    assert add(conn, str(work), registry.config)["default_branch"] == "v1"
+    [r] = crawl(conn, registry)
+    assert r.repo == locator and r.files == 2 and r.skipped == []  # README.md and a/x.py
+    paths = {p for (p,) in conn.execute("SELECT DISTINCT path FROM locations")}
+    assert paths == {"a/x.py"}

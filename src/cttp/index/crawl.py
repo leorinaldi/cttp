@@ -91,7 +91,7 @@ def add(conn: sqlite3.Connection, target: str, config: Config) -> dict:
             branch = _git("symbolic-ref", "--short", "refs/remotes/origin/HEAD", cwd=root)
             branch = branch.removeprefix("origin/")
         except IndexingError:
-            branch = _git("rev-parse", "--abbrev-ref", "HEAD", cwd=root)
+            branch = _checked_out(root)
     else:
         if not LOCATOR_RE.match(target.strip()):
             raise IndexingError(
@@ -177,7 +177,7 @@ def _repo_handle(row: dict, registries: Registries, rev: str | None) -> tuple[Pa
     locator = row["locator"]
     if row["local_path"] and Path(row["local_path"]).exists():
         repo = Path(row["local_path"])
-        branch = row["default_branch"] or _git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo)
+        branch = row["default_branch"] or _checked_out(repo)
         ref = rev or "HEAD"
     else:
         repo = gitcache.ensure_repo(locator, registries.url_for(locator), want=rev)
@@ -188,6 +188,27 @@ def _repo_handle(row: dict, registries: Registries, rev: str | None) -> tuple[Pa
     except gitcache.GitError as e:
         raise IndexingError(f"{ref!r} is not a revision of {locator}: {e}") from e
     return repo, sha, branch
+
+
+def _checked_out(root: Path | str) -> str:
+    """The branch a working copy has checked out; a detached HEAD at a tag is named by the tag."""
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD", cwd=root)
+    if branch != "HEAD":
+        return branch
+    try:
+        return _git("describe", "--tags", "--exact-match", "HEAD", cwd=root)
+    except IndexingError:
+        return branch
+
+
+def is_sparse(repo: Path | str) -> bool:
+    """Whether a working copy is a sparse checkout. A blobless sparse clone has only the checked-out
+    files' blobs — reading anything else would fetch it from the remote, which the crawl never
+    does — so a sparse clone is crawled as the files it has on disk."""
+    try:
+        return bool(_git("sparse-checkout", "list", cwd=repo))
+    except IndexingError:
+        return False
 
 
 def _crawl_repo(
@@ -205,6 +226,8 @@ def _crawl_repo(
         for table in ("links", "locations", "revisions"):
             conn.execute(f"DELETE FROM {table} WHERE repo = ? AND sha = ?", (locator, sha))
     files = gitcache.ls_tree(repo, sha)
+    if row["local_path"] and is_sparse(repo):
+        files = [f for f in files if (repo / f).is_file()]
     committed = int(_git("show", "-s", "--format=%ct", sha, cwd=repo) or 0) or None
     conn.execute(
         "INSERT INTO revisions(repo, sha, committed_at, license, crawled_at, files) "
