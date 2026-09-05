@@ -25,7 +25,6 @@ Each document has one job. Keeping them apart is what stops any of them from rot
 | [`docs/vision.md`](docs/vision.md) | **Why this exists** — purpose and intent | when direction is in question |
 | [`docs/spec.md`](docs/spec.md) | **The end state** — the finished product, its interface, its structure underneath, non-goals | when touching scope or the core model |
 | [`docs/plan.md`](docs/plan.md) | **How we get there** — phased tasks with acceptance checks. Not a status doc | before starting any build task |
-| [`docs/project-start-sequence.md`](docs/project-start-sequence.md) | **The build arc** — which stage we are in, what comes next | at session end, when writing next steps |
 
 Add subsystem design docs and runbooks as `docs/*.md` when they earn their place, and **register each
 one in this table** — an unregistered doc is invisible to the next session.
@@ -68,10 +67,9 @@ Trigger: Leo says **"start session"**, **"begin session"**, **"where are we"**, 
    orients, it does not re-derive the whole build.
 
 5. **Propose next steps, and let Leo choose.** Offer 2–4 concrete actions and recommend one. Take
-   the recommendation from `PROGRESS.md`'s **Next session** block; if that is empty or stale, derive
-   it from [`docs/project-start-sequence.md`](docs/project-start-sequence.md) — early on, the honest
-   answer is usually "write the next doc in the arc." **Wait for Leo to pick before doing heavy
-   work.**
+   the recommendation from `PROGRESS.md`'s **Next session** block; if that is empty or stale, take
+   the next unstarted task from [`docs/plan.md`](docs/plan.md). **Wait for Leo to pick before doing
+   heavy work.**
 
 ---
 
@@ -86,9 +84,9 @@ Trigger: Leo says **"end session"**, **"wrap up"**, **"done for today"**, or sim
 2. **Update [`PROGRESS.md`](PROGRESS.md).** This is the doc the *next* session reads for state —
    make it accurate:
    - Refresh **Current state — working & verified**, tightly.
-   - Rewrite **Next session — suggested next steps**. Consult
-     [`docs/project-start-sequence.md`](docs/project-start-sequence.md) to see which stage the
-     project is in and what the arc says comes next.
+   - Rewrite **Next session — suggested next steps**. Take the next step from
+     [`docs/plan.md`](docs/plan.md) — the next unstarted task, or the next phase if this one is
+     done.
    - Add a **Build history** entry: what changed and *why*, including the load-bearing decisions.
      **Then trim the history to the five most recent sessions** — older entries get deleted, not
      archived. `git log` is the archive; a bloated `PROGRESS.md` taxes every future session start.

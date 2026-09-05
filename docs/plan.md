@@ -25,9 +25,9 @@ before anything is built carefully._
 **One task = one session = one commit.** If a task needs two commits, that is a signal it should
 have been two tasks — split it here first.
 
-**Between Phase 0 and Phase 1, write [`overview.md`](overview.md).** That is Stage 4 of
-[`project-start-sequence.md`](project-start-sequence.md); it is not a task here because it is not
-code, but it is not optional either.
+**Between Phase 0 and Phase 1, write [`overview.md`](overview.md).** It is not a task here because
+it is not code, but it is not optional either. (Done; the start-sequence document that asked for it
+has been retired.)
 
 ## The shape of the plan
 
@@ -92,7 +92,7 @@ Phase 8 the benchmark — the number the vision says decides whether any of this
 ```text
 cttp/
   CLAUDE.md  AGENTS.md  PROGRESS.md
-  docs/                  vision.md  spec.md  plan.md  overview.md  project-start-sequence.md
+  docs/                  vision.md  spec.md  plan.md  overview.md
   pyproject.toml         the cttp distribution; `cttp` console script
   uv.lock
   src/cttp/
