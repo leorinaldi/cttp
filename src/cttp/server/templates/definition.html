@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}sha256:{{ identity[:12] }} · cttp{% endblock %}
+{% block body %}
+<h1>sha256:{{ identity[:12] }}{% if d.kind != 'script' %} <span class="muted">{{ d.name }}</span>{% endif %}</h1>
+<p class="muted">{{ d.kind }} · {{ d.language }} · {{ d.lines }} line(s){% if d.signature %} · <code>{{ d.signature }}</code>{% endif %}{{ m.tag('derived') }}</p>
+
+<div class="facts">
+<section class="derived-col">
+<h2>Derived — from the code</h2>
+<dl>
+  <dt>identity</dt><dd><code>sha256:{{ identity }}</code></dd>
+  <dt>shape</dt><dd>{% if d.shape %}<code>sha256:{{ d.shape[:12] }}</code> — <a href="/dups?shape=1">same shape elsewhere?</a>{% else %}not available{% endif %}</dd>
+{% if d.docstring %}  <dt>docstring</dt><dd>{{ d.docstring }}</dd>
+{% endif %}{% if page and page.refs %}  <dt>references</dt><dd>{% for ref in page.refs %}<code>{{ ref.address }}</code>{{ "<br>" | safe if not loop.last }}{% endfor %}</dd>
+{% endif %}{% if page and page.imports.stdlib %}  <dt>stdlib</dt><dd>{% for x in page.imports.stdlib %}<code>{{ x }}</code>{{ ", " if not loop.last }}{% endfor %}</dd>
+{% endif %}{% if page and page.imports.third_party %}  <dt>third party</dt><dd>{% for x in page.imports.third_party %}<code>{{ x }}</code>{{ ", " if not loop.last }}{% endfor %}</dd>
+{% endif %}{% if page and page.unresolved %}  <dt>free names</dt><dd>{% for x in page.unresolved %}<code>{{ x }}</code>{{ ", " if not loop.last }}{% endfor %}</dd>
+{% endif %}</dl>
+</section>
+<section class="asserted-col">
+<h2>Asserted — by people</h2>
+<dl>
+{% set named = locations | selectattr('name') | list %}
+{% if named %}  <dt>names</dt><dd>{% for x in named %}<a href="/{{ x.name }}"><code>{{ x.name }}</code></a>{% if x.description %} — {{ x.description }}{% endif %}{{ "<br>" | safe if not loop.last }}{% endfor %}</dd>
+{% endif %}{% if page and page.links %}  <dt>links in the page</dt><dd>{% for k in page.links %}<code>{{ k.relation }}: {{ k.address }}</code>{% if k.description %} <span class="muted">“{{ k.description }}”</span>{% endif %}{{ "<br>" | safe if not loop.last }}{% endfor %}</dd>
+{% endif %}{% if not named and not (page and page.links) %}  <dt></dt><dd class="muted">Nothing asserted: no registry name, no links in the page.</dd>
+{% endif %}</dl>
+</section>
+</div>
+
+<h2>Seen at</h2>
+{{ m.locations(locations, current) }}
+
+<h2>Source</h2>
+<pre>{{ d.source }}</pre>
+
+<h2>Who links here</h2>
+{{ m.backlinks(backlinks) }}
+{% endblock %}

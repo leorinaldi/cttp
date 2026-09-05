@@ -561,6 +561,9 @@ def index_crawl(
     rev: Annotated[
         str | None, typer.Option("--rev", help="Crawl this revision instead of the head.")
     ] = None,
+    force: Annotated[
+        bool, typer.Option("--force", help="Crawl a revision again even if it was crawled.")
+    ] = False,
     registry: RegistryOpt = None,
     index: IndexOpt = None,
     json_: JsonOpt = False,
@@ -571,7 +574,9 @@ def index_crawl(
     from cttp.index.schema import open_index
 
     try:
-        results = crawl(open_index(_index_path(index)), open_registries(registry), rev, repos)
+        results = crawl(
+            open_index(_index_path(index)), open_registries(registry), rev, repos, force
+        )
     except ERRORS as e:
         fail(str(e))
     lines = []

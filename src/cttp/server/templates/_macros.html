@@ -1,0 +1,67 @@
+{% macro tag(origin) -%}
+<span class="tag {{ origin }}">{{ origin }}</span>
+{%- endmacro %}
+
+{% macro d_link(identity) -%}
+<a href="/d/{{ identity | replace('sha256:', '') }}"><code>{{ identity }}</code></a>
+{%- endmacro %}
+
+{% macro repo_link(locator) -%}
+<a href="/r/{{ locator }}"><code>{{ locator }}</code></a>
+{%- endmacro %}
+
+{# Who links here: one row per backlink; the relation and its origin are what the link asserts
+   (or the tool derived); the source identity is always derived. #}
+{% macro backlinks(out) -%}
+{% if out is none %}
+<p class="notice">Not indexed: nothing crawled links here, or the index has not seen this address.</p>
+{% elif out.count == 0 %}
+<p class="notice">Nothing crawled links here.</p>
+{% else %}
+<div class="wrap"><table>
+<tr><th>relation</th><th>from</th><th>identity</th><th>license</th><th>as written</th></tr>
+{% for b in out.backlinks %}
+<tr>
+  <td class="nowrap"><code>{{ b.relation }}</code>{{ tag(b.origin) }}</td>
+  <td>{{ repo_link(b.source.repo) }} <code>{{ b.source.path }}{% if b.source.symbol %}#{{ b.source.symbol }}{% endif %}</code>:{{ b.line }}
+      {% if b.source.kind %}<span class="muted">{{ b.source.kind }}</span>{% endif %}</td>
+  <td class="nowrap">{{ d_link(b.source.identity) }}{{ tag('derived') }}</td>
+  <td class="nowrap">{{ b.source.license if b.source.license is not none else "not available" }}{{ tag('derived') }}</td>
+  <td><code>{{ b.target }}</code>{% if b.description %} <span class="muted">“{{ b.description }}”</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div>
+{% endif %}
+{%- endmacro %}
+
+{% macro locations(locs, current) -%}
+<div class="wrap"><table>
+<tr><th>address</th><th>repository</th><th>license</th><th>crawled</th></tr>
+{% for x in locs %}
+<tr>
+  <td><code>{{ x.address }}</code>{% if x.address in current %}<span class="current">current</span>{% endif %}
+      {% if x.name %} — <a href="/{{ x.name }}"><code>{{ x.name }}</code></a>{{ tag('asserted') }}{% endif %}</td>
+  <td>{{ repo_link(x.repo) }}</td>
+  <td>{{ x.license if x.license is not none else "not available" }}</td>
+  <td class="muted">{{ x.crawled_at }}</td>
+</tr>
+{% endfor %}
+</table></div>
+{%- endmacro %}
+
+{% macro history_table(h) -%}
+{% if h is none or not h.revisions %}
+<p class="notice">Not crawled: the index has no revisions of this repository.</p>
+{% else %}
+<div class="wrap"><table>
+<tr><th>revision</th><th>identity</th><th></th></tr>
+{% for v in h.revisions %}
+<tr>
+  <td><code>{{ v.address }}</code></td>
+  <td>{% if v.identity %}{{ d_link(v.identity) }}{% else %}<span class="muted">absent</span>{% endif %}{{ tag('derived') }}</td>
+  <td class="muted">{% if v.absent %}{% elif v.changed and not loop.first %}changed{% elif not loop.first %}unchanged{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div>
+{% endif %}
+{%- endmacro %}

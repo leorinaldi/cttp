@@ -200,3 +200,34 @@ def test_cli_add_crawl_status(registry, index, tmp_path):
     assert res.exit_code == 1 and "not registered" in res.output
     res = runner.invoke(app, ["index", "add", "not/a/locator/or/path"])
     assert res.exit_code == 1
+
+
+def test_a_malformed_link_line_costs_the_line_not_the_file(registry, index, tmp_path):
+    """Prose that looks like a link (`# cttp: <address> [key=value]`) is ignored with a note;
+    the file's definitions are still indexed. `--force` crawls a revision again."""
+    locator = add_remote_repo(
+        tmp_path,
+        "prose",
+        {
+            "doc.py": '"""A link is written as\n\n    # cttp: <address> [key=value]\n\n"""\n\n'
+            "def documented() -> int:\n    return 1\n",
+            "notes.c": "/* cttp: broken [x */\nint x;\n",
+        },
+    )
+    conn = open_index(index)
+    add(conn, locator, registry.config)
+    [r] = crawl(conn, registry)
+    assert r.pages == 2 and r.links == 0  # doc.py and documented; notes.c has no link left
+    assert len(r.skipped) == 2 and all("the line was ignored" in x for x in r.skipped)
+    assert "doc.py: line 3" in r.skipped[0] and "notes.c: line 1" in r.skipped[1]
+    assert (
+        conn.execute(
+            "SELECT count(*) FROM locations WHERE path = 'doc.py' AND symbol = 'documented'"
+        ).fetchone()[0]
+        == 1
+    )
+    before = counts(conn)
+    [again] = crawl(conn, registry, force=True)
+    assert again.status == "crawled" and counts(conn) == before
+    res = runner.invoke(app, ["index", "crawl", "--force"])
+    assert res.exit_code == 0 and "2 skipped" in res.stdout and "ignored" in res.stdout

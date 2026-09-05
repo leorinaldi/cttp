@@ -26,7 +26,7 @@ from cttp.config import Config
 from cttp.extract import ExtractError, Page, definitions, extract, language_of
 from cttp.hashing import ShapeError, identity, normalize, shape, short
 from cttp.index.schema import IndexingError, counts
-from cttp.links import LinkError, find_links
+from cttp.links import LINK_RE, LinkError, find_links, parse_link
 from cttp.registry import LocalRegistry, Registries, split_target
 
 MAX_FILE_BYTES = 1_000_000  # a file larger than this is not code anyone links to
@@ -147,9 +147,12 @@ def crawl(
     registries: Registries,
     rev: str | None = None,
     only: list[str] | None = None,
+    force: bool = False,
 ) -> list[Crawled]:
     """Crawl every registered repository (or `only` those) at its head, or at `rev`; snapshot the
-    local registries' names; then fill in every target identity the index can now tell."""
+    local registries' names; then fill in every target identity the index can now tell. A
+    revision already crawled is left alone unless `force`, which crawls it again from scratch
+    (its locations and links first removed; definitions are shared and stay)."""
     repos = [
         dict(r)
         for r in conn.execute("SELECT * FROM repos ORDER BY locator")
@@ -161,7 +164,7 @@ def crawl(
             raise IndexingError(f"not registered: {', '.join(missing)}; `cttp index add` first")
     if not repos:
         raise IndexingError("no repositories registered; `cttp index add <repo-or-path>` first")
-    results = [_crawl_repo(conn, r, registries, rev) for r in repos]
+    results = [_crawl_repo(conn, r, registries, rev, force) for r in repos]
     snapshot_names(conn, registries)
     resolve_targets(conn)
     conn.commit()
@@ -186,7 +189,9 @@ def _repo_handle(row: dict, registries: Registries, rev: str | None) -> tuple[Pa
     return repo, sha, branch
 
 
-def _crawl_repo(conn, row: dict, registries: Registries, rev: str | None) -> Crawled:
+def _crawl_repo(
+    conn, row: dict, registries: Registries, rev: str | None, force: bool = False
+) -> Crawled:
     locator = row["locator"]
     repo, sha, branch = _repo_handle(row, registries, rev)
     if branch != row["default_branch"]:
@@ -194,7 +199,10 @@ def _crawl_repo(conn, row: dict, registries: Registries, rev: str | None) -> Cra
     if conn.execute(
         "SELECT 1 FROM revisions WHERE repo = ? AND sha = ?", (locator, sha)
     ).fetchone():
-        return Crawled(locator, sha, "already")
+        if not force:
+            return Crawled(locator, sha, "already")
+        for table in ("links", "locations", "revisions"):
+            conn.execute(f"DELETE FROM {table} WHERE repo = ? AND sha = ?", (locator, sha))
     files = gitcache.ls_tree(repo, sha)
     committed = int(_git("show", "-s", "--format=%ct", sha, cwd=repo) or 0) or None
     conn.execute(
@@ -214,6 +222,8 @@ def _crawl_repo(conn, row: dict, registries: Registries, rev: str | None) -> Cra
         if len(text) > MAX_FILE_BYTES:
             out.skipped.append(f"{path}: larger than {MAX_FILE_BYTES} bytes")
             continue
+        text, bad = neutralize_bad_links(text)
+        out.skipped += [f"{path}: {b} — the line was ignored" for b in bad]
         try:
             if language_of(path) == "python":
                 writer.python_file(path, text, py_files)
@@ -223,6 +233,23 @@ def _crawl_repo(conn, row: dict, registries: Registries, rev: str | None) -> Cra
             out.skipped.append(f"{path}: {e}")
     conn.commit()
     return out
+
+
+def neutralize_bad_links(text: str) -> tuple[str, list[str]]:
+    """A line that looks like a link but is malformed — a `# cttp: <address> [key=value]` in
+    prose, say — would stop the extractor for the whole file. It becomes a bare comment of the
+    same comment syntax, so every definition of the file is still indexed and line numbers
+    hold; the notes say which lines. Only the file page's own text differs from the file's."""
+    lines = text.split("\n")
+    notes = []
+    for i, line in enumerate(lines):
+        try:
+            parse_link(i, line)
+        except LinkError as e:
+            m = LINK_RE.match(line)
+            lines[i] = m["indent"] + m["comment"] + (" */" if m["comment"] == "/*" else "")
+            notes.append(str(e))
+    return ("\n".join(lines), notes) if notes else (text, notes)
 
 
 class _Writer:

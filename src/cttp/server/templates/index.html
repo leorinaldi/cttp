@@ -1,13 +1,50 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block title %}cttp registry{% endblock %}
 {% block body %}
+{% if q %}
+<h1>search: {{ q }}</h1>
+{% if not has_index %}
+<p class="notice">No index at <code>{{ index_path }}</code> yet — <code>cttp index add &lt;repo&gt;</code> then <code>cttp index crawl</code>.</p>
+{% elif hits is none or hits.count == 0 %}
+<p class="notice">No page in the index matches.</p>
+{% else %}
+<div class="wrap"><table>
+<tr><th>page</th><th>identity</th><th>kind</th><th>signature · docstring</th></tr>
+{% for h in hits.hits %}
+<tr>
+  <td>{% if h.address %}<code>{{ h.address }}</code>{% else %}<code>{{ h.name }}</code>{% endif %}
+      {% for x in h.locations if x.name %} <a href="/{{ x.name }}"><code>{{ x.name }}</code></a>{% endfor %}</td>
+  <td class="nowrap">{{ m.d_link(h.identity) }}{{ m.tag('derived') }}</td>
+  <td class="nowrap">{{ h.kind }}</td>
+  <td>{% if h.signature %}<code>{{ h.signature }}</code>{% endif %}{% if h.docstring %} <span class="muted">— {{ h.docstring }}</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div>
+<p class="muted">{{ hits.count }} hit(s), by name, symbol, signature and docstring{{ m.tag('derived') }}</p>
+{% endif %}
+{% endif %}
+
 <h1>names</h1>
 <ul class="names">
 {% for e in entries %}
   <li><a href="/{{ e.name }}"><code>{{ e.name }}</code></a>
-      {% if e.description %}— {{ e.description }}{% endif %}</li>
+      {% if e.description %}— {{ e.description }}{{ m.tag('asserted') }}{% endif %}</li>
 {% else %}
   <li>No names yet.</li>
 {% endfor %}
 </ul>
+
+<h2>Index</h2>
+{% if status %}
+<p class="muted"><code>{{ status.index }}</code>:
+{% for k, v in status.counts.items() %}{{ v }} {{ k }}{{ ", " if not loop.last }}{% endfor %}</p>
+<ul class="names">
+{% for r in status.repos %}
+  <li>{{ m.repo_link(r.repo) }} <span class="muted">{{ r.revisions | length }} revision(s) crawled{% if r.local_path %}, from {{ r.local_path }}{% endif %}</span></li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="notice">No index at <code>{{ index_path }}</code> yet — <code>cttp index add &lt;repo&gt;</code> then <code>cttp index crawl</code>. Search, <a href="/dups">dups</a>, history and <em>who links here</em> read it.</p>
+{% endif %}
 {% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}dups{% if shape %} by shape{% endif %} · cttp{% endblock %}
+{% block body %}
+<h1>duplicates{% if shape %} by shape{% endif %}</h1>
+<p class="muted">{% if shape %}Pages with the same structure — names and literals aside — in more than one place. <a href="/dups">By identity instead.</a>{% else %}The same code, byte for byte after normalization, in more than one place at the current revisions. <a href="/dups?shape=1">By shape instead.</a>{% endif %}{{ m.tag('derived') }}</p>
+{% if not has_index %}
+<p class="notice">No index at <code>{{ index_path }}</code> yet — <code>cttp index add &lt;repo&gt;</code> then <code>cttp index crawl</code>.</p>
+{% elif groups.count == 0 %}
+<p class="notice">No duplicates among what was crawled.</p>
+{% else %}
+{% for g in groups.groups %}
+<h2>{{ g.names | join(", ") }} <span class="muted">· {{ g.kind }} · {{ g.lines }} line(s) · {{ g.count }} places{% if shape %} · {{ g.identities | length }} identities{% endif %}</span></h2>
+<div class="wrap"><table>
+{% for x in g.locations %}
+<tr><td><code>{{ x.address }}</code>{% if x.name %} — <a href="/{{ x.name }}"><code>{{ x.name }}</code></a>{{ m.tag('asserted') }}{% endif %}</td>
+    <td>{{ m.d_link(x.identity) }}</td>
+    <td>{{ x.license if x.license is not none else "not available" }}</td></tr>
+{% endfor %}
+</table></div>
+{% endfor %}
+<p class="muted">{{ groups.count }} group(s)</p>
+{% endif %}
+{% endblock %}

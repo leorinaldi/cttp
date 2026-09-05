@@ -93,3 +93,73 @@ def test_resolve_json_is_the_same_with_the_server_up_or_down(via_http, registry)
     cli_out = json.loads(runner.invoke(cli, ["--json", "resolve", "hello-world"]).stdout)
     cli_out.pop("registry")
     assert cli_out == down
+
+
+# --- the viewer over the index (plan P4-T4) ----------------------------------------------------
+
+
+@pytest.fixture
+def crawled(client, registry, tmp_path):
+    """pyrepo and a consumer of hello-world crawled into the test index."""
+    from conftest import add_remote_repo, clone_remote, commit_in
+
+    from cttp.index.crawl import add, crawl
+    from cttp.index.schema import open_index
+
+    add_remote_repo(tmp_path, "consumer", {"README.md": "consumer\n"})
+    work = clone_remote(tmp_path, "consumer")
+    (work / "hello.py").write_text(
+        "# cttp: hello-world\n\n# cttp: github.com/leorinaldi/pyrepo@v1/lib.py#deep\n",
+        encoding="utf-8",
+    )
+    assert runner.invoke(cli, ["expand", str(work / "hello.py")]).exit_code == 0
+    commit_in(work, "hello")
+    conn = open_index(tmp_path / "index.db")
+    for target in ("github.com/leorinaldi/pyrepo", "github.com/leorinaldi/cttp-registry", work):
+        add(conn, str(target), registry.config)
+    crawl(conn, registry)
+    return conn
+
+
+def test_pages_say_so_without_an_index(client):
+    page = client.get("/hello-world")
+    assert page.status_code == 200 and "No index yet" in page.text
+    assert "Derived — from the code" in page.text and "Asserted — by people" in page.text
+    assert client.get("/dups").status_code == 200 and "No index at" in client.get("/dups").text
+    assert client.get("/?q=greet").status_code == 200
+    assert client.get("/d/75a27070015e").status_code == 404
+    assert client.get("/r/github.com/leorinaldi/pyrepo").status_code == 404
+
+
+def test_name_page_shows_the_copy_under_who_links_here(client, crawled, registry):
+    page = client.get("/hello-world")
+    assert page.status_code == 200
+    html = page.text
+    who = html[html.index("Who links here") :]
+    assert "consumer" in who and "hello.py" in who
+    row = who[who.index("<tr>", who.index("</tr>")) :]  # the first backlink row
+    assert '<code>is</code><span class="tag asserted">asserted</span>' in row
+    assert 'sha256:75a27070015e</code></a><span class="tag derived">derived</span>' in row
+    assert "History" in html and "cttp-registry@" in html[html.index("History") :]
+
+
+def test_definition_repo_dups_and_search_pages(client, crawled, registry):
+    ident = resolve("github.com/leorinaldi/pyrepo@v1/lib.py#deep", registry).identity_full
+    d = client.get(f"/d/{ident[:12]}")
+    assert d.status_code == 200 and "def deep" in d.text and "Seen at" in d.text
+    assert "lib.py#deep" in d.text and "Who links here" in d.text and "lib.py#right" in d.text
+    assert client.get("/d/sha256:" + ident[:12]).status_code == 200
+    assert client.get("/d/" + "0" * 12).status_code == 404
+    r = client.get("/r/github.com/leorinaldi/pyrepo")
+    assert r.status_code == 200 and "Revisions crawled" in r.text and "many.py" in r.text
+    assert "MIT" in r.text and f"/d/{ident[:12]}" in r.text
+    assert client.get("/r/github.com/leorinaldi/nope").status_code == 404
+    dups = client.get("/dups")
+    assert dups.status_code == 200 and "deep" in dups.text  # the consumer's copy of deep
+    assert "consumer@" in dups.text and "pyrepo@" in dups.text
+    assert client.get("/dups?shape=1").status_code == 200
+    s = client.get("/?q=bottom chain")
+    assert s.status_code == 200 and "lib.py#deep" in s.text and "search: bottom chain" in s.text
+    assert "No page in the index matches" in client.get("/?q=zzzz").text
+    home = client.get("/")
+    assert "3 revision(s)" not in home.text and "revision(s) crawled" in home.text

@@ -5,25 +5,59 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}cttp{% endblock %}</title>
 <style>
-  :root { --fg: #1a1a1a; --muted: #6b6b6b; --bg: #fbfbf9; --line: #e3e1da; --asserted: #1f5f8b; --derived: #7a5c00; }
-  body { margin: 0; padding: 2rem 1.25rem; background: var(--bg); color: var(--fg);
-         font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 52rem; margin-inline: auto; }
-  header a { color: inherit; text-decoration: none; font-weight: 600; }
-  header small { color: var(--muted); margin-left: .5rem; }
-  h1 { font-size: 1.6rem; margin: 1.5rem 0 .25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  :root { --fg: #1a1a1a; --muted: #6b6b6b; --bg: #fbfbf9; --line: #e3e1da; --asserted: #1f5f8b; --derived: #7a5c00;
+          --asserted-bg: #eef4f9; --derived-bg: #faf5e6; }
+  body { margin: 0; padding: 1.5rem 1rem; background: var(--bg); color: var(--fg);
+         font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 60rem; margin-inline: auto; }
+  header { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: baseline; }
+  header a.home { color: inherit; text-decoration: none; font-weight: 600; }
+  header small { color: var(--muted); }
+  header nav a { margin-right: .75rem; }
+  header form { margin-left: auto; }
+  header input[type=search] { font: inherit; padding: .2rem .5rem; border: 1px solid var(--line); border-radius: 4px; width: 14rem; max-width: 60vw; }
+  h1 { font-size: 1.4rem; margin: 1.25rem 0 .25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  h2 { font-size: .95rem; margin: 1.75rem 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   pre { background: #fff; border: 1px solid var(--line); padding: 1rem; overflow-x: auto;
         font: 13.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; }
-  dt { color: var(--muted); }
-  .tag { font-size: .72rem; padding: 0 .35rem; border-radius: 3px; border: 1px solid; margin-left: .4rem; vertical-align: middle; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  a { color: #1f5f8b; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; margin: 0; }
+  dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
+  .tag { font-size: .72rem; padding: 0 .35rem; border-radius: 3px; border: 1px solid; margin-left: .4rem; vertical-align: middle; white-space: nowrap; }
   .asserted { color: var(--asserted); } .derived { color: var(--derived); }
-  h2 { font-size: 1rem; margin-top: 2rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  /* The one layout for facts: what the tool derived from code on the left, what people asserted
+     on the right. Every page that shows facts uses it; on a narrow screen the columns stack. */
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+  .facts > section { padding: .75rem 1rem; border-radius: 6px; border: 1px solid var(--line); }
+  .facts > section.derived-col { background: var(--derived-bg); }
+  .facts > section.asserted-col { background: var(--asserted-bg); }
+  .facts > section > h2 { margin-top: 0; }
+  .facts > section.derived-col > h2 { color: var(--derived); } .facts > section.asserted-col > h2 { color: var(--asserted); }
+  @media (max-width: 44rem) { .facts { grid-template-columns: 1fr; } dl { grid-template-columns: 1fr; gap: 0 } dt { margin-top: .4rem } }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  th { color: var(--muted); font-weight: 500; }
+  td.nowrap, .nowrap code { white-space: nowrap; }
+  .wrap { overflow-x: auto; }
+  /* On a narrow screen a table row becomes a stacked card: no header row, one cell per line. */
+  @media (max-width: 44rem) {
+    table, tbody, tr, td { display: block; width: 100%; box-sizing: border-box; }
+    thead, tr:has(th) { display: none; }
+    tr { border-bottom: 1px solid var(--line); padding: .5rem 0; }
+    td { border: none; padding: .1rem 0; }
+  }
   ul.names { list-style: none; padding: 0; } ul.names li { padding: .4rem 0; border-bottom: 1px solid var(--line); }
+  .muted { color: var(--muted); }
+  .notice { padding: .6rem .9rem; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); }
+  .current { font-size: .72rem; color: #2a7a2a; margin-left: .3rem; }
 </style>
 </head>
 <body>
-<header><a href="/">cttp</a><small>registry · {{ registry }}</small></header>
+<header>
+  <a class="home" href="/">cttp</a><small>{{ registry }}</small>
+  <nav><a href="/">names</a><a href="/dups">dups</a><a href="/dups?shape=1">dups by shape</a></nav>
+  <form action="/" method="get"><input type="search" name="q" placeholder="search the index" value="{{ q or '' }}"></form>
+</header>
 {% block body %}{% endblock %}
 </body>
 </html>

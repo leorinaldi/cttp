@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}{{ repo.locator }} · cttp{% endblock %}
+{% block body %}
+<h1>{{ repo.locator }}</h1>
+<p class="muted">default branch <code>{{ repo.default_branch or "?" }}</code>{% if repo.local_path %} · crawled from <code>{{ repo.local_path }}</code>{% endif %}{{ m.tag('derived') }}</p>
+
+<h2>Revisions crawled</h2>
+{% if not revisions %}<p class="notice">Registered, not crawled yet: <code>cttp index crawl</code>.</p>
+{% else %}
+<div class="wrap"><table>
+<tr><th>sha</th><th>license</th><th>files</th><th>crawled</th></tr>
+{% for v in revisions %}
+<tr><td><code>{{ v.sha[:12] }}</code>{% if v.sha == current.sha %}<span class="current">latest commit</span>{% endif %}</td>
+    <td>{{ v.license if v.license is not none else "not available" }}{{ m.tag('derived') }}</td>
+    <td>{{ v.files }}</td><td class="muted">{{ v.crawled_at }}</td></tr>
+{% endfor %}
+</table></div>
+{% endif %}
+
+{% if files %}
+<h2>Pages at the current revision</h2>
+{% for path, rows in files.items() %}
+<h3><code>{{ path }}</code></h3>
+<div class="wrap"><table>
+{% for x in rows %}
+<tr><td><code>{{ x.symbol if x.symbol else "(the file)" }}</code></td>
+    <td class="muted">{{ x.kind }}{% if x.signature %} · <code>{{ x.signature }}</code>{% endif %}</td>
+    <td>{{ m.d_link("sha256:" ~ x.identity[:12]) }}{{ m.tag('derived') }}</td>
+    <td class="muted">lines {{ x.span_first }}–{{ x.span_last }}</td></tr>
+{% endfor %}
+</table></div>
+{% endfor %}
+{% endif %}
+{% endblock %}
