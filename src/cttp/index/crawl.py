@@ -287,6 +287,18 @@ class _Writer:
         )  # fmt: skip
         if cur.rowcount:
             self.out.definitions += 1
+        elif page.kind != "script":
+            # a file whose whole text is one definition shares its identity; the definition's
+            # view (kind, name, signature, docstring) is the richer one and wins the row
+            self.conn.execute(
+                "UPDATE definitions SET kind = ?, name = ?, signature = ?, docstring = ? "
+                "WHERE identity = ? AND kind = 'script'",
+                (page.kind, name, page.signature, page.docstring, ident),
+            )
+        if not self.conn.execute(
+            "SELECT 1 FROM definitions_fts WHERE identity = ? AND name = ? AND symbol = ?",
+            (ident, name, symbol or ""),
+        ).fetchone():
             self.conn.execute(
                 "INSERT INTO definitions_fts(identity, name, symbol, signature, docstring) "
                 "VALUES (?,?,?,?,?)",
@@ -431,7 +443,7 @@ def _identity_at(conn, locator, rev, path, symbol) -> str | None:
     row = conn.execute(
         "SELECT l.identity FROM locations l JOIN revisions v ON v.repo = l.repo AND v.sha = l.sha "
         "WHERE l.repo = ? AND l.path = ? AND l.symbol IS ? "
-        "ORDER BY v.crawled_at DESC, v.committed_at DESC LIMIT 1",
+        "ORDER BY v.rowid DESC LIMIT 1",
         (locator, path, symbol),
     ).fetchone()
     return row["identity"] if row else None
@@ -445,7 +457,7 @@ def status(conn: sqlite3.Connection, path: Path) -> dict:
     for r in conn.execute("SELECT * FROM repos ORDER BY locator"):
         revs = conn.execute(
             "SELECT sha, crawled_at, license, files FROM revisions WHERE repo = ? "
-            "ORDER BY crawled_at DESC, committed_at DESC",
+            "ORDER BY rowid DESC",
             (r["locator"],),
         ).fetchall()
         repos.append(

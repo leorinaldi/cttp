@@ -140,13 +140,24 @@ def _resolve_latest(address: str, registry: Path | None) -> None:
 
 
 @app.command()
-def closure(address: str, registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
+def closure(
+    addresses: Annotated[list[str], typer.Argument(help="One address; several with --indexed.")],
+    indexed: Annotated[
+        bool,
+        typer.Option("--indexed", help="From the index's recorded links, not a live walk."),
+    ] = False,
+    registry: RegistryOpt = None,
+    index: IndexOpt = None,
+    json_: JsonOpt = False,
+) -> None:
     """Everything the page needs to run inline, dependencies first: what `expand` would write."""
     want_json(json_)
+    if indexed or len(addresses) > 1:
+        return _closure_indexed(addresses, registry, index)
     from cttp.closure import closure as _closure
 
     try:
-        c = _closure(address, open_registries(registry), budget=None)
+        c = _closure(addresses[0], open_registries(registry), budget=None)
     except ERRORS as e:
         fail(str(e))
     lines = [
@@ -158,6 +169,25 @@ def closure(address: str, registry: RegistryOpt = None, json_: JsonOpt = False) 
     lines.append("requires: " + (", ".join(c.requires) or "nothing outside the stdlib"))
     lines.append(f"{len(c.nodes)} definition(s), {c.lines} line(s)")
     emit(c.to_json(), "\n".join(lines))
+
+
+def _closure_indexed(addresses: list[str], registry: Path | None, index: Path | None) -> None:
+    from cttp.index.queries import closure as _closure
+
+    try:
+        c = _closure(_open_index(index), addresses, open_registries(registry))
+    except ERRORS as e:
+        fail(str(e))
+    lines = [
+        f"{n['address']}  {n['identity']}  {n['kind']}  {n['lines']} line(s)  via {n['via']}"
+        for n in c["definitions"]
+    ]
+    if c["imports"]:
+        lines.append("imports: " + "; ".join(c["imports"]))
+    lines.append("requires: " + (", ".join(c["requires"]) or "nothing outside the stdlib"))
+    lines += [f"missing: {m['address']} ({m['relation']} from {m['from']})" for m in c["missing"]]
+    lines.append(f"{c['count']} definition(s), {c['lines']} line(s), from the index")
+    emit(c, "\n".join(lines))
 
 
 @app.command()
@@ -497,6 +527,12 @@ def _index_path(index: Path | None) -> Path:
     return index or default_index_path()
 
 
+def _open_index(index: Path | None):
+    from cttp.index.schema import open_index
+
+    return open_index(_index_path(index), create=False)
+
+
 @index_app.command("add")
 def index_add(
     target: str, registry: RegistryOpt = None, index: IndexOpt = None, json_: JsonOpt = False
@@ -570,3 +606,121 @@ def index_status(index: IndexOpt = None, json_: JsonOpt = False) -> None:
         revs = ", ".join(v["sha"][:12] for v in r["revisions"]) or "not crawled"
         lines.append(f"  {r['repo']}  [{r['default_branch'] or '?'}]  {revs}")
     emit(st, "\n".join(lines))
+
+
+# --- the queries (spec §6) ---------------------------------------------------------------------
+
+
+@app.command()
+def who(
+    address: str, registry: RegistryOpt = None, index: IndexOpt = None, json_: JsonOpt = False
+) -> None:
+    """Backlinks: every indexed page linking to the address, by relation and origin."""
+    want_json(json_)
+    from cttp.index.queries import who as _who
+
+    try:
+        out = _who(_open_index(index), address, open_registries(registry))
+    except ERRORS as e:
+        fail(str(e))
+    lines = [
+        f"{b['source']['address']}:{b['line']}  {b['relation']}  {b['origin']}  "
+        f"license={b['source']['license'] or 'not available'}  -> {b['target']}"
+        for b in out["backlinks"]
+    ]
+    lines.append(f"{out['count']} backlink(s) to {address}")
+    emit(out, "\n".join(lines))
+
+
+@app.command()
+def dups(
+    shape: Annotated[
+        bool, typer.Option("--shape", help="Group by shape (same structure) instead of identity.")
+    ] = False,
+    index: IndexOpt = None,
+    json_: JsonOpt = False,
+) -> None:
+    """Groups of pages that are the same code, in more than one place."""
+    want_json(json_)
+    from cttp.index.queries import dups as _dups
+
+    try:
+        out = _dups(_open_index(index), by_shape=shape)
+    except ERRORS as e:
+        fail(str(e))
+    lines = []
+    for g in out["groups"]:
+        lines.append(
+            f"{g[out['by']]}  {g['kind']}  {', '.join(g['names'])}  x{g['count']}  "
+            f"{g['lines']} line(s)"
+        )
+        lines += [f"  {x['address']}" for x in g["locations"]]
+    lines.append(f"{out['count']} group(s) by {out['by']}")
+    emit(out, "\n".join(lines))
+
+
+@app.command()
+def search(
+    text: Annotated[list[str], typer.Argument(help="Words to look for.")],
+    limit: Annotated[int, typer.Option("--limit")] = 20,
+    index: IndexOpt = None,
+    json_: JsonOpt = False,
+) -> None:
+    """Find pages by name, signature or docstring."""
+    want_json(json_)
+    from cttp.index.queries import search as _search
+
+    try:
+        out = _search(_open_index(index), " ".join(text), limit)
+    except ERRORS as e:
+        fail(str(e))
+    lines = [
+        f"{h['address']}  {h['identity']}  {h['kind']}"
+        + (f"  {h['signature']}" if h["signature"] else "")
+        + (f"  — {h['docstring']}" if h["docstring"] else "")
+        for h in out["hits"]
+    ]
+    lines.append(f"{out['count']} hit(s) for {out['query']!r}")
+    emit(out, "\n".join(lines))
+
+
+@app.command()
+def history(
+    address: str, registry: RegistryOpt = None, index: IndexOpt = None, json_: JsonOpt = False
+) -> None:
+    """The identities seen at one place (repository, path, symbol) over crawled revisions."""
+    want_json(json_)
+    from cttp.index.queries import history as _history
+
+    try:
+        out = _history(_open_index(index), address, open_registries(registry))
+    except ERRORS as e:
+        fail(str(e))
+    lines = [
+        f"{v['address']}  {v['identity'] or 'absent'}"
+        + ("  changed" if v["changed"] and not v["absent"] else "")
+        for v in out["revisions"]
+    ]
+    lines.append(f"{len(out['identities'])} identity(ies) over {out['count']} revision(s)")
+    emit(out, "\n".join(lines))
+
+
+@app.command()
+def rank(
+    limit: Annotated[int, typer.Option("--limit")] = 20,
+    index: IndexOpt = None,
+    json_: JsonOpt = False,
+) -> None:
+    """Pages ordered by how many distinct pages link to them."""
+    want_json(json_)
+    from cttp.index.queries import rank as _rank
+
+    try:
+        out = _rank(_open_index(index), limit)
+    except ERRORS as e:
+        fail(str(e))
+    lines = [
+        f"{r['backlinks']:4}  {r['address']}  {r['identity']}  {r['kind']}" for r in out["ranked"]
+    ]
+    lines.append(f"{out['count']} ranked")
+    emit(out, "\n".join(lines))
