@@ -18,3 +18,7 @@ npm-debug.log*
 .idea/
 .vscode/
 *.swp
+
+# Benchmark corpora — bulk data, fetched by script, never committed
+bench/drivers/corpus/
+bench/drivers/lm75-teardown/
