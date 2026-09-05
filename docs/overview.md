@@ -45,8 +45,14 @@ target's `cttp.toml` declares the name; a claim is a pull request), federation (
 order, first match wins), and `cttp serve --export` writing the contract as static files for
 `cttp.ai`; and the **benchmark harness** (`bench/agent/`) — Claude Code run headless under a
 subscription login with two arms, the cttp tools against the shell's search, each run in its own
-checkout with its own index, every run a record. The task set and the run itself are still ahead
-— [`plan.md`](plan.md) lays out the phases.
+checkout with its own index, every run a record, tasks run in parallel with `--jobs`. **The plan
+is complete**: fifteen tasks over `click`, `attrs` and `rich`, ninety runs recorded, and
+[`benchmark.md`](benchmark.md) carrying the table and its reading. What it found, in one line:
+cttp is cheaper for cross-repository reuse and the margin grows with the closure's size (0.90
+overall, 0.38 on a two-file closure), costs about twice as much on in-repository fixes while
+passing slightly more often, and costs 19–40x on impact questions over a `src/`-layout project —
+one defect, not a property of the question, since `who` cannot resolve a test's import into
+`src/` and the agent cannot confirm an answer it senses is incomplete.
 
 ## 2. Architecture
 
@@ -635,7 +641,9 @@ uv run python bench/drivers/measure.py    # the vision's duplicate-line figures,
 
 bash bench/agent/fetch.sh                  # once: the three task repositories under bench/agent/repos/
 uv run python -m bench.agent.harness --list | --check-graders | --task <name> --runs N   # the benchmark, under the Claude Code login
+uv run python -m bench.agent.harness --runs 3 --jobs 3 --wait-for-reset   # the full sweep; --jobs runs whole tasks in parallel
 uv run python -m bench.agent.harness --replay bench/agent/results/<date>/<task>/<arm>/1.json   # a record from its stream, no login used
+gzip -9 bench/agent/results/<date>/*/*/*.stream.jsonl        # committed streams are gzipped; --replay reads either
 uv run python -m bench.agent.report bench/agent/results/<date>    # the table
 ```
 
@@ -652,6 +660,7 @@ in `PROGRESS.md`.
 | What is the next task, and what counts as done? | [`plan.md`](plan.md) |
 | What is built and verified right now? What was decided last session? | [`PROGRESS.md`](../PROGRESS.md) |
 | What exactly does `cttp … --json` (or an MCP tool) return? | [`json-schemas.md`](json-schemas.md), generated from `schemas.py` |
+| Does any of this actually help an agent? What does the number mean? | [`benchmark.md`](benchmark.md) |
 | How do I find my way around, and what will bite me? | this file |
 | How should I run a session in this repo? | `CLAUDE.md` |
 
