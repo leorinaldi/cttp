@@ -11,6 +11,7 @@ from cttp import __version__, gitcache
 from cttp.address import AddressError
 from cttp.closure import ClosureError
 from cttp.config import ConfigError, load_config
+from cttp.index.schema import IndexingError
 from cttp.links import LinkError
 from cttp.registry import RegistryError, open_registries
 from cttp.resolve import ResolveError
@@ -18,6 +19,8 @@ from cttp.resolve import ResolveError
 app = typer.Typer(add_completion=False, no_args_is_help=True, rich_markup_mode=None)
 cache_app = typer.Typer(no_args_is_help=True, rich_markup_mode=None)
 app.add_typer(cache_app, name="cache", help="The git and object caches under ~/.cache/cttp.")
+index_app = typer.Typer(no_args_is_help=True, rich_markup_mode=None)
+app.add_typer(index_app, name="index", help="The index: register repositories and crawl them.")
 state = {"json": False}
 
 RegistryOpt = Annotated[
@@ -25,9 +28,13 @@ RegistryOpt = Annotated[
     typer.Option("--registry", help="Use only this registry (a local registry repository)."),
 ]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Emit JSON.")]
+IndexOpt = Annotated[
+    Path | None,
+    typer.Option("--index", help="The index file (default ~/.local/share/cttp/index.db)."),
+]
 ERRORS = (
     RegistryError, ResolveError, AddressError, gitcache.GitError, ConfigError, LinkError,
-    ClosureError,
+    ClosureError, IndexingError,
 )  # fmt: skip
 NOT_RUN = 2  # exit code of `run` when the first run of an address is not confirmed
 NOT_CONFIRMED = 2  # exit code of `update` when a change waited for a confirmation it did not get
@@ -479,3 +486,87 @@ def _ask_before_first_run(c) -> bool:
     if not _interactive():
         raise NotConfirmed(f"{r.address}: first run needs confirmation; pass --yes")
     return typer.confirm("Run it?", default=False, err=True)
+
+
+# --- the index ---------------------------------------------------------------------------------
+
+
+def _index_path(index: Path | None) -> Path:
+    from cttp.index.schema import default_index_path
+
+    return index or default_index_path()
+
+
+@index_app.command("add")
+def index_add(
+    target: str, registry: RegistryOpt = None, index: IndexOpt = None, json_: JsonOpt = False
+) -> None:
+    """Register a repository to crawl: host/owner/repo, or a local clone whose origin names one."""
+    want_json(json_)
+    from cttp.index.crawl import add
+    from cttp.index.schema import open_index
+
+    try:
+        out = add(open_index(_index_path(index)), target, load_config(registry))
+    except ERRORS as e:
+        fail(str(e))
+    where = f" (from {out['local_path']})" if out["local_path"] else ""
+    emit(out, f"{out['status']}: {out['repo']}{where}")
+
+
+@index_app.command("crawl")
+def index_crawl(
+    repos: Annotated[
+        list[str] | None, typer.Argument(help="Only these registered repositories.")
+    ] = None,
+    rev: Annotated[
+        str | None, typer.Option("--rev", help="Crawl this revision instead of the head.")
+    ] = None,
+    registry: RegistryOpt = None,
+    index: IndexOpt = None,
+    json_: JsonOpt = False,
+) -> None:
+    """Crawl every registered repository at its head (or --rev): definitions, references, links."""
+    want_json(json_)
+    from cttp.index.crawl import crawl
+    from cttp.index.schema import open_index
+
+    try:
+        results = crawl(open_index(_index_path(index)), open_registries(registry), rev, repos)
+    except ERRORS as e:
+        fail(str(e))
+    lines = []
+    for r in results:
+        if r.status == "already":
+            lines.append(f"{r.repo}@{r.sha[:12]}: already crawled")
+        else:
+            lines.append(
+                f"{r.repo}@{r.sha[:12]}: {r.files} file(s), {r.pages} page(s), "
+                f"{r.definitions} new identity(ies), {r.links} link(s)"
+                + (f", {len(r.skipped)} skipped" if r.skipped else "")
+            )
+            lines += [f"  skipped {x}" for x in r.skipped]
+    emit([r.to_json() for r in results], "\n".join(lines))
+
+
+@index_app.command("status")
+def index_status(index: IndexOpt = None, json_: JsonOpt = False) -> None:
+    """What the index holds: repositories, revisions, and row counts."""
+    want_json(json_)
+    from cttp.index.crawl import status
+    from cttp.index.schema import open_index
+
+    path = _index_path(index)
+    try:
+        st = status(open_index(path, create=False), path)
+    except ERRORS as e:
+        fail(str(e))
+    c = st["counts"]
+    lines = [
+        f"index: {st['index']}",
+        "  " + ", ".join(f"{k}: {v}" for k, v in c.items()),
+    ]
+    for r in st["repos"]:
+        revs = ", ".join(v["sha"][:12] for v in r["revisions"]) or "not crawled"
+        lines.append(f"  {r['repo']}  [{r['default_branch'] or '?'}]  {revs}")
+    emit(st, "\n".join(lines))

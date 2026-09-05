@@ -178,15 +178,13 @@ def resolve_identity(a: Address) -> Resolved:
     """Identity → the object cache, then the index: the page and every location it was seen at.
     The address is the location seen most recently; `via` says which cache answered."""
     try:
-        stored = objects.lookup(a.identity)
+        stored = objects.lookup(a.identity) or objects.index_lookup(a.identity)
     except objects.AmbiguousIdentity as e:
         raise ResolveError(str(e)) from e
     if stored is None:
-        stored = objects.index_lookup(a.identity)
-    if stored is None:
         raise ResolveError(
-            f"sha256:{a.identity[:16]} is known to neither the object cache nor the index "
-            "(the index arrives in Phase 4); resolve it by name or locator once to cache it"
+            f"sha256:{a.identity[:16]} is known to neither the object cache nor the index; "
+            "resolve it by name or locator once to cache it, or `cttp index crawl` where it lives"
         )
     at = stored.latest
     shp = stored.meta["shape_full"]
@@ -214,8 +212,8 @@ def resolve_identity(a: Address) -> Resolved:
         imports=stored.meta["imports"],
         links=stored.meta.get("links") or [],
         unresolved=stored.meta.get("unresolved") or [],
-        locations=[{**x, "origin": "cache"} for x in stored.locations],
-        via="cache",
+        locations=[{**x, "origin": stored.via} for x in stored.locations],
+        via=stored.via,
     )
 
 

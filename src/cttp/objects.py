@@ -3,8 +3,7 @@
 `objects/<sha256>` is the page's normalized source and `objects/<sha256>.json` a sidecar with its
 metadata and every location — pinned locator address, name, registry, license — it was seen at.
 An identity address resolves from here without a network, and a page whose origin has vanished
-survives wherever it was ever resolved. The index (Phase 4) is the second place to ask; until it
-exists the hook says so.
+survives wherever it was ever resolved. The index is the second place to ask (`index_lookup`).
 """
 
 import json
@@ -41,6 +40,7 @@ class Stored:
     source: str
     meta: dict
     locations: list[dict] = field(default_factory=list)  # most recently seen last
+    via: str = "cache"  # which cache answered: "cache" (the object cache) or "index"
 
     @property
     def latest(self) -> dict:
@@ -105,9 +105,12 @@ def load(identity: str) -> Stored:
     )
 
 
-def index_lookup(prefix: str) -> None:
-    """The index's answer for an identity. The index is Phase 4; until then, nothing is indexed."""
-    return None
+def index_lookup(prefix: str) -> Stored | None:
+    """The index's answer for an identity: the page and every crawled location carrying it, the
+    most recently crawled last. None when there is no index, or it has no such page."""
+    from cttp.index.queries import lookup_identity
+
+    return lookup_identity(prefix)
 
 
 # --- both caches -------------------------------------------------------------------------------
