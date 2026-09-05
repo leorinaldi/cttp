@@ -7,9 +7,10 @@ registries = ["~/.local/share/cttp/registry", "http://localhost:3120"]  # in ord
 "github.com/leorinaldi/" = "/srv/mirrors/leorinaldi/"
 ```
 
-On first run the file is written with the defaults: `http://localhost:3120` first (`cttp serve`),
-the local registry repository at `~/.local/share/cttp/registry` second, and no remotes, so every
-locator is fetched from `https://<locator>.git`. Paths in the file may use `~`; relative paths are
+On first run the file is written with the defaults: `https://cttp.ai` first (the public registry,
+spec §8), `http://localhost:3120` second (`cttp serve`), the local registry repository at
+`~/.local/share/cttp/registry` third, and no remotes, so every locator is fetched from
+`https://<locator>.git`. Paths in the file may use `~`; relative paths are
 relative to the file's directory.
 """
 
@@ -34,14 +35,14 @@ def config_path() -> Path:
     return Path(xdg) / "cttp" / "config.toml"
 
 
-DEFAULT_REGISTRIES = ("http://localhost:3120", "~/.local/share/cttp/registry")
+DEFAULT_REGISTRIES = ("https://cttp.ai", "http://localhost:3120", "~/.local/share/cttp/registry")
 DEFAULT_CONFIG = """\
 # cttp configuration — see `cttp config`.
 #
 # Registries, in order: the first that knows a name answers. An http(s) URL is a registry
-# serving the cttp contract (`cttp serve` on localhost, cttp.ai later); a path is a local
-# registry repository (git clone https://github.com/leorinaldi/cttp-registry <path>).
-registries = ["http://localhost:3120", "~/.local/share/cttp/registry"]
+# serving the cttp contract (cttp.ai, the public one; `cttp serve` on localhost); a path is a
+# local registry repository (git clone https://github.com/leorinaldi/cttp-registry <path>).
+registries = ["https://cttp.ai", "http://localhost:3120", "~/.local/share/cttp/registry"]
 
 # Remotes map a locator prefix to a URL prefix — a mirror, or a local path. Longest prefix
 # wins; without a match, host/owner/repo is fetched from https://host/owner/repo.git

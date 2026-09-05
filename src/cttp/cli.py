@@ -218,6 +218,14 @@ def config(registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
 @app.command()
 def serve(
     port: Annotated[int, typer.Option("--port")] = 3120,
+    export: Annotated[
+        Path | None,
+        typer.Option(
+            "--export",
+            help="Write every route of the contract for every name to this directory as static "
+            "files, identical to the live responses, and exit.",
+        ),
+    ] = None,
     registry: RegistryOpt = None,
     json_: JsonOpt = False,
 ) -> None:
@@ -225,16 +233,38 @@ def serve(
     want_json(json_)
     import os
 
-    import uvicorn
-
     try:
         reg = open_registries(registry, local_only=True)
     except ERRORS as e:
         fail(str(e))
+    previous = os.environ.get("CTTP_REGISTRY")
     if registry:
-        os.environ["CTTP_REGISTRY"] = str(registry)
+        os.environ["CTTP_REGISTRY"] = str(registry)  # the app reads the config per request
+    if export is not None:
+        try:
+            return _export(export, reg)
+        finally:  # `serve` runs until killed; an export returns, so leave the process as it was
+            if previous is None:
+                os.environ.pop("CTTP_REGISTRY", None)
+            else:
+                os.environ["CTTP_REGISTRY"] = previous
+    import uvicorn
+
     typer.echo(f"cttp registry {reg.describe()} — http://localhost:{port}", err=True)
     uvicorn.run("cttp.server.app:app", host="127.0.0.1", port=port, log_level="warning")
+
+
+def _export(directory: Path, reg) -> None:
+    from cttp.server.export import ExportError
+    from cttp.server.export import export as _run
+
+    try:
+        out = _run(directory, reg)
+    except (*ERRORS, ExportError) as e:
+        fail(str(e))
+    lines = [f"{f.route}  ->  {f.path}  ({f.bytes} bytes)" for f in out.files]
+    lines.append(f"{len(out.files)} file(s) for {len(out.names)} name(s) in {out.directory}")
+    emit(out.to_json(), "\n".join(lines))
 
 
 PackageOpt = Annotated[

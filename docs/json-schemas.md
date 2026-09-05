@@ -2,7 +2,7 @@
 
 **Generated from `src/cttp/schemas.py` — do not edit.** `python -m cttp.schemas` rewrites it; `tests/test_schemas.py` fails when it is stale.
 
-Schema version **3**, fingerprint `b91afae14d7465e9`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
+Schema version **3**, fingerprint `b4d308f6b63419e7`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
 
 ## Conventions
 
@@ -475,6 +475,26 @@ The registry's checks on each entry (every name when none is given), and whether
 | `names[].ok` | boolean |  |  |
 | `names[].checks` | [→ [check](#check)] |  |  |
 | `count` | integer |  | names verified |
+
+### serve --export
+
+`cttp serve --export <dir> --json`
+
+The static files written: every route of the contract for every name, identical to the live responses.
+
+- Symbol routes (`%23<symbol>`) are not exported — they are unbounded; a live server answers them.
+- `cttp serve` without `--export` runs until stopped and prints no JSON object.
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `schema_version` | integer |  |  |
+| `directory` | string |  |  |
+| `names` | [string] |  | every name in the local registries, sorted |
+| `files` | [object] |  | `/` → `index.html`, `/<name>` → `<name>/index.html`, `/<name>.json`, `/<name>@<label>.json` per version label |
+| `files[].route` | string |  | the route as the live server serves it |
+| `files[].path` | string |  | the file, relative to the directory |
+| `files[].bytes` | integer |  |  |
+| `count` | integer |  | files written |
 
 ### mcp install
 

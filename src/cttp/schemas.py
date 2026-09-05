@@ -21,7 +21,7 @@ SCHEMA_VERSION = 3
 FINGERPRINTS = {
     1: "95c46a2dbc0766c1",
     2: "14c8b9e5c6d17b96",
-    3: "b91afae14d7465e9",
+    3: "b4d308f6b63419e7",
 }  # schema version → fingerprint(); a schema change bumps both
 
 # --- the schema language -----------------------------------------------------------------------
@@ -880,6 +880,34 @@ COMMANDS: dict[str, Command] = {
         (
             "Exit 1 when any check failed. This is what the registry repository's workflow runs on a pull request, with `--registry .`.",
             "A name the registry does not have fails its `declaration` check with the reason.",
+        ),
+    ),
+    "serve --export": Command(
+        "cttp serve --export <dir> --json",
+        "The static files written: every route of the contract for every name, identical to the live responses.",
+        obj(
+            "",
+            {
+                "directory": string(),
+                "names": arr(string(), "every name in the local registries, sorted"),
+                "files": arr(
+                    obj(
+                        "",
+                        {
+                            "route": string("the route as the live server serves it"),
+                            "path": string("the file, relative to the directory"),
+                            "bytes": integer(),
+                        },
+                    ),
+                    "`/` → `index.html`, `/<name>` → `<name>/index.html`, `/<name>.json`, `/<name>@<label>.json` per version label",
+                ),
+                "count": integer("files written"),
+            },
+        ),  # fmt: skip
+        "",
+        (
+            "Symbol routes (`%23<symbol>`) are not exported — they are unbounded; a live server answers them.",
+            "`cttp serve` without `--export` runs until stopped and prints no JSON object.",
         ),
     ),
     "mcp install": Command(

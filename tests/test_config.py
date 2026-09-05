@@ -21,6 +21,7 @@ def test_first_run_writes_the_default_file(tmp_path, monkeypatch):
     cfg = load_config()
     assert cfg.path == f and f.exists() and f.read_text().startswith("# cttp configuration")
     assert cfg.registries == (
+        "https://cttp.ai",
         "http://localhost:3120",
         str(Path.home() / ".local/share/cttp/registry"),
     )
