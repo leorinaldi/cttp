@@ -50,7 +50,7 @@ Phase 8 the benchmark — the number the vision says decides whether any of this
 | Abbreviated or full SHAs in stamps | The tool **writes 12-hex abbreviations** for both rev and identity, as in the spec's examples; it **accepts** any length ≥ 12. Revisit if a real repository ever produces an ambiguous 12-hex rev | P0-T5 |
 | Where the tool's configuration lives | `~/.config/cttp/config.toml` (XDG), overridable with `CTTP_CONFIG`; a project may add `cttp.toml` at its root for project-level defaults such as `track = "latest"` | P0-T3 |
 | How tests reach git repositories without the network | A `[remotes]` table in the config maps a locator prefix (`github.com/leorinaldi/`) to a URL prefix; tests point it at bare repositories built in `tmp_path`. The same mechanism serves a private mirror | P2-T1 |
-| Benchmark model and harness | `claude-opus-5`, adaptive thinking, effort `high`, identical in both arms; the Anthropic Python SDK's tool runner (`client.beta.messages.tool_runner` with `@beta_tool`) so that the harness is one loop and the only variable is the tool list; tokens measured from `usage` on every response | P8-T1 |
+| Benchmark model and harness | **Claude Code headless (`claude -p`) under Leo's subscription login**, one model and effort in both arms (`--model`; Opus 5 unless Leo picks otherwise), the same harness for both arms so the only variable is the tool list (`--allowedTools` / `--disallowedTools`, `--mcp-config` for the links arm); tokens measured from the `usage` object of `--output-format json` (input, output, cache read, cache write, per model). Decided 2026-09-05 over the Anthropic SDK: the SDK bills the API per token, the login is included in the subscription, and the docs say ordinary individual use of Claude Code and the Agent SDK is what the login is for. The caveat is stated in the report: both arms run inside Claude Code's harness (its system prompt, its context management, MCP tool deferral), so the result compares tool sets inside Claude Code, not minimal agents | P8-T1 |
 | Benchmark task set | Three mid-size Python repositories, five tasks per family, three runs per task; see P8-T2 | P8-T2 |
 | How `cttp.ai` serves the contract at first | A **static export** of the registry contract (`cttp serve --export`) published with GitHub Pages under the domain. Every route in §8 is a file; a dynamic host is a later refinement | P7-T3 |
 
@@ -82,7 +82,7 @@ Phase 8 the benchmark — the number the vision says decides whether any of this
 | Config and registry files | TOML — `tomllib` to read, `tomli-w` to write |
 | Server | FastAPI + Jinja2, `uvicorn`, port **3120**; `httpx` as the client (also FastAPI's test client) |
 | MCP server | the official Python MCP SDK (`mcp`) |
-| Benchmark harness | the Anthropic Python SDK (`anthropic`), `claude-opus-5` |
+| Benchmark harness | Claude Code headless — `claude -p --output-format json` as a subprocess under Leo's login; no API key, no `anthropic` dependency |
 | Tests | `pytest`; fixture repositories built in `tmp_path` |
 | Lint and format | `ruff` (check + format) |
 | Web port | **3120** |
@@ -649,23 +649,33 @@ so that hardening replaces bodies and never restructures.
 
 ### P8-T1 · The harness
 
-- **What:** `bench/agent/harness.py`: one agent loop, built on the Anthropic Python SDK's tool
-  runner, with two **arms** that differ only in the tool list — *links*: `resolve`, `who`,
-  `closure`, `search` (calling the cttp code directly, same schemas as MCP) plus `write_file` and
-  `run_tests`; *baseline*: `read_file`, `grep`, `list_files` plus the same `write_file` and
-  `run_tests`. Model `claude-opus-5`, adaptive thinking, `output_config.effort = "high"`, the same
-  system prompt, the same turn cap; each task runs in a fresh checkout in `tmp_path`. Per run it
-  records `usage` from every response (input, cache read, cache write, output), the sum as
-  **tokens of context consumed**, wall time, turns, and pass/fail from the task's grader. Results
-  go to `bench/agent/results/<date>/<task>/<arm>/<run>.json`. Consult the `claude-api` skill
-  before writing it — the SDK surface is the skill's, not memory's.
-- **Preconditions:** P5-T2 (the tools) and P4-T2 (the queries). `ANTHROPIC_API_KEY` in `.env`
-  or `ant auth login`.
-- **May touch:** `bench/agent/{harness,graders,report}.py`, `bench/agent/README.md`,
-  `pyproject.toml` (an optional `bench` dependency group with `anthropic`).
+- **What:** `bench/agent/harness.py`: one driver that runs **Claude Code headless** — `claude -p
+  <prompt> --output-format json` as a subprocess, under Leo's subscription login (never `--bare`,
+  which needs an API key) — with two **arms** that differ only in the tool list. *links*:
+  `--mcp-config` attaching the cttp MCP server (`resolve`, `who`, `closure`, `search`, `dups`,
+  `fold`) with `--strict-mcp-config`, plus `Write`, `Edit` and `Bash` restricted to the task's
+  test command (`Bash(<test command>)`), with `Read`, `Grep` and `Glob` disallowed; *baseline*:
+  `Read`, `Grep`, `Glob` plus the same `Write`, `Edit` and `Bash`, and no MCP server. The same
+  `--model` (Opus 5 unless Leo picks otherwise), the same `--append-system-prompt`, the same
+  `--max-turns`, `--permission-mode dontAsk` with `--permission-prompts none`, run from a fresh
+  checkout in `tmp_path` with a scratch `HOME`-independent `--settings` so nothing from `~/.claude`
+  (hooks, plugins, memory, the user-scope cttp MCP server) leaks into either arm. Per run it
+  records the result object's `usage` (input, output, cache read, cache write, and the per-model
+  breakdown), the sum as **tokens of context consumed**, `total_cost_usd` as the estimate it is,
+  `num_turns`, wall time, `permission_denials`, and pass/fail from the task's grader. Results go
+  to `bench/agent/results/<date>/<task>/<arm>/<run>.json`, the raw result JSON kept beside each.
+  A usage-limit failure (`rate_limit` in the result, or a non-zero exit naming the limit) is
+  recorded as `limited`, not as a fail, and the driver waits for the window to reset or stops
+  and says so; `--resume-run` picks up where a run stopped. Consult the Claude Code docs
+  (`code.claude.com/docs/en/headless`, `cli-reference`) for the flags — not memory — and the
+  `claude-api` skill only if a model or effort question comes up.
+- **Preconditions:** P5-T2 (the tools) and P4-T2 (the queries). Leo logged in to Claude Code on
+  this machine (`claude auth status`); no `.env`.
+- **May touch:** `bench/agent/{harness,graders,report}.py`, `bench/agent/README.md`.
 - **Accept:** A smoke task (fix a one-line bug in the `pyrepo` fixture) runs in both arms and
-  writes two result files with the fields above; a dry-run mode replays a recorded transcript and
-  produces identical numbers, so the report can be tested without spend.
+  writes two result files with the fields above; the links arm's `system/init` shows the cttp
+  server connected and the baseline's shows none; a dry-run mode replays a recorded result JSON
+  and produces identical numbers, so the report can be tested without using the subscription.
 
 ### P8-T2 · The task set
 
@@ -687,9 +697,11 @@ so that hardening replaces bodies and never restructures.
 - **What:** Run every task three times per arm; `report.py` writes `bench/agent/results/<date>/report.md`
   — a table with one row per task and family totals: median tokens per arm, pass rate per arm, and
   the ratio; a short `docs/benchmark.md` stating the method, the table, and the honest reading of
-  it, registered in `CLAUDE.md`'s document map. Estimate the spend from P8-T1's smoke run before
-  starting and tell Leo the number.
-- **Preconditions:** P8-T2. Leo's go-ahead on the estimated spend.
+  it, registered in `CLAUDE.md`'s document map — including the caveat that both arms ran inside
+  Claude Code's harness. From P8-T1's smoke run, estimate the tokens per run and how many of
+  the ninety fit in one of the subscription's 5-hour windows, and tell Leo before starting; the
+  full run may span several windows and days.
+- **Preconditions:** P8-T2. Leo's go-ahead on the estimated usage and the time it will take.
 - **May touch:** `bench/agent/report.py`, `bench/agent/results/<date>/**`, `docs/benchmark.md`,
   `CLAUDE.md` (document map row only), `PROGRESS.md`.
 - **Accept:** The table exists with ninety runs behind it (fifteen tasks × two arms × three runs),

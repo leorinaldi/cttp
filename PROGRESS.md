@@ -63,10 +63,16 @@ https_enforced=true`, then `curl -s https://cttp.ai/hello-world.json` against
 `https://cttp.ai`.
 
 **Then P8-T1 — the benchmark harness.** Read its entry in [`docs/plan.md`](docs/plan.md) in
-full and consult the `claude-api` skill before writing a line: two arms differing only in tools,
-`claude-opus-5`, usage recorded per response, results under `bench/agent/results/`, a dry-run
-mode replaying a transcript. It needs `ANTHROPIC_API_KEY` in `.env` (not present) or `ant auth
-login`; a `bench` dependency group with `anthropic`.
+full — **amended 2026-09-05**: the harness drives **Claude Code headless (`claude -p
+--output-format json`) under Leo's subscription login**, not the Anthropic SDK (the API bills
+per token; the login is included, and the docs say ordinary individual use of Claude Code and
+the Agent SDK is what it is for). Two arms differing only in `--allowedTools` /
+`--disallowedTools` and `--mcp-config`; usage from the result object; results under
+`bench/agent/results/`; a dry-run mode replaying a recorded result. No `.env`, no `anthropic`
+dependency. Check the flags against `code.claude.com/docs/en/headless` and the CLI reference
+before writing, and keep `~/.claude` (hooks, memory, the user-scope cttp MCP server) out of both
+arms with `--settings` and `--strict-mcp-config`. The caveat for the report: both arms run
+inside Claude Code's harness, so the result compares tool sets inside Claude Code.
 
 Also pending Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced byte for byte by
 `fetch.sh`) can be deleted.
