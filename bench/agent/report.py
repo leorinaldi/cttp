@@ -6,7 +6,9 @@ Reads every `<task>/<arm>/<run>.json` under the directory, prints the table, and
 `report.md` beside them. One row per task, family totals and a grand total: runs, pass rate per
 arm, median tokens per arm, and the ratio of the medians (links over baseline — below 1 means the
 links arm consumed less context). Every cell is traceable to the result files listed under it.
-`limited`, `timeout` and `error` runs are counted but never enter a median or a pass rate; the
+`limited`, `timeout` and `error` runs are counted but never enter a median or a pass rate — a
+pass cell reading `2/2 of 3` means the third run never finished, which is not the same as a
+clean sweep; the
 **run health** section says how many there were and how many permission denials each arm hit,
 so the table's denominator and the deny list's cost are both visible. The **stamps** section
 counts, over the cross-repo tasks, how often each arm's link carried an `id=` — the link check
@@ -46,8 +48,14 @@ def _cell(values: list[int | float], fmt: str = "{:,.0f}") -> str:
     return fmt.format(statistics.median(values)) if values else "–"
 
 
-def _rate(passed: int, total: int) -> str:
-    return f"{passed}/{total}" if total else "–"
+def _rate(passed: int, scored: int, runs: int | None = None) -> str:
+    """`2/3`, or `2/2 of 3` when a run did not finish — an unscored run is not a tie. A bare
+    `2/2` beside another arm's `3/3` reads as both perfect when one arm in fact gave up."""
+    if not scored:
+        return f"– of {runs}" if runs else "–"
+    if runs is not None and runs != scored:
+        return f"{passed}/{scored} of {runs}"
+    return f"{passed}/{scored}"
 
 
 def _merge_statuses(dicts) -> dict[str, int]:
@@ -115,8 +123,8 @@ def render(table: dict[str, dict], title: str) -> str:
         ratio = "–"
         if links["tokens"] and base["tokens"]:
             ratio = f"{statistics.median(links['tokens']) / statistics.median(base['tokens']):.2f}"
-        pass_links = _rate(links["passed"], links["scored"])
-        pass_base = _rate(base["passed"], base["scored"])
+        pass_links = _rate(links["passed"], links["scored"], links["runs"])
+        pass_base = _rate(base["passed"], base["scored"], base["runs"])
         return (
             f"| {name} | {family} | {links['runs']}+{base['runs']} | "
             f"{pass_links} | {pass_base} | "
