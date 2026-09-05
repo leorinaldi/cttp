@@ -636,3 +636,34 @@ def _pr_body(entry: Entry, action: str, previous: Entry | None) -> str:
     elif action == "updated":
         lines += ["", "The name exists with this owner; this updates its entry."]
     return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class Verified:
+    name: str
+    checks: list[Check]
+
+    @property
+    def ok(self) -> bool:
+        return all(c.ok for c in self.checks)
+
+    def to_json(self) -> dict:
+        return {"name": self.name, "ok": self.ok, "checks": [c.to_json() for c in self.checks]}
+
+
+def verify(names: list[str] | None, registries: Registries) -> list[Verified]:
+    """The registry's checks (`check_entry`) on each named entry of the first local registry —
+    every name it has when `names` is empty. A name it does not have fails its `declaration`
+    check with the reason. What the registry's own workflow runs on every pull request."""
+    registry = next((r for r in registries.items if isinstance(r, LocalRegistry)), None)
+    if registry is None:
+        raise RegistryError(f"no local registry repository to verify: {registries.describe()}")
+    out: list[Verified] = []
+    for name in names or registry.names():
+        try:
+            entry = registry.lookup(name)
+        except RegistryError as e:
+            out.append(Verified(name, [Check("declaration", False, str(e))]))
+            continue
+        out.append(Verified(name, check_entry(entry, registries)))
+    return out

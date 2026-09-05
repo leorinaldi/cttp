@@ -858,6 +858,37 @@ def name_claim(
     emit(c.to_json(), "\n".join(lines))
 
 
+@name_app.command("verify")
+def name_verify(
+    names: Annotated[
+        list[str] | None, typer.Argument(help="Names to verify; default: every name.")
+    ] = None,
+    registry: RegistryOpt = None,
+    json_: JsonOpt = False,
+) -> None:
+    """The registry's checks on entries: declaration at the target, owner, target, labels,
+    resolution. Exit 1 when any fails. What the registry repository runs on every pull request."""
+    want_json(json_)
+    from cttp.registry import verify as _verify
+
+    try:
+        results = _verify(names or [], open_registries(registry))
+    except ERRORS as e:
+        fail(str(e))
+    lines = []
+    for v in results:
+        lines.append(f"{v.name}  {'ok' if v.ok else 'FAILED'}")
+        lines += [f"  {c.check}: {'ok' if c.ok else 'FAILED'}  {c.detail}" for c in v.checks]
+    failed = [v for v in results if not v.ok]
+    lines.append(f"{len(results)} name(s), {len(failed)} failed")
+    emit(
+        {"ok": not failed, "names": [v.to_json() for v in results], "count": len(results)},
+        "\n".join(lines),
+    )
+    if failed:
+        raise typer.Exit(1)
+
+
 # --- the MCP server (spec §9) ------------------------------------------------------------------
 
 

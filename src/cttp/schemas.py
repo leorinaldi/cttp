@@ -21,7 +21,7 @@ SCHEMA_VERSION = 3
 FINGERPRINTS = {
     1: "95c46a2dbc0766c1",
     2: "14c8b9e5c6d17b96",
-    3: "cc99e1dcc837f541",
+    3: "b91afae14d7465e9",
 }  # schema version → fingerprint(); a schema change bumps both
 
 # --- the schema language -----------------------------------------------------------------------
@@ -860,6 +860,26 @@ COMMANDS: dict[str, Command] = {
         (
             "Refused (exit 1) when the target's `cttp.toml` does not declare the name, when the name is another owner's and `--transfer` was not given, or when a label or ref is not valid.",
             "The pull request needs `gh` and an `origin` remote on the registry clone; `--no-pr` needs neither.",
+        ),
+    ),
+    "name verify": Command(
+        "cttp name verify [<name>…] --json",
+        "The registry's checks on each entry (every name when none is given), and whether all passed.",
+        obj(
+            "",
+            {
+                "ok": boolean("every name passed every check"),
+                "names": arr(
+                    obj("", {"name": string(), "ok": boolean(), "checks": arr(ref("check"))}),
+                    "in the order asked, or sorted",
+                ),
+                "count": integer("names verified"),
+            },
+        ),  # fmt: skip
+        "",
+        (
+            "Exit 1 when any check failed. This is what the registry repository's workflow runs on a pull request, with `--registry .`.",
+            "A name the registry does not have fails its `declaration` check with the reason.",
         ),
     ),
     "mcp install": Command(

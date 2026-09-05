@@ -2,7 +2,7 @@
 
 **Generated from `src/cttp/schemas.py` — do not edit.** `python -m cttp.schemas` rewrites it; `tests/test_schemas.py` fails when it is stale.
 
-Schema version **3**, fingerprint `cc99e1dcc837f541`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
+Schema version **3**, fingerprint `b91afae14d7465e9`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
 
 ## Conventions
 
@@ -456,6 +456,25 @@ The entry written for the name, the checks it passed, and the pull request opene
 | `origin.owner` | `derived` |  | computed by the tool from the repository |
 | `origin.declaration` | `derived` |  | computed by the tool from the repository |
 | `origin.description` | `asserted` |  | stated by a person: a link line or a registry entry |
+
+### name verify
+
+`cttp name verify [<name>…] --json`
+
+The registry's checks on each entry (every name when none is given), and whether all passed.
+
+- Exit 1 when any check failed. This is what the registry repository's workflow runs on a pull request, with `--registry .`.
+- A name the registry does not have fails its `declaration` check with the reason.
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `schema_version` | integer |  |  |
+| `ok` | boolean |  | every name passed every check |
+| `names` | [object] |  | in the order asked, or sorted |
+| `names[].name` | string |  |  |
+| `names[].ok` | boolean |  |  |
+| `names[].checks` | [→ [check](#check)] |  |  |
+| `count` | integer |  | names verified |
 
 ### mcp install
 
