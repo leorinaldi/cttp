@@ -109,6 +109,23 @@ A run that exists is skipped, so the same command picks up where a usage limit o
 stopped it; `--redo` runs it again. `--keep` leaves the scratch checkout on disk for a look.
 `--model`, `--max-turns` (40) and `--timeout` (1200 s) apply to both arms.
 
+**Cost is driven by turns, not by tasks.** Every turn re-reads the whole conversation from the
+cache, so a run's tokens grow roughly with the square of its turns: 6 turns cost 37k, 18 cost
+189k, and the first click impact run took 37 of its 40 turns and cost **1,895,253** — of which
+1,708,203 were cache reads. Ninety runs are therefore budgeted at roughly 17M tokens, but the
+tail is what matters, so the driver is **guarded rather than estimated**: `--stop-above`
+(default 0.85) stops the sweep when a run's rate-limit event puts the seven-day window past that
+fraction. Recorded runs are kept and the same command resumes.
+
+**The streams are committed gzipped.** Ninety runs are tens of megabytes of JSONL — one impact
+run alone is 1 MB — and `gzip -9` takes that down by about an order of magnitude. The records
+stay plain JSON, since they are what anyone reads; `--replay` accepts either
+(`harness.resolve_stream`). Compress a finished date directory with:
+
+```bash
+gzip -9 bench/agent/results/<date>/*/*/*.stream.jsonl
+```
+
 ## Tasks
 
 A task is `tasks/<name>/task.toml` with a prompt, the source repository (`[repo]`: a directory of

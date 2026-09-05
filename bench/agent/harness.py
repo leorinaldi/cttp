@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import gzip
 import json
 import shutil
 import signal
@@ -513,14 +514,34 @@ def run_once(
     return record
 
 
+def resolve_stream(stream_path: Path) -> Path:
+    """The recorded stream as it is on disk: `<name>.jsonl`, or the `.gz` beside it. Ninety runs
+    of real tasks are tens of megabytes of stream (one impact run reached 1 MB), so the committed
+    streams are gzipped — `gzip -9` takes the JSONL down by about an order of magnitude. The
+    records themselves stay plain JSON: they are what anyone reads."""
+    if stream_path.is_file():
+        return stream_path
+    packed = stream_path.with_suffix(stream_path.suffix + ".gz")
+    if packed.is_file():
+        return packed
+    raise HarnessError(f"{stream_path} is missing (no .gz either); nothing to replay")
+
+
+def read_stream(stream_path: Path) -> list[str]:
+    """The stream's lines, whether it is stored plain or gzipped."""
+    path = resolve_stream(stream_path)
+    if path.suffix == ".gz":
+        with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
+            return fh.read().splitlines()
+    return path.read_text(encoding="utf-8", errors="replace").splitlines()
+
+
 def replay(record_path: Path, out_dir: Path | None) -> dict[str, object]:
     """Re-derive a record from its recorded stream: the same numbers, no subscription used. The
     grade is taken from the record (the checkout is gone)."""
     old = json.loads(record_path.read_text(encoding="utf-8"))
-    stream_path = record_path.parent / old["stream_file"]
-    if not stream_path.is_file():
-        raise HarnessError(f"{stream_path} is missing; nothing to replay")
-    lines = stream_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    stream_path = resolve_stream(record_path.parent / old["stream_file"])
+    lines = read_stream(stream_path)
     parsed = parse_stream(lines)
     tasks = {t.name: t for t in load_tasks()}
     task = tasks.get(old["task"])
@@ -586,6 +607,20 @@ def wait_for_reset(rate_limit: dict | None) -> None:
     time.sleep(seconds)
 
 
+def weekly_utilization(rate_limit: dict | None) -> float | None:
+    """The seven-day window's utilization as the last rate-limit event reported it, or None."""
+    if not isinstance(rate_limit, dict):
+        return None
+    windows = rate_limit.get("unifiedWindows")
+    if not isinstance(windows, dict):
+        return None
+    week = windows.get("seven_day")
+    if not isinstance(week, dict):
+        return None
+    used = week.get("utilization")
+    return float(used) if isinstance(used, (int, float)) else None
+
+
 def say(text: str) -> None:
     print(text, file=sys.stderr, flush=True)
 
@@ -633,6 +668,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     add("--replay", type=Path, help="re-derive a record from its stream; write under --out")
     add("--out", type=Path, help="where --replay writes")
+    add(
+        "--stop-above",
+        type=float,
+        default=0.85,
+        metavar="FRACTION",
+        help=(
+            "stop when the seven-day window passes this utilization (default 0.85; 0 disables). "
+            "One turn-capped run can cost 1.9M tokens, so a long sweep is guarded rather than "
+            "trusted to an estimate"
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -699,6 +745,15 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     if record["status"] != "limited":
                         records.append(record)
+                        used = weekly_utilization(record.get("rate_limit"))
+                        if args.stop_above and used is not None and used > args.stop_above:
+                            print(summarize(records))
+                            say(
+                                f"stopping: the seven-day window is at {used:.0%}, above the "
+                                f"--stop-above limit of {args.stop_above:.0%}. Runs already "
+                                "recorded are kept; the same command resumes where it stopped."
+                            )
+                            return 4
                         break
                     if not args.wait_for_reset:
                         records.append(record)

@@ -5,6 +5,7 @@ commits, dependencies are cloned beside the checkout, the link check and the who
 what the plan says they grade. The acceptance over the real repositories is the `slow` test at
 the end (skipped until `bash bench/agent/fetch.sh` has run)."""
 
+import gzip
 import json
 import subprocess
 from pathlib import Path
@@ -252,6 +253,31 @@ def test_the_report_counts_stamps_over_the_cross_repo_tasks_only():
         assert table[task]["_family"] == "cross-repo"
     text = report.render(table, "t")
     assert "## Stamps written (cross-repo tasks)" in text
+
+
+def test_the_weekly_guard_reads_the_seven_day_window():
+    """One turn-capped run cost 1.9M tokens (P8-T3), so a long sweep is guarded, not estimated."""
+    event = {"unifiedWindows": {"seven_day": {"utilization": 0.62}, "five_hour": {}}}
+    assert harness.weekly_utilization(event) == 0.62
+    for junk in (None, {}, {"unifiedWindows": {}}, {"unifiedWindows": {"seven_day": {}}}):
+        assert harness.weekly_utilization(junk) is None
+
+
+def test_a_gzipped_stream_replays_the_same_as_a_plain_one(tmp_path):
+    """Ninety streams are tens of megabytes, so the committed ones are gzipped."""
+    plain = tmp_path / "1.stream.jsonl"
+    plain.write_text('{"type":"system","subtype":"init"}\n', encoding="utf-8")
+    assert harness.resolve_stream(plain) == plain
+    assert harness.read_stream(plain) == ['{"type":"system","subtype":"init"}']
+    packed = tmp_path / "1.stream.jsonl.gz"
+    with gzip.open(packed, "wt", encoding="utf-8") as fh:
+        fh.write('{"type":"system","subtype":"init"}\n')
+    plain.unlink()
+    assert harness.resolve_stream(plain) == packed
+    assert harness.read_stream(plain) == ['{"type":"system","subtype":"init"}']
+    packed.unlink()
+    with pytest.raises(harness.HarnessError):
+        harness.read_stream(plain)
 
 
 # --- P8-T2: the task set ------------------------------------------------------------------------
