@@ -2,13 +2,15 @@
 
 Name form: the registries are asked in order (an HTTP registry hands back its object, a local one
 does the git work). Locator form: straight to git through `[remotes]` — no registry is needed,
-though a local registry that names the same target lends its name and description. Identity form
-needs the object cache (P2-T2). A `#symbol` on either form selects one definition of the file.
+though a local registry that names the same target lends its name and description. Identity form:
+the object cache, then the index — every location known to carry that identity, the most recent
+one as the address. A `#symbol` on either form selects one definition of the file. Every page
+resolved is stored in the object cache on the way out.
 """
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 
-from cttp import gitcache
+from cttp import gitcache, objects
 from cttp.address import Address, parse
 from cttp.extract import ExtractError, Page, definitions, extract, language_of
 from cttp.hashing import ShapeError, identity, shape, short
@@ -54,6 +56,11 @@ class Resolved:
     registry: str | None  # which registry answered, or lent the name; None for a bare locator
     refs: list[dict]  # derived references: {"address", "relation": "ref", "origin": "derived"}
     imports: dict  # {"stdlib": [...], "third_party": [...]} — top-level modules the page needs
+    # not part of the registry contract: set when an identity address was answered from a cache
+    locations: list[dict] = field(
+        default_factory=list
+    )  # every place the page was seen, latest last
+    via: str | None = None  # "cache" | "index" | None (the repository itself)
 
     FIELDS = (
         "name", "address", "rev", "identity", "identity_full", "shape", "shape_full", "kind",
@@ -78,6 +85,7 @@ class Resolved:
             "rev": "derived",
             "refs": "derived",
             "description": "asserted" if self.description is not None else None,
+            "location": self.via or "repository",
         }
         return d
 
@@ -90,12 +98,14 @@ def resolve(text: str, registries: Registries, expect: str | None = None) -> Res
         claimed = expect.removeprefix("sha256:").lower()
         if not claimed or not r.identity_full.startswith(claimed):
             raise Mismatch(r, expect)
+    if r.via is None:
+        objects.store(r)
     return r
 
 
 def _resolve(a: Address, registries: Registries) -> Resolved:
     if a.form == "identity":
-        raise ResolveError("identity addresses need the object cache (P2-T2)")
+        return resolve_identity(a)
     if a.form == "locator":
         return resolve_locator(a, registries)
 
@@ -150,6 +160,49 @@ def resolve_locator(a: Address, registries: Registries) -> Resolved:
         a.path,
         entry,
         registry.describe() if registry else None,
+    )
+
+
+def resolve_identity(a: Address) -> Resolved:
+    """Identity → the object cache, then the index: the page and every location it was seen at.
+    The address is the location seen most recently; `via` says which cache answered."""
+    try:
+        stored = objects.lookup(a.identity)
+    except objects.AmbiguousIdentity as e:
+        raise ResolveError(str(e)) from e
+    if stored is None:
+        stored = objects.index_lookup(a.identity)
+    if stored is None:
+        raise ResolveError(
+            f"sha256:{a.identity[:16]} is known to neither the object cache nor the index "
+            "(the index arrives in Phase 4); resolve it by name or locator once to cache it"
+        )
+    at = stored.latest
+    shp = stored.meta["shape_full"]
+    return Resolved(
+        name=at["name"],
+        address=at["address"],
+        rev=at["rev"],
+        identity=f"sha256:{short(stored.identity)}",
+        identity_full=stored.identity,
+        shape=f"sha256:{short(shp)}" if shp else None,
+        shape_full=shp,
+        kind=stored.meta["kind"],
+        language=stored.meta["language"],
+        symbol=stored.meta["symbol"],
+        signature=stored.meta["signature"],
+        docstring=stored.meta["docstring"],
+        span=stored.meta["span"],
+        source=stored.source,
+        description=at["description"],
+        license=at["license"],
+        target=at["target"],
+        path=at["path"],
+        registry=at["registry"],
+        refs=stored.meta["refs"],
+        imports=stored.meta["imports"],
+        locations=[{**x, "origin": "cache"} for x in stored.locations],
+        via="cache",
     )
 
 

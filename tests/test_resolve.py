@@ -60,7 +60,7 @@ def test_resolve_locator_errors_name_the_part(registry):
         resolve("github.com/leorinaldi/cttp-registry@nope/snippets/hello_world.py", registry)
     with pytest.raises(ResolveError, match="'missing.py' is not in"):
         resolve("github.com/leorinaldi/cttp-registry@main/missing.py", registry)
-    with pytest.raises(ResolveError, match="identity"):
+    with pytest.raises(ResolveError, match="neither the object cache nor the index"):
         resolve("sha256:" + "a" * 12, registry)
 
 

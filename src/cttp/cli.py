@@ -15,6 +15,8 @@ from cttp.registry import RegistryError, open_registries
 from cttp.resolve import Resolved, ResolveError
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, rich_markup_mode=None)
+cache_app = typer.Typer(no_args_is_help=True, rich_markup_mode=None)
+app.add_typer(cache_app, name="cache", help="The git and object caches under ~/.cache/cttp.")
 state = {"json": False}
 
 RegistryOpt = Annotated[
@@ -83,6 +85,9 @@ def resolve(
         fail(str(e))
     lic = r.license or "not available"
     head = f"{r.address}  {r.identity}  {r.kind}/{r.language}  license={lic}"
+    if r.via:
+        head += f"  (from the object {r.via}; seen at {len(r.locations)} location(s))"
+        head += "".join(f"\n# seen: {x['address']}  {x['seen']}" for x in r.locations)
     if r.signature:
         head += f"\n# {r.signature}" + (f" — {r.docstring}" if r.docstring else "")
     if r.description:
@@ -176,6 +181,38 @@ def check(files: list[Path], registry: RegistryOpt = None, json_: JsonOpt = Fals
     )
     if bad:
         raise typer.Exit(1)
+
+
+@cache_app.command("status")
+def cache_status(json_: JsonOpt = False) -> None:
+    """What the caches hold: repositories, objects, run-cache entries."""
+    want_json(json_)
+    from cttp.objects import status
+
+    st = status()
+    emit(
+        st,
+        f"cache: {st['home']}\n"
+        + "\n".join(
+            f"  {k}: {st[k]['count']} ({st[k]['bytes'] / 1e6:.1f} MB)"
+            for k in ("repos", "objects", "run")
+        ),
+    )
+
+
+@cache_app.command("clear")
+def cache_clear(
+    run: Annotated[
+        bool, typer.Option("--run", help="Also clear the run cache (what was confirmed to run).")
+    ] = False,
+    json_: JsonOpt = False,
+) -> None:
+    """Remove the cached repositories and objects; the run cache only with --run."""
+    want_json(json_)
+    from cttp.objects import clear
+
+    removed = clear(run=run)
+    emit({"removed": removed}, "\n".join(f"removed {p}" for p in removed) or "nothing to remove")
 
 
 @app.command()
