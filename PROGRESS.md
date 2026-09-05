@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 7 BUILT; P7-T2/T3 WAIT ON LEO FOR THE OUTWARD-FACING STEPS. NEXT IS P8-T1 (THE HARNESS).** Phase 0
+**Status: PHASES 0 TO 7 COMPLETE BUT FOR THE `cttp.ai` DNS (LEO). NEXT IS P8-T1 (THE HARNESS).** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -44,31 +44,28 @@ them, the `CTTP_TOKEN` secret, enabling Pages, the DNS for `cttp.ai` and the two
 requests are Leo's, and are the open items of P7-T2/T3. 334 fast tests green plus 2 `slow`
 corpus tests (deselected by default), ruff clean.
 
-_Last updated: 2026-09-05 (Phase 7 built; its publish steps pending)._
+_Last updated: 2026-09-05 (Phase 7; cttp.ai DNS pending)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: finish P7-T2/T3's outward-facing steps, if Leo has approved them** (see
-**Environment** below for the exact state):
-1. Push the registry clone's `p7` branch and merge it to `main` (`verify.yml`, `pages.yml`,
-   `cttp.toml` declaring `hello-world`, README with the claiming instructions).
-2. ~~The `CTTP_TOKEN` secret~~ — not needed: `cttp` went **public** on 2026-09-05 and the
-   workflows install from it directly (a fork's PR gets no secrets, so a token would have broken
-   every claim but Leo's own).
-3. Enable Pages from GitHub Actions (`gh api -X POST repos/leorinaldi/cttp-registry/pages -f
-   build_type=workflow`), set the custom domain `cttp.ai`, and point the DNS at Pages (apex `A`
-   records 185.199.108.153 / .109 / .110 / .111, or the `ALIAS` the registrar offers).
-4. The P7-T2 acceptance, by hand: a good claim (`cttp name claim hello-world --target
-   github.com/leorinaldi/cttp-registry/snippets/hello_world.py --description "Prints 'hello
-   world'."` opens a real PR through the tool — the same owner, so `updated`) passes the check;
-   a hand-written `names/bogus.toml` pointing at an undeclared name fails it. Record both PR
-   numbers here.
-5. The P7-T3 acceptance: `curl -s https://cttp.ai/hello-world.json` equals
-   `localhost:3120/hello-world.json`; a fresh config (`CTTP_CONFIG=/tmp/x cttp run hello-world
-   --yes`) prints `hello world!` through cttp.ai.
+**Start here: the last two P7-T3 steps, which wait on Leo's DNS.** Everything else in Phase 7
+is done and recorded (see **Environment** and the build history):
+1. **DNS for `cttp.ai`** — Leo, at the registrar: apex `A` records 185.199.108.153,
+   185.199.109.153, 185.199.110.153, 185.199.111.153 (or an `ALIAS` to `leorinaldi.github.io`).
+   Pages is enabled from Actions with `cname = cttp.ai` and the first deploy succeeded;
+   `https://leorinaldi.github.io/cttp-registry/hello-world.json` already answers 301 to
+   `http://cttp.ai/hello-world.json`, which is dead until the records exist. Once they do,
+   GitHub issues the certificate; then `gh api -X PUT repos/leorinaldi/cttp-registry/pages -f
+   https_enforced=true`.
+2. The P7-T3 acceptance, once DNS resolves: `curl -s https://cttp.ai/hello-world.json` equals
+   `localhost:3120/hello-world.json`; a fresh config (`CTTP_CONFIG=/tmp/x/config.toml uv run
+   cttp run hello-world --yes`) prints `hello world!` through cttp.ai, with `resolve --json`
+   naming `https://cttp.ai` as the registry.
+3. Decide what to do with **registry PR #1** (the tool's own re-claim of `hello-world`, checks
+   green): merge it (the entry is rewritten in `tomli_w`'s format, same content) or close it.
 
 **Then P8-T1 — the benchmark harness.** Read its entry in [`docs/plan.md`](docs/plan.md) in
 full and consult the `claude-api` skill before writing a line: two arms differing only in tools,
@@ -496,13 +493,18 @@ Also pending Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced b
 - Git on `main`, remote `origin` → `github.com/leorinaldi/cttp` (**public** since 2026-09-05;
   history scanned for secrets first — none).
 - **Registry repo:** `github.com/leorinaldi/cttp-registry` (**public**), first commit
-  `d29352a4fbf1` tagged `v1`. **Unpushed (2026-09-05):** the clone at
-  `~/.local/share/cttp/registry` has a local branch **`p7`** (three commits on top of `origin/main`,
-  worktree at the session scratchpad, since removed — `git worktree prune` if it lingers) with
+  `d29352a4fbf1` tagged `v1`; `main` is now `5125a659a10f` (2026-09-05) with
   `.github/workflows/verify.yml`, `.github/workflows/pages.yml`, `cttp.toml` declaring
   `names = ["hello-world"]` (identical to `tests/fixtures/registry/cttp.toml`) and the README's
-  claiming instructions. `git -C ~/.local/share/cttp/registry push origin p7:main` publishes it
-  once Leo says so; Actions are enabled on the repo, Pages is not yet.
+  claiming instructions. The clone at `~/.local/share/cttp/registry` is at that commit, clean.
+  **Pages** is enabled from Actions (`build_type = workflow`, `cname = cttp.ai`); the first
+  `pages` run (33974576676) exported and deployed. **P7-T2 acceptance, done 2026-09-05:**
+  **PR #1** (`claim/hello-world`, opened by `cttp name claim` itself — action `updated`, same
+  owner) → `verify` **passed** all five checks in 17 s, `resolves` giving
+  `hello-world@5125a659a10f sha256:75a27070015e` in CI; **PR #2** (`claim/bogus`, a hand-written
+  entry for an undeclared name) → `verify` **failed** on `declaration` ("declares
+  'cttp-registry', 'hello-world' … not 'bogus'"), the other checks ok; closed with a comment,
+  branch deleted. PR #1 is left open for Leo. Runs 33974607931 and 33974629545.
 - **On this machine (2026-09-04):** `~/.config/cttp/config.toml` is the first-run default *as it
   was before P7-T3* (localhost first, then `~/.local/share/cttp/registry`, which is a **real
   clone** of the public repo); an existing file is never rewritten, so `https://cttp.ai` is not in
@@ -708,8 +710,11 @@ is the archive, and a bloated history taxes every future session start.
   token secret; a fork's PR gets no secrets, which would have broken every outside claim, so
   **`cttp` was made public** (history scanned for secrets first) and the token dropped.
   `pages.yml` writes `CNAME` and `.nojekyll` itself so the export stays host-neutral.
-  Outward-facing steps (push, secret, Pages, DNS, the two acceptance PRs) were not done: the
-  plan says ask first.
+  The outward-facing steps were done on Leo's word later the same session: the registry's
+  `main` pushed, Pages enabled from Actions with the `cttp.ai` domain, and the P7-T2 acceptance
+  run for real — PR #1 opened by the tool itself passed `verify` (the `resolves` check ran a real
+  resolution in CI); PR #2, a hand-written undeclared name, failed on `declaration` and was
+  closed. The DNS is Leo's; the P7-T3 acceptance waits on it.
 - **2026-09-05 (fifteenth session) — Phase 6 end to end: P6-T1 the tree-sitter extractor,
   P6-T2 the corpus and acceptance test 1, P6-T3 the measurement.** Three commits. P6-T1:
   `tree-sitter` 0.26.0 segfaulted on nodes returned from query captures (a `Point` read from
