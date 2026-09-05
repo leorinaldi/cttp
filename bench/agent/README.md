@@ -282,6 +282,37 @@ the arms as they now stand and are **not** part of P8-T3's ninety — they are k
 of why the note exists. The other reading stands whatever the prompt says: a tool's JSON payload
 is counted as context whatever the agent needed out of it, and the report says so.
 
+## The links arm cannot confirm a negative (2026-09-05)
+
+The first two runs of `im-color-default-click` on the links arm, and what they cost:
+
+| run | status | turns | tokens | of which cache reads | `Read` calls |
+|---|---|---:|---:|---:|---:|
+| 1 | pass | 37 | 1,895,253 | 1,708,203 | 14 |
+| 2 | error (hit the 40-turn cap) | 41 | 5,043,073 | 4,735,684 | 63 |
+
+Both runs had the right answer from their **first** tool call: `who` on the target returns the
+five definitions the reference `impact.txt` lists, and `git grep` over the clone agrees — no test
+references `resolve_color_default`, so the task is well formed. What the agent then spent 80 more
+tool calls on was trying to establish that *nothing else* uses it. It could not. `who` omits a
+`src/` layout's tests by construction (the extractor resolves absolute imports against the
+importing file's ancestors, so `tests/` never reaches `src/click/`), and the links arm has no
+`grep` with which to check. So it searched, folded and read its way across the repository — 63
+`Read` calls in the second run — and ran out of turns.
+
+This is a real result, not a harness fault, and it is probably the most interesting thing the
+benchmark has produced so far: **the tool answers the question, and the agent cannot tell that
+the answer is complete.** A `who` that covered src-layout tests would likely end the thrash;
+that limitation is a logged follow-up, and the benchmark is what pulled its trigger. Fixing it
+mid-sweep would make the runs incomparable, so it is reported and not fixed here.
+
+Two consequences for reading the table. Cost grows with the square of the turn count — every turn
+re-reads the whole conversation from cache — so a non-converging run is worth 50 short ones and
+would wreck a mean; the report uses **medians**, and per-task rows keep this task's behaviour
+visible instead of buried. And a run that hits the turn cap is recorded as `error`, so it enters
+neither the pass rate nor the median: **run health** is where it shows up, and a family whose
+links arm has errors should be read as "did not converge", not as a missing measurement.
+
 ## Caveats for the report
 
 Both arms run inside Claude Code's harness, so the comparison is between tool sets inside Claude

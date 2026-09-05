@@ -73,6 +73,33 @@ _The ninety runs are in progress; this section is filled from
 
 ---
 
+## The finding that came before the table
+
+The first two runs of the sweep — `im-color-default-click`, links arm — cost 1,895,253 and
+5,043,073 tokens. The second hit the 40-turn cap and was recorded as an error. Both had the right
+answer from their **first** tool call: `who` returns exactly the five definitions the reference
+answer lists, and `git grep` over the clone agrees that no test uses the target.
+
+What the agent spent its remaining eighty tool calls on was trying to establish that *nothing
+else* used it — and it could not. `cttp who` omits a `src/` layout's tests by construction, and
+the links arm has no `grep` to check with. So it searched, folded and read across the repository,
+63 `Read` calls in the second run, until it ran out of turns.
+
+**The tool answered the question; the agent could not tell that the answer was complete.** That
+is a property of the interface, not of the harness, and it is the most useful thing this
+benchmark has produced. A `who` that resolved src-layout imports would likely end the thrash. It
+is a logged follow-up, and fixing it mid-sweep would make the runs incomparable, so it is
+reported here rather than fixed.
+
+Two consequences for reading the table below. **Cost grows with the square of the turn count** —
+every turn re-reads the whole conversation from cache, so 6 turns cost 37k tokens, 18 cost 189k
+and 41 cost 5M. One non-converging run outweighs fifty short ones, so the table reports medians
+and keeps per-task rows. And a run that hits the turn cap is an `error`: it enters neither the
+pass rate nor the median, and shows up only under run health. A family whose links arm carries
+errors should be read as *did not converge*, not as a gap in the data.
+
+---
+
 ## What the number does not mean
 
 Six things a reader should hold against any ratio in the table.
@@ -85,7 +112,7 @@ Six things a reader should hold against any ratio in the table.
    objects — source plus metadata, 3.5–4.6k characters each — where the baseline's `grep -A 40`
    returns only the lines it asked for. The links arm pays for everything the tool knows, whether
    or not it needed it. That is a real cost of the interface as built, not a measurement error,
-   and it is the single largest contributor to the ratio.
+   and on the tasks that converge it is the largest single contributor to the ratio.
 
 3. **The model already knows these libraries.** click, attrs and rich are widely-read public code
    with a training cutoff behind them. In the first runs the baseline went straight to the right
