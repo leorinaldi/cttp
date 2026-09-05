@@ -92,6 +92,7 @@ def test_resolve_json_is_the_same_with_the_server_up_or_down(via_http, registry)
     assert up == down
     cli_out = json.loads(runner.invoke(cli, ["--json", "resolve", "hello-world"]).stdout)
     cli_out.pop("registry")
+    assert cli_out.pop("schema_version") == 1
     assert cli_out == down
 
 

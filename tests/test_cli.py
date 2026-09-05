@@ -11,7 +11,7 @@ runner = CliRunner()
 def test_version():
     assert runner.invoke(app, ["--version"]).stdout.strip() == f"cttp {__version__}"
     out = runner.invoke(app, ["--json", "--version"]).stdout
-    assert json.loads(out) == {"version": __version__}
+    assert json.loads(out) == {"schema_version": 1, "version": __version__}
 
 
 def test_resolve_json(registry):

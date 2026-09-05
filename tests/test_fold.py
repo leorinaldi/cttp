@@ -51,7 +51,7 @@ def test_acceptance_open_unfolds_one_block(registry, tmp_path):
 def test_fold_json_lists_links_with_line_ranges(registry, tmp_path):
     f, g, h = spec_7_file(registry, tmp_path)
     j = json.loads(runner.invoke(app, ["fold", str(f), "--json"]).stdout)
-    assert j[str(f)] == [
+    assert j["files"][str(f)] == [
         {
             "line": 1,
             "relation": "is",

@@ -21,6 +21,7 @@ from cttp.index import queries
 from cttp.index.schema import IndexingError, default_index_path, open_index
 from cttp.registry import RegistryError, open_registries
 from cttp.resolve import ResolveError, resolve
+from cttp.schemas import stamp
 
 app = FastAPI(title="cttp registry", version=__version__)
 templates = jinja2.Environment(
@@ -157,7 +158,7 @@ def name_page(slug: str):
     except ERRORS as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     if want_json:
-        return JSONResponse(r.to_json())
+        return JSONResponse(stamp(r.to_json()))
     conn = index_conn()
     backlinks = _safe(queries.who, conn, str(a), reg) if conn else None
     hist = _safe(queries.history, conn, str(a), reg) if conn else None

@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 4 COMPLETE. NEXT IS P5-T1 (stable `--json` schemas).** Phase 0
+**Status: PHASES 0 TO 5 COMPLETE. NEXT IS P6-T1 (the tree-sitter extractor).** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -18,39 +18,44 @@ queries `who`, `dups [--shape]`, `closure --indexed`, `search`, `history`, `rank
 rule 3** through the index (a move across repositories, or a fork); spec §12 **acceptance tests
 2 and 3** as pytest; and **the viewer over the index** (search, `/d/<identity>`,
 `/r/<locator>`, `/dups`, the name page with history and *who links here*), derived and asserted
-facts in two labelled columns. 275 tests green, ruff clean.
+facts in two labelled columns. Phase 5 (2026-09-05): **the agent interface** — `schemas.py`,
+the one definition of every command's `--json` object (`schema_version` stamped on all of them,
+strict validation of every subcommand's real output, a pinned fingerprint, `docs/json-schemas.md`
+generated); and `cttp mcp`, an MCP server over stdio whose six tools (`resolve`, `who`, `closure`,
+`search`, `dups`, `fold`) answer exactly what the CLI prints, checked from Claude Code by hand.
+295 tests green, ruff clean.
 
-_Last updated: 2026-09-05 (Phase 4)._
+_Last updated: 2026-09-05 (Phase 5)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: P5-T1 — stable `--json` schemas.** Read its entry in [`docs/plan.md`](docs/plan.md)
-in full. `src/cttp/schemas.py` becomes the one definition of every command's JSON output
-(TypedDicts or dataclasses) with `origin` on every derived or asserted value, `null` for
-unavailable, and a `schema_version`; a test runs every command against the fixtures and validates
-the output; `docs/json-schemas.md` is generated from the definitions and registered in
-`CLAUDE.md`'s document map. What Phase 4 leaves for it: the query outputs (`who`, `dups`,
-`closure --indexed`, `search`, `history`, `rank`, `index add|crawl|status`) were written with
-`--json` from the start but their shapes are only in `index/queries.py`'s docstrings and the
-tests; `Latest.to_json()` grew `via`; the contract object is in spec §8's table now, so the
-schema for `resolve` can be checked against the spec.
+**Start here: P6-T1 — the tree-sitter extractor.** Read its entry in [`docs/plan.md`](docs/plan.md)
+in full. `extract/treesitter.py` with a per-language query file (`queries/c.scm` first) naming
+definition node types and the name field; identity and shape for C (shape via the grammar's
+identifier and literal nodes, not `tokenize`); `resolve` and `index crawl` route non-Python files
+through it; links in C comments already parse (`links.py` handles `//` and `/* */`). Acceptance:
+`cttp resolve <locator to the corpus's lm75.c>#<decoder>` returns its exact span and a derived
+signature; the same function in two files is one identity; two functions differing only in
+identifiers are one shape. Before starting, decide the dependency (`tree-sitter` +
+`tree-sitter-c` wheels; pin in `pyproject.toml`) and note that `Page.language` / `shape: null`
+for non-Python is the thing that changes — the `resolve` schema's `language` enum (`python`,
+`text`) will grow, which is a **schema change: bump `SCHEMA_VERSION`**, re-pin the fingerprint,
+regenerate the doc, note it here.
 
-Worth a look before or during P5-T1: `docs/spec.md` §9 lists `closure` once, while the CLI has a
-live `closure <address>` (P3-T1) and `closure --indexed <address>…` (P4-T2, several roots,
-`missing` for targets the index cannot tell) — the spec should say which the agent gets, or
-that both exist.
+Also worth doing early in P6, since the corpus is local: `cttp index add bench/drivers/corpus`
+after P6-T1 is the P6-T2 acceptance's first half.
 
-If Leo wants to play: the real index at `~/.local/share/cttp/index.db` already has this
-repository and the public registry crawled (see **How to run**); `cttp dups` finds
-`runner = CliRunner()` thirteen times across the test files, `cttp who hello-world` lists the
-spec's own examples, and **http://localhost:3120** shows all of it.
+If Leo wants to play with Phase 5: `uv run cttp mcp install` prints the `claude mcp add` line
+(`--claude-code` runs it; not run this session — see **Environment**); after that, in Claude
+Code, *who links to hello-world?* calls the `who` tool. `uv run cttp --json <anything>` now
+prints `schema_version` first, and `docs/json-schemas.md` says what every field means.
 
 ## Current state — working & verified
 
-**Code (`src/cttp/`), 2026-09-05.** Real modules; Phases 1 to 4 in full:
+**Code (`src/cttp/`), 2026-09-05.** Real modules; Phases 1 to 5 in full:
 - `config.py` — **P0-T3/T4.** `~/.config/cttp/config.toml` (XDG; `CTTP_CONFIG` overrides the
   path): `registries` (ordered list of HTTP URLs or local paths; first match wins) and
   `[remotes]` (locator prefix → URL prefix, longest prefix wins, else `https://<locator>.git`).
@@ -258,6 +263,38 @@ spec's own examples, and **http://localhost:3120** shows all of it.
   same-second ties), `changed` and `absent` flags. **`rank`**: distinct linking pages
   (identity, repo, file) per target — a verbatim copy linking back counts; a definition's derived
   reference to itself does not. **`forward()`** is `--latest`'s rule 3 (P4-T3).
+- `schemas.py` — **P5-T1.** The one definition of every command's `--json` output: a small
+  schema language (`S` nodes: object, array, map, string, integer, number, boolean, enum, ref;
+  `.null()`, `.derived()`, `.asserted()`, `.about()`), shared objects in `DEFS` (`page` — the
+  contract object; `location`, `ref`, `link`, `imports`, `node`, `missing`, `expand_report`,
+  `check_report`, `update_report`, `fold_entry`, `backlink`, `by`, `dup_group`, `hit`,
+  `revision`, `ranked`, `crawled`, `repo_status`, `closure`), and `COMMANDS` — 24 entries
+  (`version`, `config`, `resolve`, `resolve --latest`, `closure`, `expand`, `add`, `check`,
+  `update`, `fold`, `run` (no object: the program's output), `cache status|clear`, `index
+  add|crawl|status`, `who`, `dups`, `search`, `history`, `rank`, `mcp install`, `error`), each
+  with usage, summary, *when*, notes and schema. `stamp()` puts `schema_version` (1) first on
+  every object — `cli.emit()`, `cli.fail()` and the server's `/<name>.json` all go through it.
+  `validate()` is strict (missing, extra, type, enum, null); `json_schema()` renders draft
+  2020-12 (inline, or with `$defs`); `markdown()` renders `docs/json-schemas.md`;
+  `fingerprint()` digests every schema and `FINGERPRINTS = {1: "95c46a2dbc0766c1"}` pins it.
+  **Shapes frozen this session (deliberate, first version):** `expand`, `add` and `fold` wrap
+  their per-file map in `files`; `index crawl` wraps its list in `crawled`; `closure` gained
+  `source` (`repository` | `index`), `roots` and `missing` (empty for the live walk) so the live
+  and indexed walks are one schema; `dups` groups carry `key` / `key_full` instead of
+  `identity`/`shape` and `origin.by` instead of a dynamic key; `--version` and the error object
+  carry `schema_version` too. `# ruff: noqa: E501` in this one file.
+- `mcp.py` — **P5-T2.** `build_server()`: an `MCPServer` (the official `mcp` SDK, **2.1.1** —
+  `FastMCP` was renamed) named `cttp` with instructions and six tools — `resolve(address,
+  id)`, `who(address)`, `closure(addresses, indexed)`, `search(text, limit)`, `dups(shape)`,
+  `fold(file, open)` — each calling the function the CLI calls and returning a `CallToolResult`
+  with the stamped object as `structuredContent` and the same JSON as text; descriptions come
+  from `COMMANDS` (summary + when + notes + "Same object as `cttp …`"); annotations read-only,
+  idempotent, open-world for `resolve` and `closure`; `outputSchema` is `json_schema(name)`,
+  set on `fn_metadata` by hand. A failure raises `ToolError` with the CLI's message (the client
+  sees `isError` and the text). `cttp mcp [--registry] [--index]` runs it over stdio
+  (`serve()`); `cttp mcp install [--claude-code]` prints, or runs, `claude mcp add --transport
+  stdio cttp -- <.venv/bin/cttp> mcp`. `--latest`, `expand`, `add`, `check`, `update`, `run`
+  and the index commands are CLI-only on purpose (they write, ask, or run).
 - `server/app.py` — **P4-T4.** FastAPI on **3120**: the contract as before (`/<name>.json`,
   `/<name>@<version>.json`, `%23<symbol>`), and the viewer of spec §9 over the index: `/`
   (names, index status, `?q=` search), `/d/<identity>` (derived and asserted columns, every
@@ -272,16 +309,30 @@ spec's own examples, and **http://localhost:3120** shows all of it.
   check [--fix] | update [--all] [--to] [--yes] | fold [--open] | run [--yes] | cache status |
   cache clear [--run] | index add <repo-or-path> | index crawl [<repo>…] [--rev] [--force] | index
   status | who <address> | dups [--shape] | search <text>… [--limit] | history <address> | rank
-  [--limit]`; every index-reading command takes `--index <path>`; `--json` is accepted before or
-  after the subcommand. `closure` with several addresses, or `--indexed`, reads the index; one
+  [--limit] | mcp [--registry] [--index] | mcp install [--claude-code]`; every index-reading
+  command takes `--index <path>`; `--json` is accepted before or after the subcommand, and every
+  object is stamped with `schema_version` (P5-T1). `closure` with several addresses, or `--indexed`, reads the index; one
   address without the flag is the live walk. `update` takes files and addresses mixed; exit 2
   when a change waited for a confirmation it did not get. `_interactive()` wraps the tty check
   so tests can drive the prompts. `resolve`'s text form prints the signature and docstring on a
   `#` line, `# seen:` lines when an identity came from a cache (`cache` or `index`), and `from →
   to` with the rule (`via index` when the index found it) under `--latest`.
-- Tests: 275 in `tests/` — `test_{address,hashing,extract_python,config,links,gitcache,resolve,
+- Tests: 295 in `tests/` — `test_{address,hashing,extract_python,config,links,gitcache,resolve,
   objects,latest,closure,expand,check,update,fold,run,package,server,cli,index_crawl,
-  index_queries,acceptance_move,acceptance_provenance}.py`. `test_index_crawl.py` is the P4-T1
+  index_queries,acceptance_move,acceptance_provenance,schemas,mcp}.py`. `test_schemas.py` is
+  the P5-T1 acceptance: every subcommand run through the CLI with `--json` against a fixture
+  world (both `resolve` forms and the cache form, `--id` and its mismatch, `--latest` found and
+  not found, live and indexed `closure` with a `missing` entry, `expand --write-deps` with all
+  five statuses, `add`, `check` with drift/unexpanded/`--fix`, `update` not-confirmed then
+  `--yes` with updated/unchanged/upstream, `fold`, `run`'s error object, both cache commands,
+  the three index commands, the five queries, and the error object) validated strictly; the
+  pinned fingerprint; the doc diffed against `markdown()`; the validator's own strictness; the
+  JSON Schemas checked with `jsonschema` (a transitive dependency of `mcp`); the contract
+  object validating as `resolve`. `test_mcp.py` is the P5-T2 acceptance: the in-memory client
+  (`mcp.client.Client(server)`) lists six tools with the P5-T1 schemas and read-only hints,
+  calls each and gets **exactly** the CLI's object, `closure` indexed by flag or by several
+  roots, `resolve` by identity, failures as tool errors with the CLI's message, the install
+  line. `test_index_crawl.py` is the P4-T1
   acceptance (row counts over `pyrepo` and a consumer, one `definitions` row per identity,
   `links` with origin, idempotence, a second rev adding one revision and only the changed
   definitions, an identity resolved from the index, a local clone added through its origin, a
@@ -367,8 +418,20 @@ spec's own examples, and **http://localhost:3120** shows all of it.
   `drivers/{gpio,hwmon,iio,rtc}`), copied from the fisheye session's scratchpad. The measurement
   scripts and the Linux commit did **not** survive; P6-T2 reconstructs them. The LM75 teardown
   files are at `bench/drivers/lm75-teardown/` (gitignored).
-- The server was restarted on the Phase 3 code on 2026-09-05 (`.local/serve.log`); the contract
-  now serves `links`, `unresolved`, `refs[].name` and `imports.statements`.
+- The server was restarted on the Phase 5 code on 2026-09-05 (`.local/serve.log`); the contract
+  object now carries `schema_version: 1` first (checked: `curl localhost:3120/hello-world.json`).
+- **MCP SDK `mcp` 2.1.1** added to `pyproject.toml` (with `jsonschema`, `pydantic`,
+  `sse-starlette` and friends as transitive dependencies; `uv.lock` updated). 2.x renamed
+  `FastMCP` to `MCPServer` — see overview §8.
+- **The MCP server was checked from Claude Code by hand (2026-09-05)** without touching Leo's
+  config: `claude -p "Using the cttp MCP tools, who links to hello-world?" --mcp-config
+  <scratch>/mcp.json --strict-mcp-config --allowedTools mcp__cttp__who,… --model sonnet
+  --output-format stream-json` produced one call to `mcp__cttp__who` with `{"address":
+  "hello-world"}` and the answer "3 links to hello-world: docs/spec.md (lines 138 and 142) and
+  tests/fixtures/hello/hello.py (line 1), both in github.com/leorinaldi/cttp" — correct against
+  `cttp who hello-world`. **`cttp mcp install --claude-code` was not run** (it writes Leo's
+  Claude Code config); the line to run is `claude mcp add --transport stdio cttp --
+  /home/leo/Claude/cttp/.venv/bin/cttp mcp`.
 - `~/.cache/cttp/repos/` holds four real repositories from by-hand checks (2026-09-05):
   `pallets/itsdangerous`, `psf/requests`, `leorinaldi/cttp-registry`, and **`git/git`, which is
   ~340 MB** (cloned to check the matcher on a COPYING with a long preamble). `cttp cache status`
@@ -450,8 +513,17 @@ trigger that would schedule it.
 - **`runner = CliRunner()` is defined thirteen times across the test files** — `cttp dups`'s
   first real finding on this repository; a `conftest.py` fixture would do → **unscheduled**;
   trigger: the next time a test file is touched for another reason
-- **Spec §9 lists `closure` once**; the CLI has the live walk and `--indexed` → **unscheduled**;
-  trigger: the next spec edit, or P5-T1 deciding what the agent's `closure` tool is
+- **`--latest` is not an MCP tool** (nor are the writing commands); an agent that wants to
+  follow a link forward shells out to `cttp resolve --latest --json` → **unscheduled**; trigger:
+  an agent task in P8 that needs it (adding a `latest` tool is one function plus its schema)
+- **The viewer's `/dups` page links each location's `name` to `/<name>`** as if it were a
+  registry name, but `dups` locations carry the *definition's* name (the schema now says so) —
+  a dead link for every group → **unscheduled**; trigger: the next viewer session (drop the link
+  or look the registry name up per location)
+- **The `resolve` schema's `language` enum is `python` | `text`**; P6-T1 adds `c` (and more), a
+  schema change → **P6-T1** (bump `SCHEMA_VERSION`, re-pin, regenerate the doc)
+- **`cttp mcp install --claude-code` has not been run on this machine** → **unscheduled**;
+  trigger: Leo wanting the server attached to his Claude Code (he runs it, or says so)
 - **`resolve` through the index for a file that is its one definition says `kind: function`**
   (the definition's view won the `definitions` row) where git would say `script` for the file
   address — same text, same identity → **unscheduled**; trigger: it confuses someone
@@ -461,6 +533,30 @@ trigger that would schedule it.
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-05 (fourteenth session) — Phase 5 end to end: P5-T1 the `--json` schemas, P5-T2
+  `cttp mcp`.** Two tasks, one commit. P5-T1: `schemas.py` was written from the code's actual
+  outputs — every `to_json()` and query dict read first — as a small schema language rather than
+  TypedDicts, because one definition had to do three jobs at once: validate strictly (extra
+  fields are errors, so shape drift is caught the day it happens), render JSON Schema for the
+  MCP tools' `outputSchema`, and render the Markdown doc. Load-bearing decisions: **every
+  object is stamped** with `schema_version` at the one place the CLI prints (`emit`) and at the
+  contract route, so the registry contract and `cttp resolve --json` stay byte-identical;
+  **a schema change is a deliberate act** — a fingerprint of every JSON Schema is pinned per
+  version and the test's failure message says what to do; **the live and indexed `closure` are
+  one object** (`source`, `roots`, `missing`), which settled the spec §9 follow-up and gave the
+  MCP tool one output schema; `dups` groups got a fixed `key`/`key_full` so `--shape` is the same
+  schema; `expand`/`add`/`fold` wrap their per-file map in `files` and `crawl` its list in
+  `crawled`, so every object is an object with a version. The schema test builds a fixture world
+  and runs all 24 command shapes for real, including every report status. P5-T2: the official
+  `mcp` SDK turned out to be 2.x (`MCPServer`, not `FastMCP`), so the server hands the SDK
+  pre-built tools with the P5-T1 JSON Schema set as `output_schema` and returns
+  `CallToolResult`s itself — the only way to keep the tool's object byte-identical to the CLI's
+  (the SDK would otherwise wrap a `dict` return in `{"result": …}`). The test asserts that
+  equality per tool through the SDK's in-memory client. By hand: the real stdio server listed
+  six tools and answered `who hello-world` from the real index; Claude Code (Sonnet, via a
+  scratch `--mcp-config`) called `mcp__cttp__who` and answered correctly. Spec §9 amended
+  (schemas, `closure` in both modes); `docs/json-schemas.md` registered in `CLAUDE.md`. Server
+  restarted on the new code. 275 → 295 tests.
 - **2026-09-05 (thirteenth session) — spec §8 patched; Phase 4 end to end: P4-T1 the index
   schema and crawl, P4-T2 the six queries, P4-T3 `--latest` rule 3 with acceptance tests 2 and
   3, P4-T4 the viewer over the index.** Five commits. First the spec: §8 gained the
@@ -533,21 +629,12 @@ is the archive, and a bloated history taxes every future session start.
   now carry the pinned address in any form (`format_stamped` signature changed). Acceptance
   walked by hand from `/tmp`: the plan's locator command, a locator link expanded, run under
   `python3 -I`, and checked ok. 55 → 113 tests. Server restarted on the new code.
-- **2026-09-04 (eighth session) — P0-T5: first-run confirmation; test 4 as tests; Phase 0 done.**
-  `run` now asks before the first run of a pinned address (source, identity, license, registry)
-  and exits 2 with "pass --yes" when there is no terminal; the run-cache entry is the confirmed
-  marker and is only created after a yes (a declined run leaves nothing — found by a test).
-  `expand` refuses a page that contains `# cttp:` lines itself (closure is P3-T1). Tests split by
-  concern (`links`, `expand`, `check`, `run`), acceptance test 4 verbatim through the CLI, 41 →
-  55. Walked by hand against the live server including decline/accept through a pty via
-  `script(1)`. Also: `uv run --project <dir>` is the way to run cttp from another directory.
-
 ## How to run
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"          # uv lives here
 uv sync                                        # once; creates .venv
-uv run pytest -q                               # 275 tests, no network
+uv run pytest -q                               # 295 tests, no network
 uv run ruff check . && uv run ruff format --check .
 
 git clone https://github.com/leorinaldi/cttp-registry ~/.local/share/cttp/registry   # once
@@ -600,6 +687,16 @@ uv run cttp history github.com/leorinaldi/cttp-registry@main/snippets/hello_worl
 uv run cttp rank --limit 10
 uv run cttp closure --indexed github.com/leorinaldi/cttp@main/src/cttp/resolve.py#latest
 uv run cttp resolve --latest <pinned address>               # rule 3 through the index when 1 and 2 miss
+```
+
+Phase 5, the agent interface:
+
+```bash
+uv run cttp --json who hello-world | head -3               # every object starts with "schema_version": 1
+uv run cttp mcp install                                    # prints: claude mcp add --transport stdio cttp -- …/.venv/bin/cttp mcp
+uv run cttp mcp install --claude-code                      # runs it (writes Claude Code's config) — Leo's call
+uv run cttp mcp                                            # the server itself, over stdio; Ctrl-C
+uv run python -m cttp.schemas                              # regenerate docs/json-schemas.md after a schema change
 ```
 
 `scripts/make_local_registry.py` still builds an offline registry from the fixture if needed.

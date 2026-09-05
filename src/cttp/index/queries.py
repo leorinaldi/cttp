@@ -451,8 +451,8 @@ def dups(conn: sqlite3.Connection, by_shape: bool = False) -> dict:
             continue
         out.append(
             {
-                key: f"sha256:{short(k)}",
-                f"{key}_full": k,
+                "key": f"sha256:{short(k)}",
+                "key_full": k,
                 "identities": [f"sha256:{short(i)}" for i in idents],
                 "names": sorted({x["name"] for x in locs}),
                 "kind": locs[0]["kind"],
@@ -477,7 +477,7 @@ def dups(conn: sqlite3.Connection, by_shape: bool = False) -> dict:
         "by": key,
         "groups": out,
         "count": len(out),
-        "origin": {"groups": "derived", key: "derived"},
+        "origin": {"groups": "derived", "by": "derived"},
     }
 
 
@@ -544,6 +544,7 @@ def closure(conn: sqlite3.Connection, texts: list[str], registries=None) -> dict
     return {
         "address": roots[0][1]["address"],
         "identity": f"sha256:{short(roots[0][0])}",
+        "source": "index",
         "roots": [at["address"] for _, at in roots],
         "definitions": order,
         "count": len(order),

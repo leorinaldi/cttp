@@ -109,12 +109,15 @@ class Closure:
         return {
             "address": self.root.address,
             "identity": self.root.identity,
+            "source": "repository",  # a live walk; `closure --indexed` says "index"
+            "roots": [self.root.address],
             "definitions": [n.to_json() for n in self.nodes],
             "count": len(self.nodes),
             "lines": self.lines,
             "imports": list(self.imports),
             "stdlib": list(self.stdlib),
             "requires": list(self.requires),
+            "missing": [],  # the live walk refuses what it cannot tell (ClosureError)
             "origin": {"order": "derived", "imports": "derived", "requires": "derived"},
         }
 

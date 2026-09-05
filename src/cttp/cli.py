@@ -15,12 +15,15 @@ from cttp.index.schema import IndexingError
 from cttp.links import LinkError
 from cttp.registry import RegistryError, open_registries
 from cttp.resolve import ResolveError
+from cttp.schemas import stamp
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, rich_markup_mode=None)
 cache_app = typer.Typer(no_args_is_help=True, rich_markup_mode=None)
 app.add_typer(cache_app, name="cache", help="The git and object caches under ~/.cache/cttp.")
 index_app = typer.Typer(no_args_is_help=True, rich_markup_mode=None)
 app.add_typer(index_app, name="index", help="The index: register repositories and crawl them.")
+mcp_app = typer.Typer(invoke_without_command=True, rich_markup_mode=None)
+app.add_typer(mcp_app, name="mcp", help="The MCP server (stdio): the agent interface.")
 state = {"json": False}
 
 RegistryOpt = Annotated[
@@ -45,16 +48,18 @@ def want_json(flag: bool) -> None:
     state["json"] = state["json"] or flag
 
 
-def emit(data: dict | list, text: str) -> None:
+def emit(data: dict, text: str) -> None:
+    """The command's answer: the JSON object (its schema in `schemas.py`, stamped with the
+    schema version) or the text."""
     if state["json"]:
-        typer.echo(json.dumps(data, indent=2))
+        typer.echo(json.dumps(stamp(data), indent=2))
     else:
         typer.echo(text)
 
 
 def fail(message: str, code: int = 1) -> None:
     if state["json"]:
-        typer.echo(json.dumps({"error": message}), err=False)
+        typer.echo(json.dumps(stamp({"error": message})), err=False)
     else:
         typer.echo(f"error: {message}", err=True)
     raise typer.Exit(code)
@@ -275,7 +280,7 @@ def expand(
     except (*ERRORS, ExpandError) as e:
         fail(str(e))
     emit(
-        {f: [r.to_json() for r in rs] for f, rs in results.items()},
+        {"files": {f: [r.to_json() for r in rs] for f, rs in results.items()}},
         _report_lines(results) or "nothing to expand",
     )
 
@@ -301,7 +306,9 @@ def add(
         reports = add_link(address, file, open_registries(registry), at, package)
     except (*ERRORS, ExpandError) as e:
         fail(str(e))
-    emit({str(file): [r.to_json() for r in reports]}, _report_lines({str(file): reports}))
+    emit(
+        {"files": {str(file): [r.to_json() for r in reports]}}, _report_lines({str(file): reports})
+    )
 
 
 @app.command()
@@ -424,7 +431,7 @@ def fold(
         fail(str(e))
     except FileNotFoundError as e:
         fail(f"{e.filename}: no such file")
-    emit(out, "\n".join(t.rstrip("\n") for t in texts))
+    emit({"files": out}, "\n".join(t.rstrip("\n") for t in texts))
 
 
 @cache_app.command("status")
@@ -590,7 +597,7 @@ def index_crawl(
                 + (f", {len(r.skipped)} skipped" if r.skipped else "")
             )
             lines += [f"  skipped {x}" for x in r.skipped]
-    emit([r.to_json() for r in results], "\n".join(lines))
+    emit({"crawled": [r.to_json() for r in results]}, "\n".join(lines))
 
 
 @index_app.command("status")
@@ -659,8 +666,7 @@ def dups(
     lines = []
     for g in out["groups"]:
         lines.append(
-            f"{g[out['by']]}  {g['kind']}  {', '.join(g['names'])}  x{g['count']}  "
-            f"{g['lines']} line(s)"
+            f"{g['key']}  {g['kind']}  {', '.join(g['names'])}  x{g['count']}  {g['lines']} line(s)"
         )
         lines += [f"  {x['address']}" for x in g["locations"]]
     lines.append(f"{out['count']} group(s) by {out['by']}")
@@ -732,3 +738,63 @@ def rank(
     ]
     lines.append(f"{out['count']} ranked")
     emit(out, "\n".join(lines))
+
+
+# --- the MCP server (spec §9) ------------------------------------------------------------------
+
+
+@mcp_app.callback()
+def mcp(
+    ctx: typer.Context,
+    registry: RegistryOpt = None,
+    index: IndexOpt = None,
+    json_: JsonOpt = False,
+) -> None:
+    """Run the MCP server over stdio: resolve, who, closure, search, dups, fold as tools."""
+    want_json(json_)
+    if ctx.invoked_subcommand is not None:
+        return
+    import os
+
+    from cttp.mcp import serve
+
+    try:
+        open_registries(registry)
+    except ERRORS as e:
+        fail(str(e))
+    if registry:
+        os.environ["CTTP_REGISTRY"] = str(registry)
+    if index:
+        os.environ["CTTP_INDEX"] = str(index)
+    serve()
+
+
+@mcp_app.command("install")
+def mcp_install(
+    claude_code: Annotated[
+        bool,
+        typer.Option("--claude-code", help="Run the `claude mcp add` line, not just print it."),
+    ] = False,
+    json_: JsonOpt = False,
+) -> None:
+    """Print (or with --claude-code run) the `claude mcp add` line that attaches the server."""
+    want_json(json_)
+    import shlex
+    import subprocess
+
+    from cttp.mcp import install_command
+
+    command = install_command()
+    output = None
+    if claude_code:
+        try:
+            done = subprocess.run(command, capture_output=True, text=True)
+        except FileNotFoundError:
+            fail("`claude` is not on PATH; install Claude Code first, or run the line by hand")
+        output = (done.stdout + done.stderr).strip()
+        if done.returncode != 0:
+            fail(f"`{shlex.join(command)}` failed: {output}")
+    emit(
+        {"command": command, "ran": claude_code, "output": output},
+        shlex.join(command) if output is None else output,
+    )

@@ -90,7 +90,7 @@ def test_dups_by_identity_and_by_shape(world):
     # deep was edited after the consumer copied it: at the current revisions the copy is a
     # stale copy, not a duplicate, so there is no deep group
     assert not [g for g in out["groups"] if "deep" in g["names"]]
-    assert out["origin"]["identity"] == "derived"
+    assert out["origin"]["by"] == "derived" and out["by"] == "identity"
     # by shape: the renamed copy joins, and so does salute — same structure, other literals
     by_shape = dups(conn, by_shape=True)
     [group] = [g for g in by_shape["groups"] if "greet" in g["names"]]

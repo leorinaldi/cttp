@@ -435,10 +435,15 @@ schema. The families are: `resolve`, `who`, `dups`, `closure`, `search`, `histor
 
 **The agent interface.** The agent is the first user, and its interface is the CLI with `--json`
 plus `cttp mcp`, an MCP server exposing `resolve`, `who`, `closure`, `search`, `dups` and `fold` as
-tools with the same schemas. The design rule for these outputs: return the definition, not the
-file. `resolve` returns one definition's text and signature; `closure` returns exactly the
-definitions a task needs, in order, each with its address; `fold` returns a file as links, so that
-context cost is proportional to the task and not to the repository.
+tools with the same schemas, each published as the tool's output schema. The schemas are one
+definition in `schemas.py`, rendered to `docs/json-schemas.md`; every object carries
+`schema_version`, and a change to any schema bumps it. The design rule for these outputs: return
+the definition, not the file. `resolve` returns one definition's text and signature; `closure`
+returns exactly the definitions a task needs, in order, each with its address — one object whether
+it comes from a live walk of the repositories (what `expand` would write; it refuses what cannot be
+inlined) or, with `--indexed` and any number of roots, from the index's recorded links (which lists
+what it cannot tell under `missing`); `fold` returns a file as links, so that context cost is
+proportional to the task and not to the repository.
 
 **The local server, `cttp serve`.** A server-rendered site at **http://localhost:3120**, read-only
 over the local registry and index. It is both the local registry (section 8's contract) and the

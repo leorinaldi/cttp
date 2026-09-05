@@ -188,7 +188,7 @@ def test_cli_add_crawl_status(registry, index, tmp_path):
     assert res.exit_code == 0 and res.stdout.strip() == f"added: {PYREPO}"
     res = runner.invoke(app, ["--json", "index", "crawl"])
     assert res.exit_code == 0, res.output
-    [r] = json.loads(res.stdout)
+    [r] = json.loads(res.stdout)["crawled"]
     assert r["status"] == "crawled" and r["pages"] == PYREPO_PAGES
     res = runner.invoke(app, ["index", "crawl"])
     assert "already crawled" in res.stdout
