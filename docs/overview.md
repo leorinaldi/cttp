@@ -30,8 +30,11 @@ matcher; `resolve --latest` following a pinned address to the repository's head;
 **materializer in full** — the closure of a page, expansion with the closure beneath the link
 (dependencies above, imports hoisted, each beneath its own stamp), `add`, `check --fix`,
 `update`, `fold`, `run` confirming every page, and `expand --package` as the vendored fallback;
-and a viewer on port 3120. The index, the viewer over it, the MCP server, other languages and
-the benchmark are still ahead — [`plan.md`](plan.md) lays out the phases.
+the **index** — a SQLite file crawled from repositories you name, identity the key, answering
+`who`, `dups`, `closure --indexed`, `search`, `history`, `rank` and `--latest`'s rule 3; and
+the **viewer** over registry and index on port 3120. The agent interface (stable schemas, the
+MCP server), other languages and the benchmark are still ahead — [`plan.md`](plan.md) lays out
+the phases.
 
 ## 2. Architecture
 
@@ -69,8 +72,8 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   file at the rev, matched by phrase (nine ids; anything else is `None`).
 - **Object cache** (`objects.py`) — every page `resolve` returns is stored by identity under
   `$CTTP_HOME/objects/<sha256>` with a JSON sidecar of its metadata and every location it was
-  seen at. An identity address is answered from here; the index (Phase 4) is the second place
-  to ask, and its hook says "not indexed" until it exists.
+  seen at. An identity address is answered from here first, then from the index
+  (`index_lookup` → `queries.lookup_identity`, `via: index`).
 - **Extractor** (`extract/`) — `extract(path, source, symbol, files)` turns a file at a rev,
   or one definition of it, into a `Page`: kind, language, **its own text** (§4), span, and for a
   definition its symbol, signature, first docstring paragraph, **derived references** (`Ref`s
@@ -113,14 +116,33 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   cache after confirming the whole closure. `--package` writes the closure into
   `cttp_vendor/<module>.py`, stamps the user's link with `vendor=<path>` and puts an import
   beneath it; `check` follows `vendor=` into the module.
+- **Index** (`index/`) — `schema.py`: one SQLite file (default `~/.local/share/cttp/index.db`,
+  `--index`, `CTTP_INDEX`) with `repos`, `revisions`, `definitions` (**identity is the key**),
+  `locations` (one row per place an identity was seen), `links` (the target address as written
+  and parsed, its identity when the index can tell, relation, origin), `names` (registry
+  snapshot), and an FTS5 shadow for search. `crawl.py`: `add` registers a locator or a local
+  clone (its `origin` reversed through `[remotes]`, else parsed); `crawl` reads every file of a
+  registered repository at one commit through `git` — a Python file is a **file page plus one
+  page per definition**, another file a page only if it carries a link — records pages once per
+  identity and once per place, asserted links against the page they stand for, derived refs
+  against the page that made them, then fills target identities from what the index knows.
+  It never fetches a repository it was not given. `queries.py`: `target_of` (any address → the
+  identities and place the index knows, resolving for real only when it must), `who`, `dups`,
+  `closure`, `search`, `history`, `rank`, `forward` (rule 3), `lookup_identity`, `page_json`.
 - **Server** (`server/app.py`) — FastAPI on **3120**, Jinja2 templates. Serves the contract
-  (`/<name>.json`, `/<name>@<version>.json`) and the human pages (`/`, `/<name>`) over the
-  configured **local** registries only.
-- **CLI** (`cli.py`) — Typer. `cttp --version | config | resolve [--id] [--latest] | closure |
-  serve | expand [--package] [--write-deps] | add [--at] | check [--fix] | update [--all] [--to]
-  [--yes] | fold [--open] | run [--yes] | cache status | cache clear`. Every subcommand takes
-  `--json`, before or after the subcommand name. Prompts (`run`, `update`) go through
-  `_interactive()`, which tests patch; without a terminal they decline and exit 2.
+  (`/<name>.json`, `/<name>@<version>.json`, `%23<symbol>`) over the configured **local**
+  registries only, and the viewer of spec §9 over the index: `/` (names, index status, `?q=`
+  search), `/<name>` (with history and *who links here*), `/d/<identity>`,
+  `/r/<host>/<owner>/<repo>`, `/dups[?shape=1]`. `base.html` fixes the derived/asserted layout
+  once — two labelled columns, stacking on a narrow screen — and every page says when there is
+  no index. Those three route prefixes are declared before `/{slug}`.
+- **CLI** (`cli.py`) — Typer. `cttp --version | config | resolve [--id] [--latest] | closure
+  [--indexed] | serve | expand [--package] [--write-deps] | add [--at] | check [--fix] | update
+  [--all] [--to] [--yes] | fold [--open] | run [--yes] | cache status | cache clear | index
+  add|crawl|status | who | dups [--shape] | search | history | rank`. Every subcommand takes
+  `--json`, before or after the subcommand name; every index reader takes `--index`. Prompts
+  (`run`, `update`) go through `_interactive()`, which tests patch; without a terminal they
+  decline and exit 2.
 
 Data an address needs lives in three places on disk, all of them derivable:
 
@@ -129,6 +151,7 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `~/.config/cttp/config.toml` | `registries` (ordered) and `[remotes]`; **written with defaults on first run** | `CTTP_CONFIG` (path), `CTTP_REGISTRY` (replace the list with one entry) |
 | `~/.local/share/cttp/registry` | a clone of the public registry repo; the second default registry | (an entry in the config) |
 | `~/.cache/cttp/` | `repos/<locator>` bare clones; `objects/<sha256>` + `.json` the object cache; `run/<pinned address>/main.py` and `run/file-<hash>/` run caches | `CTTP_HOME` |
+| `~/.local/share/cttp/index.db` | the index: what was crawled, by identity | `CTTP_INDEX` (path), `--index`, `XDG_DATA_HOME` |
 
 ## 3. Repo map
 
@@ -136,8 +159,9 @@ Data an address needs lives in three places on disk, all of them derivable:
 |---|---|---|
 | `src/cttp/` | the package; see §2 | authored |
 | `src/cttp/extract/` | `__init__.py` (`Page`, `Ref`, `extract()` dispatch by suffix), `python.py` (the `ast` extractor) | authored |
-| `src/cttp/server/templates/` | `base.html`, `index.html`, `name.html` | authored |
-| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`); `conftest.py` builds the offline world and forbids sockets | authored |
+| `src/cttp/index/` | `schema.py` (tables, `open_index`), `crawl.py` (`add`, `crawl`, `status`), `queries.py` (the six queries, `forward`, `lookup_identity`) | authored |
+| `src/cttp/server/templates/` | `base.html` (the one layout and stylesheet), `_macros.html` (tags, backlinks, locations, history), `index.html`, `name.html`, `definition.html`, `repo.html`, `dups.html` | authored |
+| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`, `_index_crawl`, `_index_queries`, `_acceptance_move`, `_acceptance_provenance`); `conftest.py` builds the offline world, forbids sockets, and points `CTTP_INDEX` at `tmp_path` | authored |
 | `tests/fixtures/registry/` | the registry repository's contents — **identical to the public repo at `v1`**; keep them in sync | authored |
 | `tests/fixtures/hello/hello.py` | one line, `# cttp: hello-world` | authored |
 | `tests/fixtures/thermo/` | a fake sensor package (`src/thermo/{__init__,decode,lm75}.py`) with every definition kind the extractor must handle; served in tests as `github.com/leorinaldi/thermo` | authored |
@@ -210,6 +234,27 @@ links to spec §8 in this private repo.
 - **Derived versus asserted.** `rev`, `identity`, `license` are derived by the tool from the
   repository; `description` is asserted by the entry's author. `to_json()` says which is which
   under `origin`, and the viewer tags them.
+- **In the index, identity is the key and a place is a row.** `definitions` has one row per
+  identity; `locations` one per (repo, sha, path, symbol). "Two copies of one thing are one
+  thing" is therefore a join, not a heuristic — `dups` is `GROUP BY identity`.
+- **A Python file is a page beside its definitions.** The crawl records the whole-file page
+  (what a locator without `#symbol` resolves to) and one page per definition. A file whose
+  entire text is one definition shares that definition's identity; the definition's view (kind,
+  name, signature) wins the `definitions` row, and `dups` never pairs a file with its own only
+  definition.
+- **An asserted link's source is the page it stands for.** In the index a `# cttp:` line at
+  module level belongs to the definition in the block beneath it (spec §4), else to the
+  innermost definition holding the line, else to the file. So a verbatim copy links back to its
+  original *as itself* — same identity, another place — and `who`, `rank` and `--latest` rule 3
+  all read provenance the same way.
+- **The crawl never fetches what it was not given.** Target identities are filled in after the
+  crawl from what the index knows — a stamp's `id=`, a pinned locator seen at that rev, a name
+  whose snapshot points at a crawled file — and stay NULL otherwise. `who` matches by identity,
+  and by place or name only for links whose identity the index could not tell.
+- **"Current" is the most recently crawled revision of each repository.** `dups`, `rank`,
+  `search` and the viewer's repository page report over it; `history` and `who` see every
+  crawled revision, ordered by commit time, then crawl order (`rowid`) for ties. A `--rev` crawl
+  makes that rev current, on purpose.
 - **Registry entries name a target, not code.** `names/<name>.toml` holds `target =
   host/owner/repo/path`, a `default` label and `[versions]` mapping labels to refs. Version
   labels are names for refs; git revisions are the versions. There is no second versioning scheme.
@@ -271,6 +316,11 @@ links to spec §8 in this private repo.
 - **upstream** — `update`'s answer for a `from` link: the diff between the pinned page and its
   head, shown and not applied.
 - **derived / asserted** — computed by the tool from the repository versus stated by a person.
+- **index** — the SQLite file of everything crawled: `repos`, `revisions`, `definitions`,
+  `locations`, `links`, `names`. **crawl** — reading one repository at one commit into it.
+  **current** — a repository's most recently crawled revision. **place** — (repo, path,
+  symbol), what `history` follows. **backlink** — a link whose target is the address asked
+  about; `who` lists them by relation and origin.
 
 ## 6. Invariants — never violate
 
@@ -291,6 +341,9 @@ links to spec §8 in this private repo.
   stamp the tool writes.
 - **`tests/fixtures/registry/` mirrors the public registry repo.** A change to one is a change to
   both, in the same session.
+- **Tests never touch the real index.** `config_file` sets `CTTP_INDEX` to `tmp_path`; a test
+  that needs an index opens one there. `open_index(create=False)` is what queries use, so a
+  query never creates an empty index as a side effect.
 - **The identity of `print("hello world!")` is `75a27070015e…`**, pinned in `test_address.py`.
   If it changes, the normalization changed, and every stamp in the world would drift.
 
@@ -336,6 +389,17 @@ links to spec §8 in this private repo.
 - **`run <file>` runs a copy, never the file.** The user's file is untouched; only `expand` writes
   in place.
 - **`docs/` is excluded from ruff.** `ruff format` reformats code blocks inside Markdown.
+- **A malformed link line costs the line, not the file.** The crawl turns prose that looks like
+  a link (`# cttp: <address> [key=value]` in a docstring) into a bare comment and notes it under
+  `skipped`; the file's definitions are still indexed. `resolve` on such a file still raises —
+  that is the link grammar being strict where it should be.
+- **`cttp index crawl` skips a revision it has crawled; `--force` is the way to redo one.** The
+  skip is what makes crawling idempotent.
+- **`closure --indexed` lists what it cannot tell under `missing` instead of refusing.** It is
+  context for an agent, not a materialization; the live `closure` still refuses.
+- **`rank` counts a copy that links back to its original.** Distinct linking *pages* are
+  (identity, repo, file), so the same identity elsewhere counts; only a derived self-reference
+  (recursion) is excluded.
 
 ## 8. Operational gotchas
 
@@ -366,6 +430,14 @@ links to spec §8 in this private repo.
   --screenshot=…`. System Firefox's headless screenshot does not work here.
 - **The stale `hello.py` in the repo root is Leo's**, untracked, and stamped with a rev that no
   longer exists anywhere. `check` correctly reports it `unresolvable`. Leave it.
+- **Headless Chrome needs `--no-sandbox` here** (with `--disable-gpu --disable-dev-shm-usage`);
+  without it the process aborts with a core dump before writing the screenshot.
+- **The running server serves the code it was started with.** `cttp serve` has no reload; after
+  a change under `server/` restart it (`pgrep -af 'cttp serve'`, then `kill <pids>` in a
+  separate command) or the browser shows the old pages.
+- **The real index is `~/.local/share/cttp/index.db`.** It holds whatever was crawled by hand;
+  the tests never see it. `cttp index status` says what is in it; deleting the file is the
+  reset.
 
 ## 9. Running and testing
 
@@ -384,6 +456,9 @@ uv run cttp resolve sha256:75a27070015e   # from the object cache, once resolved
 uv run cttp cache status                  # what ~/.cache/cttp holds
 uv run cttp closure <address>             # what expand would write, dependencies first
 uv run cttp add <address> main.py         # link + expansion; then fold / check / update main.py
+uv run cttp index add <repo-or-path> && uv run cttp index crawl   # the index; status / --rev / --force
+uv run cttp who <address>                 # backlinks; also dups [--shape], search, history, rank
+uv run cttp closure --indexed <address>…  # from the index's recorded links, several roots
 ```
 
 Site: **http://localhost:3120** — the viewer and the registry contract, nothing else. The product

@@ -4,48 +4,53 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 3 COMPLETE. NEXT IS P4-T1 (the index: schema and crawl).** Phase 0
+**Status: PHASES 0 TO 4 COMPLETE. NEXT IS P5-T1 (stable `--json` schemas).** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
 **identity and shape hashing**, the **Python extractor in full** with derived references, and the
 **link convention in full**. Phase 2 (2026-09-05): **the resolver in full** — SPDX matcher,
 symbol search, `id=` mismatch, the **object cache**, **`resolve --latest`** rules 1 and 2. Phase 3
-(2026-09-05): **the materializer in full** — the **closure** (`cttp closure`), **expansion with
-closure** (dependencies above, imports hoisted, each beneath its own stamp), `add`, `check --fix`,
-`update`, `fold`, `run` confirming every page, `--write-deps`, and **`expand --package`** (the
-vendored fallback). A page's `source` is now its **own text** (link lines inside it stripped and
-reported as `links`), so the spec §7 `greet`/`hello-world` example reproduces byte for byte and
-checks clean. 249 tests green, ruff clean.
+(2026-09-05): **the materializer in full** — closure, expansion with closure, `add`, `check
+--fix`, `update`, `fold`, `run`, `--write-deps`, `expand --package`. Phase 4 (2026-09-05): **the
+index** — `cttp index add|crawl|status` over six SQLite tables with identity as the key; the six
+queries `who`, `dups [--shape]`, `closure --indexed`, `search`, `history`, `rank`; **`--latest`
+rule 3** through the index (a move across repositories, or a fork); spec §12 **acceptance tests
+2 and 3** as pytest; and **the viewer over the index** (search, `/d/<identity>`,
+`/r/<locator>`, `/dups`, the name page with history and *who links here*), derived and asserted
+facts in two labelled columns. 275 tests green, ruff clean.
 
-_Last updated: 2026-09-05 (Phase 3)._
+_Last updated: 2026-09-05 (Phase 4)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: P4-T1 — the index: schema and crawl.** Read its entry in
-[`docs/plan.md`](docs/plan.md) in full. `src/cttp/index/schema.py` with spec §6's five tables
-(identity the key of `definitions`, a separate `locations` table so one identity in three places
-is one row plus three), `index/crawl.py` with `cttp index add <repo-or-path>`, `cttp index crawl
-[--rev]` and `cttp index status`; default `~/.local/share/cttp/index.db`, `--index <path>`. The
-crawl extracts every Python file at a rev, records definitions, derived `ref` links and every
-asserted link `links.py` finds. Two things Phase 3 left ready for it: `objects.index_lookup()` is
-the hook an identity address falls through to, and `Resolved.links` / `Page.links` already give a
-page's asserted links with line numbers. The `pyrepo` fixture (`tests/fixtures/pyrepo/`) is the
-one the P4-T1 acceptance names; a consumer fixture linking to it is still to be made.
+**Start here: P5-T1 — stable `--json` schemas.** Read its entry in [`docs/plan.md`](docs/plan.md)
+in full. `src/cttp/schemas.py` becomes the one definition of every command's JSON output
+(TypedDicts or dataclasses) with `origin` on every derived or asserted value, `null` for
+unavailable, and a `schema_version`; a test runs every command against the fixtures and validates
+the output; `docs/json-schemas.md` is generated from the definitions and registered in
+`CLAUDE.md`'s document map. What Phase 4 leaves for it: the query outputs (`who`, `dups`,
+`closure --indexed`, `search`, `history`, `rank`, `index add|crawl|status`) were written with
+`--json` from the start but their shapes are only in `index/queries.py`'s docstrings and the
+tests; `Latest.to_json()` grew `via`; the contract object is in spec §8's table now, so the
+schema for `resolve` can be checked against the spec.
 
-One small thing worth a look: the viewer (`name.html`) does not show a page's `links` or
-`unresolved` names yet — P4-T4 rewrites it anyway.
+Worth a look before or during P5-T1: `docs/spec.md` §9 lists `closure` once, while the CLI has a
+live `closure <address>` (P3-T1) and `closure --indexed <address>…` (P4-T2, several roots,
+`missing` for targets the index cannot tell) — the spec should say which the agent gets, or
+that both exist.
 
-If Leo wants to play, the demo is in **How to run** below. New since last time: `cttp closure
-<address>`, `cttp add`, `cttp expand --package`, `cttp check --fix`, `cttp update`, `cttp fold`,
-and a link whose page needs two constants expanding to three stamped blocks that run.
+If Leo wants to play: the real index at `~/.local/share/cttp/index.db` already has this
+repository and the public registry crawled (see **How to run**); `cttp dups` finds
+`runner = CliRunner()` thirteen times across the test files, `cttp who hello-world` lists the
+spec's own examples, and **http://localhost:3120** shows all of it.
 
 ## Current state — working & verified
 
-**Code (`src/cttp/`), 2026-09-05.** Real modules; Phases 1, 2 and 3 in full:
+**Code (`src/cttp/`), 2026-09-05.** Real modules; Phases 1 to 4 in full:
 - `config.py` — **P0-T3/T4.** `~/.config/cttp/config.toml` (XDG; `CTTP_CONFIG` overrides the
   path): `registries` (ordered list of HTTP URLs or local paths; first match wins) and
   `[remotes]` (locator prefix → URL prefix, longest prefix wins, else `https://<locator>.git`).
@@ -205,23 +210,91 @@ and a link whose page needs two constants expanding to three stamped blocks that
   into `cttp_vendor/<module>.py` (`__init__.py` created), the user's link stamped with
   `vendor=cttp_vendor/<module>.py`, and `from cttp_vendor.<module> import <names>` (or `import
   cttp_vendor.<module>` for a script that defines nothing) beneath it.
-- `server/app.py` — FastAPI on **3120**: `/`, `/<name>`, `/<name>.json`, `/<name>@<version>.json`,
-  each optionally with `%23<symbol>` before `.json`; the slug is parsed with `address.parse()`.
-  The page shows shape, signature, docstring, span and the derived references. Looked at in a
-  headless browser (hello-world and a symbol page): renders correctly.
-- `cli.py` — `cttp --version | config | resolve [--id …] [--latest] | closure | serve | expand
-  [--package] [--write-deps] | add [--at] [--package] | check [--fix] | update [--all] [--to]
-  [--yes] | fold [--open] | run [--yes] | cache status | cache clear [--run]`; `--json` is
-  accepted before or after the subcommand. `update` takes files and addresses mixed (a target
-  that parses as an address and is not a path selects links); exit 2 when a change waited for a
-  confirmation it did not get. `_interactive()` wraps the tty check so tests can drive the
-  prompts (`input="n\n"`).
-  `resolve`'s text form prints the signature and docstring on a `#` line when the page is a
-  definition, `# seen:` lines when an identity came from the object cache, and `from → to` with
-  the rule under `--latest` (exit 1 when not found). `cache clear` removes repos and objects; the
-  run cache — the confirmation record — only with `--run`.
-- Tests: 249 in `tests/` — `test_{address,hashing,extract_python,config,links,gitcache,resolve,
-  objects,latest,closure,expand,check,update,fold,run,package,server,cli}.py`. `test_closure.py`
+- `index/schema.py` — **P4-T1.** One SQLite file, default `~/.local/share/cttp/index.db`
+  (`--index <path>`, `CTTP_INDEX`; `XDG_DATA_HOME` honoured). Six tables: `repos` (locator,
+  default branch, the local path it was added from), `revisions` (repo, sha, commit time,
+  license at that rev, crawled-at, file count), `definitions` (**identity is the key**: shape,
+  language, kind, name, signature, docstring, lines, source, imports JSON, unresolved JSON),
+  `locations` (identity at (repo, sha, path, symbol) with its span — three places are three
+  rows against one definition), `links` (source identity and where it was; the target address
+  as written *and parsed* — form, name, locator, path, rev, symbol, `id=`; the target identity
+  when the index can tell; relation `is`/`from`/`see`/`ref`; origin; description, derived flag,
+  fields JSON, indent; a derived ref's `name`), `names` (registry entries snapshotted at crawl),
+  plus `definitions_fts` (FTS5, porter stemming) for search. `open_index(path, create=False)`
+  raises `IndexingError` for a missing file — a query never creates an empty index.
+- `index/crawl.py` — **P4-T1.** `add()` registers `host/owner/repo`, or a local path whose
+  `origin` remote names one — the URL is reversed through `[remotes]` first (so the tests' bare
+  repositories map back to their locators), else parsed as https / ssh / scp-style. A registered
+  local path is crawled **from that clone's git**, at `HEAD` or `--rev`; a locator through the
+  git cache at its default branch. `crawl()` per repository at one sha: every file read through
+  `git`; a Python file yields its **file page and one page per definition**, any other file a
+  `text` page only when it carries a link line; each page recorded once per identity
+  (`INSERT OR IGNORE`) and once per place; a file whose whole text is one definition shares its
+  identity and **the definition's view wins the row** (kind, name, signature). Asserted links go
+  against **the page they stand for** — the definition whose span starts at the block, else the
+  innermost definition holding the line, else the file; derived refs against the page that made
+  them. A **malformed link line** (prose like `# cttp: <address> [key=value]`) becomes a bare
+  comment and a skip note names it — the file's definitions are still indexed. Then the local
+  registries' names are snapshotted and `resolve_targets()` fills every `target_identity` it
+  can: a stamp's `id=` (one match), a pinned locator seen at that rev, a name whose snapshot
+  points at a crawled file (latest crawled rev). The crawl **never fetches a repository it was
+  not given**. A revision already crawled is skipped (`already`); `--force` crawls it again
+  (locations and links removed first). `status()` counts.
+- `index/queries.py` — **P4-T2.** `lookup_identity()` is `objects.index_lookup` (a `Stored`
+  with `via="index"` and every crawled location); `page_json()` renders a definition at a
+  location as the contract object. `target_of()` turns any address into what the index knows —
+  identities and the place (repo, path, symbol); a label rev resolves for real when registries
+  are given; an address the index never saw resolves for real to learn its identity. **`who`**:
+  links whose target identity matches, or — only when the index could not tell the target's
+  identity — whose target names the same place or name; one row per (source, file, relation,
+  target), at the latest crawled rev; sorted `is`, `from`, `see`, `ref`, asserted before derived.
+  **`dups`** over the **current** locations (each repository's most recently crawled revision;
+  a file that is its one definition is not its own twin), by identity or `--shape`, largest
+  groups first. **`closure`** from recorded `is`/`ref` links, several roots, the P3-T1 output
+  shape plus `roots` and `missing` (targets the index cannot tell — listed, never fetched); a
+  pinned rev wins over "current". **`search`**: FTS5, every term a quoted prefix, porter
+  stemming (`greet` finds a "greeting" docstring). **`history`**: identities at a place over
+  every revision of its repository, ordered by commit time then crawl order (`rowid` breaks
+  same-second ties), `changed` and `absent` flags. **`rank`**: distinct linking pages
+  (identity, repo, file) per target — a verbatim copy linking back counts; a definition's derived
+  reference to itself does not. **`forward()`** is `--latest`'s rule 3 (P4-T3).
+- `server/app.py` — **P4-T4.** FastAPI on **3120**: the contract as before (`/<name>.json`,
+  `/<name>@<version>.json`, `%23<symbol>`), and the viewer of spec §9 over the index: `/`
+  (names, index status, `?q=` search), `/d/<identity>` (derived and asserted columns, every
+  location with the current ones marked, source, who links here), `/r/<host>/<owner>/<repo>`
+  (revisions crawled, pages at the current revision), `/dups[?shape=1]`, and the name page with
+  history and *who links here*. **`base.html` chooses the derived/asserted layout once**: two
+  labelled, tinted columns that stack under 44rem; inline facts keep their tag; tables become
+  stacked cards on a phone. Every page says plainly when there is no index. Looked at in headless
+  Chrome at 1200px and 390px against the real index.
+- `cli.py` — `cttp --version | config | resolve [--id …] [--latest] [--index] | closure
+  [--indexed] <address>… | serve | expand [--package] [--write-deps] | add [--at] [--package] |
+  check [--fix] | update [--all] [--to] [--yes] | fold [--open] | run [--yes] | cache status |
+  cache clear [--run] | index add <repo-or-path> | index crawl [<repo>…] [--rev] [--force] | index
+  status | who <address> | dups [--shape] | search <text>… [--limit] | history <address> | rank
+  [--limit]`; every index-reading command takes `--index <path>`; `--json` is accepted before or
+  after the subcommand. `closure` with several addresses, or `--indexed`, reads the index; one
+  address without the flag is the live walk. `update` takes files and addresses mixed; exit 2
+  when a change waited for a confirmation it did not get. `_interactive()` wraps the tty check
+  so tests can drive the prompts. `resolve`'s text form prints the signature and docstring on a
+  `#` line, `# seen:` lines when an identity came from a cache (`cache` or `index`), and `from →
+  to` with the rule (`via index` when the index found it) under `--latest`.
+- Tests: 275 in `tests/` — `test_{address,hashing,extract_python,config,links,gitcache,resolve,
+  objects,latest,closure,expand,check,update,fold,run,package,server,cli,index_crawl,
+  index_queries,acceptance_move,acceptance_provenance}.py`. `test_index_crawl.py` is the P4-T1
+  acceptance (row counts over `pyrepo` and a consumer, one `definitions` row per identity,
+  `links` with origin, idempotence, a second rev adding one revision and only the changed
+  definitions, an identity resolved from the index, a local clone added through its origin, a
+  malformed link line costing the line not the file, `--force`); `test_index_queries.py` P4-T2
+  (`who` on `deep` — the copy asserted, the sibling derived; `dups` and `--shape` over `twins`;
+  `search greet`; `history` over two revs; `rank`; the indexed closure equal to the live one);
+  `test_acceptance_move.py` spec §12 test 2 (a renamed move found by its `from` link, a plain
+  move by identity once B is crawled, the no-index message, rules 1 and 2 still first);
+  `test_acceptance_provenance.py` test 3 (`cttp add` in a cloned consumer, `cttp index add
+  <path>`, `who` lists the copy as `is`/asserted with a license field; and by name).
+  `conftest.py` gained `clone_remote(tmp_path, name)` and `commit_in(path, message, push)`, and
+  **sets `CTTP_INDEX` to `tmp_path`** so no test can touch the real index. `test_server.py`
+  covers the viewer pages with the fixtures crawled into a test index. `test_closure.py`
   is the P3-T1 acceptance (the four-definition order, `requires`, the unresolvable name, the
   budget) plus every refusal; `test_expand.py` P3-T2 (the spec §7 example byte for byte, running
   under `python3 -I`; imports hoisted once; `--write-deps`; `add` ≡ write + expand; re-expansion
@@ -334,15 +407,16 @@ trigger that would schedule it.
 - **`GPL-2.0` / `GPL-3.0` are the plan's spellings** and SPDX has deprecated them in favour of
   `-only` / `-or-later`; a license file alone cannot say which → **unscheduled**; trigger: the
   spec edit that publishes the license list (P7-T3), decide then
-- **A renamed definition is not found by `--latest`** — its identity changed with its name; its
-  shape did not, and a shape-based rule would find it → **unscheduled**; trigger: a real
-  `--latest` miss on a rename (rule 3 via the index may also cover it, P4-T3)
+- **A renamed definition is not found by `--latest` unless a link points back** — its identity
+  changed with its name; its shape did not, and a shape-based rule through the index would find
+  it → **unscheduled**; trigger: a real `--latest` miss on a rename with no `from` link
 - `--latest` on a **locator uses the bare clone's HEAD** as the default branch, which is the
   origin's default at clone time; a repository that changes its default branch later keeps the
   old one until the cache is cleared → **unscheduled**; trigger: it happens
 - `latest()` resolves the pinned page and then the head page through `resolve()`, so **`--latest`
   stores both in the object cache** — intended, but it means the head page's location is
-  recorded as "seen" without anyone linking to it → **standing**, revisit at P4
+  recorded as "seen" without anyone linking to it → **standing**; the index now records
+  locations independently, so this only affects the object cache
 - **`update` on a vendored module does not follow through to the user's `vendor=` link**: after
   the module's root moves, `check` on the user's file reports drift ("the module holds X; the
   link says Y") and the person re-expands → **unscheduled**; trigger: the first real `--package`
@@ -355,40 +429,64 @@ trigger that would schedule it.
 - **A script page with a top-level blank line between statements** still ends its block early
   under the block rule (the P1-T4 follow-up); the closure only ever inlines definitions and the
   root, so it bites only when the root is such a script → **unscheduled**; trigger unchanged
-- **The viewer does not show a page's `links` or `unresolved` names** → **P4-T4**
 - **`fold` treats a `from` block as foldable** (derived code is still a block with a stamp) —
   spec §7 says "expanded code"; revisit if a person wants forks visible in the folded view →
   **unscheduled**; trigger: a complaint
+
+- **A stamped `is` block that is a script, not a definition, is not a page of the consumer**
+  (`# cttp: hello-world@… id=…` + `print(...)` in `main.py`): `who` sees the link, `dups` does
+  not see the copy, since a block page would collide with the file page's `(repo, sha, path,
+  NULL)` location key → **unscheduled**; trigger: wanting `dups` to find copies of script
+  snippets (a block location would need its own symbol-like key, say the link's line)
+- **The crawl re-parses a Python file once per definition** (`extract(path, text, symbol)` each
+  time), so a file with many definitions costs O(definitions × file) → **unscheduled**; trigger:
+  a crawl slow enough to notice (this repository's 64 files crawl in seconds)
+- **"Current" is the most recently crawled revision of a repository**, so `cttp index crawl
+  --rev <older>` makes that older rev current for `dups`, `rank`, `search` and the viewer →
+  **standing**, by design; say so in the spec at P7-T3
+- **The viewer's `/d/…`, `/r/…` and `/dups` routes shadow registry names `d`, `r`, `dups`** →
+  **unscheduled**; trigger: someone claiming such a name (spec §8's naming rules could reserve
+  them)
+- **`runner = CliRunner()` is defined thirteen times across the test files** — `cttp dups`'s
+  first real finding on this repository; a `conftest.py` fixture would do → **unscheduled**;
+  trigger: the next time a test file is touched for another reason
+- **Spec §9 lists `closure` once**; the CLI has the live walk and `--indexed` → **unscheduled**;
+  trigger: the next spec edit, or P5-T1 deciding what the agent's `closure` tool is
+- **`resolve` through the index for a file that is its one definition says `kind: function`**
+  (the definition's view won the `definitions` row) where git would say `script` for the file
+  address — same text, same identity → **unscheduled**; trigger: it confuses someone
 
 ## Build history
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
-- **2026-09-05 (twelfth session) — Phase 3 end to end: P3-T1 the closure, P3-T2 expansion with
-  closure and `add`, P3-T3 `check --fix` and `update`, P3-T4 `fold` and `run` in full, P3-T5
-  `expand --package`.** One code commit, one docs commit. The load-bearing decision came first
-  and everything else followed from it: **a page's `source` is its own text.** The spec §7
-  example puts `greet`'s block *above* `hello-world`'s, and a link line always ends a block, so
-  the `hello-world` page (`# cttp: greet` + `print(greet("world"))`) can only check clean if its
-  identity hashes `print(greet("world"))` alone. So the extractor strips link lines (and the
-  blocks beneath stamped `is` links) out of a script page's text and reports them as asserted
-  `links`; identity is unchanged in meaning ("the definition's own source, nothing it
-  references") and the pinned hello-world identity did not move. Inner `is` links are then
-  dependencies like derived refs; `from`/`see` lines are hoisted into the stack. Second decision:
-  **inline expansion binds a definition only by its own name**, so the extractor now records how
-  each reference is reached (`Ref.name`), and the closure refuses module-qualified and aliased
-  references, whole-module uses, free names nothing binds, links nested in definitions, name
-  clashes, and the budget — each with a message that says what to do instead. Third: **a
-  definition's stdlib/third-party imports travel as statements** (`Page.imports`), hoisted once
-  above the whole block; scripts keep theirs in their text. `describe()` moved to `closure.py`.
-  `update` plans before it writes (diff first, bottom-up application, new dependencies inserted),
-  and a `from` link is only ever shown its upstream diff. `--package` stamps the user's link with
-  `vendor=<path>` so `check` can follow into the module. Found on the way: `python3 -I` implies
-  `-P` since 3.11, so the vendored import test runs under `-E -s`; an empty registry description
-  must read as none, or the stamp gets `""`; two `is` links in one stack can never be
-  well-formed and are refused. By hand: `add` → `fold` → `check` → `update` on `pyrepo#top`, and
-  the three-block `reg_to_millicelsius` expansion printing `25000`. 205 → 249 tests.
+- **2026-09-05 (thirteenth session) — spec §8 patched; Phase 4 end to end: P4-T1 the index
+  schema and crawl, P4-T2 the six queries, P4-T3 `--latest` rule 3 with acceptance tests 2 and
+  3, P4-T4 the viewer over the index.** Five commits. First the spec: §8 gained the
+  `%23<symbol>` route and a field table for the resolver's object, checked row by row against
+  the live server. Then the index. Load-bearing decisions: **identity is the key of
+  `definitions` and `locations` is its own table**, so "the same code in three places" is one
+  row plus three; **a Python file is a page too** (the whole-file page beside its definitions),
+  which is what makes a script snippet like `hello-world` indexable — and what made a file that
+  is exactly one definition share that definition's identity, so the definition's view (kind,
+  name, signature) wins the row and `dups` never pairs a file with its own only definition;
+  **an asserted link's source is the page it stands for** — the definition in the block beneath
+  it (spec §4), not the file — so a verbatim copy links back *as itself* and `who`, `rank` and
+  `--latest` all see provenance the same way; **the crawl never fetches a repository it was not
+  given**, so target identities are filled in afterwards from what the index knows (a stamp's
+  `id=`, a pinned locator seen at that rev, a name's snapshot) and left NULL otherwise, and
+  `who` falls back to place-matching only for those; **"current" means most recently crawled**,
+  with `rowid` breaking same-second ties for history order. `--latest` asks the index last: the
+  same identity at another repository's current revision first (derived, exact), then an
+  `is`/`from` backlink (`is` before `from`, newest commit first). Found on the way: a
+  documentation line that *looks* like a malformed link (`links.py`'s own docstring, spec §4's
+  grammar) made the crawler drop the whole file — now the line becomes a bare comment with a
+  skip note, and `--force` exists to crawl a revision again; two commits in the same second
+  need `rowid` to order; a label rev in a query address must be resolved for real; headless
+  Chrome here needs `--no-sandbox`. By hand on the real index: this repository and the public
+  registry crawled (670 identities, 1,093 links), `dups` finding `runner` ×13, `who hello-world`
+  listing spec §7's examples, every page at 1200px and 390px. 249 → 275 tests.
 - **2026-09-05 (eleventh session) — P1-T4, P2-T1, P2-T2, P2-T3: Phases 1 and 2 done.**
   Four task commits. P1-T4 rewrote `links.py` around one regex for any comment syntax, three
   relations, ordered fields and a recorded block (`start`/`end`, beginning after the link's
@@ -449,7 +547,7 @@ is the archive, and a bloated history taxes every future session start.
 ```bash
 export PATH="$HOME/.local/bin:$PATH"          # uv lives here
 uv sync                                        # once; creates .venv
-uv run pytest -q                               # 249 tests, no network
+uv run pytest -q                               # 275 tests, no network
 uv run ruff check . && uv run ruff format --check .
 
 git clone https://github.com/leorinaldi/cttp-registry ~/.local/share/cttp/registry   # once
@@ -488,13 +586,33 @@ uv run cttp expand --package big.py                                       # over
 uv run cttp check --fix drifted.py                                        # drift → cttp-from:
 ```
 
+Phase 4, the index (the real one already holds this repository and the public registry):
+
+```bash
+uv run cttp index add github.com/leorinaldi/cttp-registry   # a locator; or a local clone's path
+uv run cttp index add .                                     # this clone, through its origin remote
+uv run cttp index crawl                                     # every registered repo at its head (--rev, --force)
+uv run cttp index status
+uv run cttp who hello-world                                 # backlinks, by relation and origin
+uv run cttp dups && uv run cttp dups --shape                # the same code, or the same shape, in several places
+uv run cttp search registry                                 # name, signature, docstring (FTS5)
+uv run cttp history github.com/leorinaldi/cttp-registry@main/snippets/hello_world.py
+uv run cttp rank --limit 10
+uv run cttp closure --indexed github.com/leorinaldi/cttp@main/src/cttp/resolve.py#latest
+uv run cttp resolve --latest <pinned address>               # rule 3 through the index when 1 and 2 miss
+```
+
 `scripts/make_local_registry.py` still builds an offline registry from the fixture if needed.
 The server was left running in the background (`.local/serve.log`); probe
-`curl -s -o /dev/null -w '%{http_code}' http://localhost:3120/` before starting another.
+`curl -s -o /dev/null -w '%{http_code}' http://localhost:3120/` before starting another. **It
+runs the code it was started with** — after a change to `server/` it has to be restarted
+(`pgrep -af 'cttp serve'`, then `kill <pids>` in a separate command).
 
 ## Config / secrets
 
 - `.env` — not created. Gitignored by design; never commit it.
 - `~/.config/cttp/config.toml` — the tool's configuration (see `config.py` above). Environment
   knobs: `CTTP_CONFIG` (config file path), `CTTP_HOME` (caches, default `~/.cache/cttp`),
-  `CTTP_REGISTRY` (one registry, replacing the list). Tests set the first two to `tmp_path`.
+  `CTTP_REGISTRY` (one registry, replacing the list), `CTTP_INDEX` (the index file, default
+  `~/.local/share/cttp/index.db`). Tests set `CTTP_CONFIG`, `CTTP_HOME` and `CTTP_INDEX` to
+  `tmp_path`.
