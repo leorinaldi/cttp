@@ -36,8 +36,12 @@ the **viewer** over registry and index on port 3120; and the **agent interface**
 command's `--json` object defined once in `schemas.py` (stamped `schema_version`, validated by a
 test, rendered to `docs/json-schemas.md`) and `cttp mcp`, an MCP server over stdio exposing
 `resolve`, `who`, `closure`, `search`, `dups` and `fold` as tools that answer exactly what the
-CLI prints. Other languages (tree-sitter) and the benchmark are still ahead —
-[`plan.md`](plan.md) lays out the phases.
+CLI prints; and the **read side for C** — a tree-sitter extractor driven by a per-language
+query file, so `.c`/`.h` files have definitions, identities, shapes and backlinks like Python
+files (no references, no write side), and the **driver corpus** reproduced under `bench/drivers/`
+with spec §12's acceptance test 1 and the line-level measurement behind the vision's numbers.
+The registry as a service and the benchmark are still ahead — [`plan.md`](plan.md) lays out the
+phases.
 
 ## 2. Architecture
 
@@ -55,8 +59,10 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
 - **Hashing** (`hashing.py`) — the **identity**: SHA-256 of the definition's own normalized
   source (dedented, LF, no trailing whitespace, one trailing newline); and the **shape**: the
   same text tokenized with identifiers as positional placeholders and literals as typed ones,
-  keywords and builtins kept, comments and blank lines dropped, structure tokens kept. Python
-  only; `ShapeError` otherwise. `address.py` re-exports both.
+  keywords and builtins kept, comments and blank lines dropped, structure tokens kept.
+  `shape(text, language)`: Python through `tokenize`, a language with a tree-sitter grammar
+  through `extract.treesitter.shape_text` (its identifier and literal nodes; braces and
+  semicolons are the structure), anything else `ShapeError`. `address.py` re-exports both.
 - **Links** (`links.py`) — one regex finds every link line in any comment syntax (`#`, `//`,
   `--`, `;`, `/* … */`); the marker gives the relation — `cttp:` *is*, `cttp-from:` *from*,
   `cttp-see:` *see*; fields are ordered `key=value`, the description is the trailing quoted
@@ -83,8 +89,14 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   to files and definitions in the same repository, resolved against the rev's file list, each
   with the `name` the page reaches it by), the stdlib / third-party modules it needs and the
   **import statements** that bind them, its **free names** (`unresolved`), and the **link
-  lines** found in its text (`links`, asserted). The Python extractor is exact, via `ast`; any
-  other file is a `text` script page with no shape and no references.
+  lines** found in its text (`links`, asserted). The Python extractor is exact, via `ast`.
+  **`treesitter.py`** is every other language's read side: `queries/<language>.scm` names the
+  definition node types (`@definition.<kind>`) and the name node (`@name`); the extractor keeps
+  file-scope definitions, descends declarator chains for a function's or variable's name, and
+  gives a page its kind (`function`, `constant`, `type`, `macro`), span, own text, signature (the
+  declaration up to the body), the comment above it as docstring, and its link lines — **no
+  refs, no imports, no free names**. C is the one grammar today (`GRAMMARS`; `.c` and `.h`). A
+  file with no extractor is a `text` script page with no shape and no references.
 - **Resolver** (`resolve.py`) — address → `Resolved`: pinned address (symbol kept), full rev,
   identity, shape, kind, symbol, signature, docstring, span, source, description, license,
   target, refs (as pinned locator addresses at the same rev, `origin: derived`), imports, and
@@ -129,7 +141,8 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   page per definition**, another file a page only if it carries a link — records pages once per
   identity and once per place, asserted links against the page they stand for, derived refs
   against the page that made them, then fills target identities from what the index knows.
-  It never fetches a repository it was not given. `queries.py`: `target_of` (any address → the
+  It never fetches a repository it was not given — a **sparse checkout is crawled as the files
+  it has on disk**, since a blobless clone would fetch every other blob. `queries.py`: `target_of` (any address → the
   identities and place the index knows, resolving for real only when it must), `who`, `dups`,
   `closure`, `search`, `history`, `rank`, `forward` (rule 3), `lookup_identity`, `page_json`.
 - **Server** (`server/app.py`) — FastAPI on **3120**, Jinja2 templates. Serves the contract
@@ -179,18 +192,20 @@ Data an address needs lives in three places on disk, all of them derivable:
 | Path | What | Status |
 |---|---|---|
 | `src/cttp/` | the package; see §2 | authored |
-| `src/cttp/extract/` | `__init__.py` (`Page`, `Ref`, `extract()` dispatch by suffix), `python.py` (the `ast` extractor) | authored |
+| `src/cttp/extract/` | `__init__.py` (`Page`, `Ref`, `extract()` dispatch by suffix), `python.py` (the `ast` extractor), `treesitter.py` + `queries/c.scm` (the C extractor; add a grammar wheel and a query file per further language) | authored |
 | `src/cttp/index/` | `schema.py` (tables, `open_index`), `crawl.py` (`add`, `crawl`, `status`), `queries.py` (the six queries, `forward`, `lookup_identity`) | authored |
 | `src/cttp/schemas.py`, `src/cttp/mcp.py` | the agent interface: the `--json` schemas and the MCP server; see §2 | authored |
 | `src/cttp/server/templates/` | `base.html` (the one layout and stylesheet), `_macros.html` (tags, backlinks, locations, history), `index.html`, `name.html`, `definition.html`, `repo.html`, `dups.html` | authored |
-| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`, `_index_crawl`, `_index_queries`, `_acceptance_move`, `_acceptance_provenance`, `_schemas`, `_mcp`); `conftest.py` builds the offline world, forbids sockets, and points `CTTP_INDEX` at `tmp_path` | authored |
+| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_extract_c`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_closure`, `_expand`, `_check`, `_update`, `_fold`, `_run`, `_package`, `_server`, `_cli`, `_index_crawl`, `_index_queries`, `_acceptance_move`, `_acceptance_provenance`, `_acceptance_drivers` (`slow`), `_schemas`, `_mcp`); `conftest.py` builds the offline world, forbids sockets, and points `CTTP_INDEX` at `tmp_path` | authored |
 | `tests/fixtures/registry/` | the registry repository's contents — **identical to the public repo at `v1`**; keep them in sync | authored |
 | `tests/fixtures/hello/hello.py` | one line, `# cttp: hello-world` | authored |
 | `tests/fixtures/thermo/` | a fake sensor package (`src/thermo/{__init__,decode,lm75}.py`) with every definition kind the extractor must handle; served in tests as `github.com/leorinaldi/thermo` | authored |
 | `tests/fixtures/pyrepo/` | the closure fixture: `lib.py` (siblings in a chain, a `requests` import, a stdlib import, a missing name, mutual recursion) and `many.py` (51 tiny definitions, over budget); served as `github.com/leorinaldi/pyrepo` | authored |
+| `tests/fixtures/crepo/` | the C fixture: every definition kind, a construct the grammar does not know, links in both comment syntaxes, one decoder verbatim in two files and under other names in a third; served as `github.com/leorinaldi/crepo` | authored |
 | `docs/` | vision, spec, plan, this file; `json-schemas.md` is **generated** (`python -m cttp.schemas`); excluded from ruff | authored |
 | `scripts/make_local_registry.py` | builds an offline registry repo from the fixture | authored |
-| `bench/drivers/corpus/`, `bench/drivers/lm75-teardown/` | the benchmark corpus (736 Linux driver `.c` files) and the LM75 teardown; fetched by script, never committed | gitignored |
+| `bench/drivers/` | `fetch.sh` (the corpus: a sparse, blobless clone of `torvalds/linux` at **v7.3-rc1**, five directories' own files, 736 `.c`), `expected.json` (provenance, the duplicate groups of acceptance test 1, the measurement's numbers), `measure.py` (the line-level measurement), `README.md` | authored |
+| `bench/drivers/corpus/`, `bench/drivers/corpus-preserved/`, `bench/drivers/lm75-teardown/` | the clone `fetch.sh` makes; the original raw-file copy it reproduces byte for byte; the LM75 teardown — never committed | gitignored |
 | `.local/` | local scratch, e.g. `serve.log` | gitignored |
 | `.venv/`, `uv.lock` | uv-managed environment; the lockfile is committed | `.venv` gitignored |
 | `pyproject.toml` | hatchling build, `cttp` entry point, ruff and pytest config | authored |
@@ -259,7 +274,16 @@ links to spec §8 in this private repo.
 - **In the index, identity is the key and a place is a row.** `definitions` has one row per
   identity; `locations` one per (repo, sha, path, symbol). "Two copies of one thing are one
   thing" is therefore a join, not a heuristic — `dups` is `GROUP BY identity`.
-- **A Python file is a page beside its definitions.** The crawl records the whole-file page
+- **C definitions are addressed by name, tagged types by `struct.<tag>` / `enum.<tag>` /
+  `union.<tag>`, typedefs and macros by name.** C's tags live in their own namespace, so a
+  struct and a function may share a name; the dotted form keeps them apart within the symbol
+  grammar. Kinds `type` and `macro` exist for them. Two definitions of one symbol in a file
+  (the arms of an `#ifdef`) keep the first.
+- **A C page has no derived references.** Only the Python extractor resolves names; a C page's
+  `refs`, `imports` and `unresolved` are empty, so its graph is its asserted links alone. The
+  write side stays Python's (spec §3); a `//` link in a `.c` file expanding a C *script* page
+  is fine and tested, and a C definition is never refused by the closure — nothing asks it to.
+- **A file with an extractor is a page beside its definitions.** The crawl records the whole-file page
   (what a locator without `#symbol` resolves to) and one page per definition. A file whose
   entire text is one definition shares that definition's identity; the definition's view (kind,
   name, signature) wins the `definitions` row, and `dups` never pairs a file with its own only
@@ -312,11 +336,13 @@ links to spec §8 in this private repo.
   beneath is that page), `# cttp-from:` (*from* — derived from it, never hashed), `# cttp-see:`
   (*see* — a reference, no code claimed). The **relation** is `is`, `from` or `see`.
 - **stack** — consecutive link lines above one statement. They share one block.
-- **page** — what an address resolves to: a definition (`function`, `class`, `constant`) or a
-  script, with its normalized source. A definition's source is its span, dedented.
+- **page** — what an address resolves to: a definition (`function`, `class`, `constant`, and
+  for C `type`, `macro`) or a script, with its normalized source. A definition's source is its
+  span, dedented.
 - **symbol** — the dotted name of a definition within a file: `reg_to_millicelsius`,
-  `LM75.read_temp`. Module-level defs, classes, constants and class members are addressable;
-  nested defs are not, and the error says which definition they are nested in.
+  `LM75.read_temp`; in C `lm75_reg_to_mc`, `struct.lm75_data`, `LM75_REG_TEMP`. Module-level
+  defs, classes, constants and class members are addressable; nested defs are not, and the
+  error says which definition they are nested in. C: file-scope definitions only.
 - **shape** — the identity's structural twin: same hash over the placeholder text. Equal shapes
   with different identities mean a near-duplicate.
 - **ref** — a derived reference from a page to another file or definition in its repository,
@@ -373,6 +399,14 @@ links to spec §8 in this private repo.
   test client, whose event loop makes a socketpair — no connect, so it passes the guard.
 - **Never invent a value.** A missing license is `None` and prints `not available`; a missing
   description stays absent. Nothing is coerced to a plausible default.
+- **Rows come from byte offsets, never from a tree-sitter `Point`.** py-tree-sitter 0.26.0
+  returns `Point`s from freed memory for nodes that came out of query captures (garbage spans,
+  then a segfault); the dependency is pinned `<0.26` *and* `treesitter.Rows` maps
+  `start_byte`/`end_byte` to lines. Keep both.
+- **The corpus tests are `slow` and deselected by default** (`addopts = "-m 'not slow'"`);
+  `uv run pytest -m slow` runs them, skipped when `bench/drivers/corpus/.git` is absent. They
+  run git against a blobless clone with `GIT_ALLOW_PROTOCOL=none`, so a lazy blob fetch fails
+  loudly instead of reaching GitHub.
 - **Stamps carry commit SHAs only.** Tags and branches are for humans; they never appear in a
   stamp the tool writes.
 - **`tests/fixtures/registry/` mirrors the public registry repo.** A change to one is a change to
@@ -442,6 +476,13 @@ links to spec §8 in this private repo.
 - **The MCP tools set `output_schema` by hand and return `CallToolResult` themselves.** The SDK
   would otherwise synthesize a schema from the return annotation (wrapping a `dict` in
   `{"result": …}`); building the result keeps the object byte-identical to the CLI's.
+- **`open_index(create=False)` does not run the schema script.** `CREATE TABLE IF NOT EXISTS`
+  takes SQLite's write lock, and a corpus crawl holds it for minutes; a reader that ran the
+  script answered `database is locked` (the viewer's 500). Readers open with a 5 s busy timeout
+  and touch nothing.
+- **A sparse clone is crawled as the files it has, and a detached HEAD is named by its tag.**
+  `fetch.sh`'s corpus is both; the crawl of a blobless clone would otherwise fetch the whole
+  kernel one blob at a time, and `index status` would say `[HEAD]`.
 - **`rank` counts a copy that links back to its original.** Distinct linking *pages* are
   (identity, repo, file), so the same identity elsewhere counts; only a derived self-reference
   (recursion) is excluded.
@@ -489,9 +530,17 @@ links to spec §8 in this private repo.
   stream-json --verbose` from a scratch directory; the `tool_use` blocks in the stream show the
   call. `cttp mcp install --claude-code` is the persistent attach (writes Leo's Claude Code
   config) — offer it, don't run it unasked.
-- **The real index is `~/.local/share/cttp/index.db`.** It holds whatever was crawled by hand;
-  the tests never see it. `cttp index status` says what is in it; deleting the file is the
-  reset.
+- **The real index is `~/.local/share/cttp/index.db`.** It holds whatever was crawled by hand —
+  including the driver corpus (`github.com/torvalds/linux [v7.3-rc1]`, ~34,000 pages), so
+  `dups` and `search` answer at kernel scale; the tests never see it. `cttp index status` says
+  what is in it; deleting the file is the reset.
+- **`cttp resolve <real locator>` clones the whole repository into `~/.cache/cttp/repos`.** For
+  `github.com/torvalds/linux` that is the entire kernel — do not type it; the corpus is reachable
+  through the index (`dups`, `who`, `search`, `resolve sha256:…`) and its local clone. If it
+  happens: kill it, `rm -rf ~/.cache/cttp/repos/github.com/torvalds`.
+- **The corpus clone is blobless.** Anything outside the sparse checkout (`git show HEAD:MAINTAINERS`
+  is fine, root files are in; `git show HEAD:kernel/fork.c` is not) fetches from GitHub on demand.
+  `GIT_ALLOW_PROTOCOL=none` in the environment turns that into an error.
 
 ## 9. Running and testing
 
@@ -516,6 +565,10 @@ uv run cttp closure --indexed <address>…  # from the index's recorded links, s
 uv run cttp mcp install                   # the `claude mcp add` line; --claude-code runs it
 uv run cttp mcp                           # the MCP server over stdio (what Claude Code launches)
 uv run python -m cttp.schemas             # regenerate docs/json-schemas.md after a schema change
+
+bash bench/drivers/fetch.sh               # the corpus (~60 MB); then index add bench/drivers/corpus && index crawl (~2 min)
+uv run pytest -m slow                     # acceptance test 1 and the measurement over the corpus (~2.5 min)
+uv run python bench/drivers/measure.py    # the vision's duplicate-line figures, recomputed
 ```
 
 Site: **http://localhost:3120** — the viewer and the registry contract, nothing else. The product

@@ -143,14 +143,17 @@ def open_index(path: Path | str | None = None, create: bool = True) -> sqlite3.C
             f"no index at {p}; `cttp index add <repo>` and `cttp index crawl` first"
         )
     p.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(p)
+    conn = sqlite3.connect(p, timeout=5.0)  # wait out a writer's commit rather than fail at once
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(SCHEMA)
-    conn.execute(
-        "INSERT OR IGNORE INTO meta(key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),)
-    )
-    conn.commit()
+    if create:
+        # a reader must not run the schema script: `CREATE TABLE IF NOT EXISTS` takes the write
+        # lock, and a crawl holds it for minutes — the viewer would answer 500 the whole while
+        conn.executescript(SCHEMA)
+        conn.execute(
+            "INSERT OR IGNORE INTO meta(key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),)
+        )
+        conn.commit()
     return conn
 
 

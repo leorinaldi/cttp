@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 5 COMPLETE. NEXT IS P6-T1 (the tree-sitter extractor).** Phase 0
+**Status: PHASES 0 TO 6 COMPLETE. NEXT IS P7-T1 (`name claim` and `name show`).** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -23,35 +23,41 @@ the one definition of every command's `--json` object (`schema_version` stamped 
 strict validation of every subcommand's real output, a pinned fingerprint, `docs/json-schemas.md`
 generated); and `cttp mcp`, an MCP server over stdio whose six tools (`resolve`, `who`, `closure`,
 `search`, `dups`, `fold`) answer exactly what the CLI prints, checked from Claude Code by hand.
-295 tests green, ruff clean.
+Phase 6 (2026-09-05): **the read side for C and the driver corpus** — `extract/treesitter.py`
+with `queries/c.scm` (functions, constants, `struct.`/`enum.`/`union.<tag>` types, typedefs,
+macros; identity and shape from the grammar's nodes; links in C comments), `.c`/`.h` routed
+through it everywhere (schema version **2**: `language` gains `c`, `kind` gains `type` and
+`macro`); the corpus pinned to **Linux v7.3-rc1** and reproduced byte for byte by
+`bench/drivers/fetch.sh` (a sparse, blobless clone, which the crawl reads as the files it has);
+spec §12 **acceptance test 1** passing with the groups `expected.json` records; and the
+line-level measurement recomputed by `bench/drivers/measure.py` — the vision's numbers amended
+(42 % verbatim, 92 % by shape; the old 37 %/14 % could not be reproduced). 321 fast tests green
+plus 2 `slow` corpus tests (deselected by default), ruff clean.
 
-_Last updated: 2026-09-05 (Phase 5)._
+_Last updated: 2026-09-05 (Phase 6)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: P6-T1 — the tree-sitter extractor.** Read its entry in [`docs/plan.md`](docs/plan.md)
-in full. `extract/treesitter.py` with a per-language query file (`queries/c.scm` first) naming
-definition node types and the name field; identity and shape for C (shape via the grammar's
-identifier and literal nodes, not `tokenize`); `resolve` and `index crawl` route non-Python files
-through it; links in C comments already parse (`links.py` handles `//` and `/* */`). Acceptance:
-`cttp resolve <locator to the corpus's lm75.c>#<decoder>` returns its exact span and a derived
-signature; the same function in two files is one identity; two functions differing only in
-identifiers are one shape. Before starting, decide the dependency (`tree-sitter` +
-`tree-sitter-c` wheels; pin in `pyproject.toml`) and note that `Page.language` / `shape: null`
-for non-Python is the thing that changes — the `resolve` schema's `language` enum (`python`,
-`text`) will grow, which is a **schema change: bump `SCHEMA_VERSION`**, re-pin the fingerprint,
-regenerate the doc, note it here.
+**Start here: P7-T1 — `cttp name show` and `cttp name claim`.** Read its entry in
+[`docs/plan.md`](docs/plan.md) in full. `name show <name>` prints the registry entry and its
+resolution; `name claim <name> --target <locator>` verifies the target repository declares the name
+in a `cttp.toml` at its default branch, writes `names/<name>.toml`, and opens a PR against the
+registry repository with `gh` (or prints the file under `--no-pr`); refuses an existing name with
+another owner unless `--transfer`. Acceptance is against a `tmp_path` registry and target: claim
+with the declaration → entry written and printed; without → refused naming the missing file; a
+second owner → refused; `name show hello-world` prints the P0-T2 entry. Decide first what the
+target's `cttp.toml` declaration looks like (spec §8 names the file; the plan says "declaring the
+name") — that is a small spec addition, note it. `name show`/`name claim` outputs are new
+`--json` objects: add them to `schemas.py` (`COMMANDS`), bump `SCHEMA_VERSION` to 3, re-pin,
+regenerate the doc.
 
-Also worth doing early in P6, since the corpus is local: `cttp index add bench/drivers/corpus`
-after P6-T1 is the P6-T2 acceptance's first half.
-
-If Leo wants to play with Phase 5: `uv run cttp mcp install` prints the `claude mcp add` line
-(already run at user scope — see **Environment**); in any Claude Code session, *who links to
-hello-world?* calls the `who` tool. `uv run cttp --json <anything>` now
-prints `schema_version` first, and `docs/json-schemas.md` says what every field means.
+Before that, two things from this session worth a minute: review the **vision amendment** (the
+duplicate-line numbers and the decoder example changed — `git show b111f5c -- docs/vision.md`),
+and decide whether `bench/drivers/corpus-preserved/` (the original raw-file copy, now reproduced
+byte for byte by `fetch.sh`) can be deleted.
 
 ## Current state — working & verified
 
@@ -69,7 +75,10 @@ prints `schema_version` first, and `docs/json-schemas.md` says what every field 
   `<str>`, `<fstr>`, statement and block structure → `<nl>`, `<in>`, `<out>`; keywords, builtins
   and operators kept; comments and blank lines dropped) and `short()`. `ShapeError` when the text
   is not Python. The identity of `print("hello world!")` is pinned in `tests/test_hashing.py`
-  (`75a27070015e…`). `address.py` re-exports all of these.
+  (`75a27070015e…`). `address.py` re-exports all of these. **P6-T1:** `shape_text(text,
+  language="python")` / `shape(text, language)` — a language other than Python goes to
+  `treesitter.shape_text`; one with no grammar is a `ShapeError` (`resolve` and the crawl catch
+  it: `shape: null`).
 - `address.py` — **P1-T1.** All three spec §2 forms in one frozen `Address` (`form`, `name`,
   `locator`, `path`, `rev`, `symbol`, `identity`): `parse()` accepts the optional `cttp:` marker,
   lower-cases the host and hex, turns backslashes into slashes, drops a trailing slash, rejects
@@ -100,6 +109,27 @@ prints `schema_version` first, and `docs/json-schemas.md` says what every field 
   script page's `source` is its own text**: `links.strip_links()` removes every link line and,
   for a stamped `is` link, its block and separator blank; what remains is what the identity
   hashes and what `expand` writes. A definition's text stays its span verbatim.
+- `extract/treesitter.py` + `extract/queries/c.scm` — **P6-T1.** The read side for C (and any
+  language a `tree_sitter_<lang>` wheel and a query file are added for: `GRAMMARS`,
+  `LANGUAGES` in `extract/__init__.py`). The query file names each definition node type as
+  `@definition.<kind>` and, where the grammar has the field, its name as `@name`; the extractor
+  descends declarator chains (`*name`, `name[]`, `(*name)(…)`) for the rest, keeps file-scope
+  definitions only (nothing inside a body, struct, parameter or enumerator list; macros
+  anywhere), and the first of two definitions of one symbol (`#ifdef` arms). Kinds: `function`,
+  `constant` (a declaration with an initializer — tables included), `type` (`struct.<tag>`,
+  `union.<tag>`, `enum.<tag>` with a body; a typedef by its name), `macro` (`#define`, with or
+  without parameters). A page carries its span (rows computed from **byte offsets**, never from
+  a node's `Point` — py-tree-sitter 0.26.0 hands those out from freed memory and segfaults on
+  nodes returned by query captures; the dependency is pinned `<0.26`), its own text, a
+  signature (the declaration up to the body or initializer, whitespace collapsed; a macro's
+  name and parameters), the first paragraph of the comment directly above (kernel-doc summary;
+  a link-line comment is not a description), and its link lines; **no refs, no imports, no
+  free names** — those are the Python extractor's. `tokens()` gives `(row, category, token)`
+  triples with comments gone and raw macro bodies regex-tokenized; `shape_text()` is the
+  definition-level shape (identifiers `$n` by first appearance, literals `<num>`/`<str>`,
+  keywords and primitive types kept). A parsed file is cached (`lru_cache`), so the crawl's one
+  `extract()` per definition parses once. `.c` and `.h` are `c`; a whole C file is a `script`
+  page with a shape, its link lines taken out.
 - `gitcache.py` — **P2-T1.** Bare clones under `$CTTP_HOME` (default `~/.cache/cttp`)
   `/repos/<locator>`, cloned from `config.url_for(locator)`; `rev_parse` (tags and branches to
   SHAs), `show` (`cat-file blob`), `ls_tree`, `default_branch` (the bare clone's HEAD).
@@ -244,7 +274,11 @@ prints `schema_version` first, and `docs/json-schemas.md` says what every field 
   can: a stamp's `id=` (one match), a pinned locator seen at that rev, a name whose snapshot
   points at a crawled file (latest crawled rev). The crawl **never fetches a repository it was
   not given**. A revision already crawled is skipped (`already`); `--force` crawls it again
-  (locations and links removed first). `status()` counts.
+  (locations and links removed first). `status()` counts. **P6:** every file with an extractor
+  (Python, C) goes through `code_file()`; a **sparse checkout is crawled as the files it has on
+  disk** (`is_sparse()`, `git sparse-checkout list`) — a blobless clone would otherwise fetch
+  every other blob of the repository; a local clone at a detached HEAD is named by its tag
+  (`_checked_out()`, e.g. `v7.3-rc1`) when there is no origin HEAD.
 - `index/queries.py` — **P4-T2.** `lookup_identity()` is `objects.index_lookup` (a `Stored`
   with `via="index"` and every crawled location); `page_json()` renders a definition at a
   location as the contract object. `target_of()` turns any address into what the index knows —
@@ -276,7 +310,9 @@ prints `schema_version` first, and `docs/json-schemas.md` says what every field 
   every object — `cli.emit()`, `cli.fail()` and the server's `/<name>.json` all go through it.
   `validate()` is strict (missing, extra, type, enum, null); `json_schema()` renders draft
   2020-12 (inline, or with `$defs`); `markdown()` renders `docs/json-schemas.md`;
-  `fingerprint()` digests every schema and `FINGERPRINTS = {1: "95c46a2dbc0766c1"}` pins it.
+  `fingerprint()` digests every schema and `FINGERPRINTS` pins it — **version 2 since P6-T1**
+  (`14c8b9e5c6d17b96`): `language` is `python | c | text`, `kind` gained `type` and `macro`,
+  the `signature`/`docstring` field notes say what they are for C.
   **Shapes frozen this session (deliberate, first version):** `expand`, `add` and `fold` wrap
   their per-file map in `files`; `index crawl` wraps its list in `crawled`; `closure` gained
   `source` (`repository` | `index`), `roots` and `missing` (empty for the live walk) so the live
@@ -317,9 +353,22 @@ prints `schema_version` first, and `docs/json-schemas.md` says what every field 
   so tests can drive the prompts. `resolve`'s text form prints the signature and docstring on a
   `#` line, `# seen:` lines when an identity came from a cache (`cache` or `index`), and `from →
   to` with the rule (`via index` when the index found it) under `--latest`.
-- Tests: 295 in `tests/` — `test_{address,hashing,extract_python,config,links,gitcache,resolve,
-  objects,latest,closure,expand,check,update,fold,run,package,server,cli,index_crawl,
-  index_queries,acceptance_move,acceptance_provenance,schemas,mcp}.py`. `test_schemas.py` is
+- `bench/drivers/` — **P6-T2, P6-T3.** `fetch.sh` (the corpus: a sparse, blobless clone of
+  `torvalds/linux` at **v7.3-rc1**, each of five directories' own files, 736 `.c`; ~60 MB;
+  gitignored), `expected.json` (the corpus's provenance and how it was pinned; the duplicate
+  groups acceptance test 1 checks; the measurement's numbers), `measure.py` (the line-level
+  measurement, `--json`), `README.md` (all of it in prose). `corpus-preserved/` is the original
+  raw-file copy, moved aside, identical to what `fetch.sh` produces.
+- Tests: 321 fast + 2 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
+  config,links,gitcache,resolve,objects,latest,closure,expand,check,update,fold,run,package,
+  server,cli,index_crawl,index_queries,acceptance_move,acceptance_provenance,
+  acceptance_drivers,schemas,mcp}.py`. `test_extract_c.py` is P6-T1's acceptance over the
+  `crepo` fixture (every kind, exact spans and signatures, one identity in two files, one shape
+  under other names and literals, links in both C comment syntaxes, the crawl and the five
+  queries over C, `--latest` rule 2 on a moved C function) plus the corpus's `lm75_reg_to_mc`
+  when the corpus is present. `test_acceptance_drivers.py` (**`-m slow`**, deselected by
+  `addopts`, skipped without the clone) crawls the corpus offline (`GIT_ALLOW_PROTOCOL=none`)
+  and checks `expected.json`'s groups and the measurement's numbers. `test_schemas.py` is
   the P5-T1 acceptance: every subcommand run through the CLI with `--json` against a fixture
   world (both `resolve` forms and the cache form, `--id` and its mismatch, `--latest` found and
   not found, live and indexed `closure` with a `missing` entry, `expand --write-deps` with all
@@ -414,12 +463,16 @@ prints `schema_version` first, and `docs/json-schemas.md` says what every field 
 - `uv` 0.12.10 installed at `~/.local/bin/uv` (2026-09-04). Python 3.12.3 system interpreter at
   `/usr/bin/python3` has no cttp, which the tests rely on.
 - Domain `cttp.ai` registered by Leo; nothing points at it yet.
-- Driver corpus preserved at `bench/drivers/corpus/` (gitignored, 13 MB, 736 `.c` files under
-  `drivers/{gpio,hwmon,iio,rtc}`), copied from the fisheye session's scratchpad. The measurement
-  scripts and the Linux commit did **not** survive; P6-T2 reconstructs them. The LM75 teardown
-  files are at `bench/drivers/lm75-teardown/` (gitignored).
-- The server was restarted on the Phase 5 code on 2026-09-05 (`.local/serve.log`); the contract
-  object now carries `schema_version: 1` first (checked: `curl localhost:3120/hello-world.json`).
+- Driver corpus: `bench/drivers/corpus/` is now a **sparse, blobless clone of torvalds/linux at
+  v7.3-rc1** made by `fetch.sh` (2026-09-05; gitignored). The original raw-file copy from the
+  measurement session's scratchpad is at `bench/drivers/corpus-preserved/` (gitignored, 13 MB),
+  byte-identical to the clone's five directories — Leo may delete it. The LM75 teardown files
+  are at `bench/drivers/lm75-teardown/` (gitignored). **The real index now holds the corpus**
+  (`github.com/torvalds/linux [v7.3-rc1]`, ~34,000 pages), crawled 2026-09-05.
+- `tree-sitter` **0.25.2** (pinned `<0.26`) and `tree-sitter-c` 0.24.2 added to
+  `pyproject.toml` (`uv.lock` updated); aarch64 wheels, no build step.
+- The server was restarted on the Phase 6 code on 2026-09-05 (`.local/serve.log`); the contract
+  object carries `schema_version: 2` first.
 - **MCP SDK `mcp` 2.1.1** added to `pyproject.toml` (with `jsonschema`, `pydantic`,
   `sse-starlette` and friends as transitive dependencies; `uv.lock` updated). 2.x renamed
   `FastMCP` to `MCPServer` — see overview §8.
@@ -449,8 +502,6 @@ prints `schema_version` first, and `docs/json-schemas.md` says what every field 
 Every item carries a target: the phase that will close it, `→ standing`, or `→ unscheduled` with the
 trigger that would schedule it.
 
-- Identify the Linux commit the preserved corpus came from and write `bench/drivers/fetch.sh`;
-  re-derive `expected.json` → **P6-T2**
 - Name collision check on PyPI and npm before the first package is published → **unscheduled**;
   trigger: deciding to publish `cttp` to PyPI (not in the plan)
 - Point `cttp.ai` at the static export → **P7-T3**
@@ -524,8 +575,42 @@ trigger that would schedule it.
   registry name, but `dups` locations carry the *definition's* name (the schema now says so) —
   a dead link for every group → **unscheduled**; trigger: the next viewer session (drop the link
   or look the registry name up per location)
-- **The `resolve` schema's `language` enum is `python` | `text`**; P6-T1 adds `c` (and more), a
-  schema change → **P6-T1** (bump `SCHEMA_VERSION`, re-pin, regenerate the doc)
+- **Spec §3 says a definition is "a function, class or constant"**; the C extractor adds `type`
+  and `macro` kinds, and names tagged types `struct.<tag>` — the spec should say so, and §12
+  test 1's wording ("four temperature decoders… two verbatim copies") should match
+  `expected.json` → **P7-T3** (the spec edit that publishes)
+- **The vision's original 37 % / 14 % could not be reproduced** — the measurement session's
+  method is lost; the vision now carries the recomputed figures (42 % verbatim, 92 % by shape
+  over substantive lines; 16 % / 66 % over lines of eight or more tokens) and names
+  `measure.py` as the method. Leo to confirm the amendment reads right → **next session**
+- **`cttp resolve` on a real locator clones the whole repository into the git cache** — for
+  `github.com/torvalds/linux` that is the entire kernel; the corpus is reachable only through the
+  index and its local clone (`dups`, `who`, `search`, `resolve sha256:…`). A locator whose
+  repository is registered with a `local_path` could resolve through that clone instead →
+  **unscheduled**; trigger: wanting `resolve <corpus locator>#symbol` to work (the P6-T1
+  acceptance used a small repo built from the two lm75 files)
+- **A C page has no derived references and no free names**, so the closure of a C file would
+  inline it beneath a `#` link happily (the write side is Python's by spec §3; a `//` link in a
+  `.c` file expanding a C script page is tested and fine) → **unscheduled**; trigger: someone
+  expanding a C definition into a Python file
+- **Kernel constructs the grammar does not know** (`MODULE_DEVICE_TABLE(…)`, `module_init(…)`,
+  `static IIO_CONST_ATTR(…)`) become `ERROR` nodes: 27 top-level ones across the 736 files, the
+  definitions around them found, their own text regex-tokenized for the shape → **standing**
+- **`default_branch` of a local clone at a detached HEAD** with no origin HEAD is the tag (or
+  `HEAD`); `--latest` rule 3 and the viewer treat it as a branch name → **unscheduled**; trigger:
+  a `--latest` against such a repository
+- **The line-level shape abstracts every identifier within a line**, so `return $0 ;` and
+  `$0 = $1 ( $2 ) ;` make 92 % of substantive lines "shape-identical"; the table by minimum
+  tokens shows how much is short lines. A shape over windows of several lines would say more →
+  **unscheduled**; trigger: wanting the vision's headline to be about copied *blocks*
+- **The viewer's `/dups?shape=1` (7.6 MB) and `/r/github.com/torvalds/linux` (10 MB) pages
+  render the whole kernel-scale index in one response** — under a second server-side, but a
+  heavy page; paginate or cap groups when it hurts → **unscheduled**; trigger: the viewer
+  becoming a daily tool over a large index
+- **`open_index(create=False)` used to run the schema script and take the write lock**, so the
+  viewer answered 500 for the two minutes a corpus crawl held the lock; fixed this session
+  (readers skip the script; 5 s busy timeout) — a test with a concurrent writer is still missing
+  → **unscheduled**; trigger: the next change to `open_index`
 - **`resolve` through the index for a file that is its one definition says `kind: function`**
   (the definition's view won the `definitions` row) where git would say `script` for the file
   address — same text, same identity → **unscheduled**; trigger: it confuses someone
@@ -535,6 +620,39 @@ trigger that would schedule it.
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-05 (fifteenth session) — Phase 6 end to end: P6-T1 the tree-sitter extractor,
+  P6-T2 the corpus and acceptance test 1, P6-T3 the measurement.** Three commits. P6-T1:
+  `tree-sitter` 0.26.0 segfaulted on nodes returned from query captures (a `Point` read from
+  freed memory gave spans like `(9928, 9928)` before the crash); pinned `<0.26` and, belt and
+  braces, every row is computed from `start_byte`/`end_byte`. Decisions: tagged types are
+  addressed `struct.<tag>` / `enum.<tag>` / `union.<tag>` (C's tag namespace is separate, and the
+  symbol grammar is dotted identifiers); kinds `type` and `macro` were added rather than
+  stretching `class`; the C shape keeps keywords and primitive types and abstracts every
+  identifier node, and a raw macro body or `ERROR` text is regex-tokenized with comments cut
+  out; a comment directly above a definition is its docstring unless it is a link line; the
+  first of two `#ifdef` definitions wins. `shape()` took a `language` argument instead of a
+  second function, so the crawl and `resolve` stopped special-casing Python. A refusal of C
+  pages in the closure was tried and reverted: `test_check.py` expands a C script page beneath a
+  `//` link in a `.c` file on purpose. P6-T2: the preserved copy's `urls.txt` said `master`,
+  2026-09-04; hashing every file as a git blob against the GitHub contents API showed the five
+  directories unchanged on master from the rtc merge `275bc4eedf2c` (2026-08-28) through
+  2026-09-05, so **v7.3-rc1** is the pin. Reproducing the original fetch exactly needed
+  non-cone sparse patterns (cone mode takes `hwmon/pmbus` and the 12 files of `drivers/iio`
+  itself) ordered shallowest-first so an exclusion never undoes a deeper inclusion; the result
+  is byte-identical to the preserved copy (moved to `corpus-preserved/`, not deleted). The crawl
+  of a blobless clone would have fetched the whole kernel blob by blob, so a sparse checkout is
+  crawled as the files it has; the acceptance test runs git with `GIT_ALLOW_PROTOCOL=none` so a
+  lazy fetch would fail loudly. Crawl: 799 files, 34,087 pages, 33,811 identities, 2 m 14 s,
+  nothing skipped. The vision's own example groups were not recoverable; `expected.json` records
+  what the tool finds (four `(s8)reg * 1000` decoders by shape, two verbatim pairs) and says so.
+  A `cttp resolve github.com/torvalds/linux@v7.3-rc1/…` typed by hand started cloning the whole
+  kernel into `~/.cache/cttp` — killed, cache dir removed, follow-up filed. P6-T3: the
+  line-level numbers came out 92 % / 42 % under the stated method, and 89/31, 83/23, 66/16 over
+  lines of ≥3, ≥5, ≥8 tokens — nowhere near 37/14 under any reading tried, so the vision was
+  amended to the recomputed figures with the method named, and `expected.json` keeps the old
+  numbers under `vision_before`. Slow corpus tests are deselected by default (`addopts`). The
+  viewer answered 500 during the real-index crawl (`database is locked`: a read-only open ran
+  the schema script); readers now skip it.
 - **2026-09-05 (fourteenth session) — Phase 5 end to end: P5-T1 the `--json` schemas, P5-T2
   `cttp mcp`.** Two tasks, one commit. P5-T1: `schemas.py` was written from the code's actual
   outputs — every `to_json()` and query dict read first — as a small schema language rather than
@@ -618,25 +736,13 @@ is the archive, and a bloated history taxes every future session start.
   (itsdangerous, over the network) found and fixed two bugs the fixture had not: the shadowing
   case, and a docstring summary wrapping onto a second line being cut. Both pages looked at in
   headless Chromium. 113 → 138 tests. Server restarted on the new code.
-- **2026-09-04 (ninth session) — Stage 4 `overview.md`; start sequence retired; P1-T1 the full
-  address grammar.** The overview was written from the code, not from memory: architecture,
-  repo map, load-bearing decisions, vocabulary, invariants, the oddities not to "fix", the traps,
-  how to run. Reaching Stage 5 retired `docs/project-start-sequence.md` exactly as it asked
-  (two CLAUDE.md steps repointed at the plan, its row dropped from the map, the file deleted).
-  Then P1-T1: one `Address` type for all three forms, canonical round-trip, `parse_pinned`,
-  errors that name the part, a table of valid/invalid inputs. Decisions: a locator resolves
-  through git without a registry (the contract has no locator route) and borrows name and
-  description from a local entry with the same target; a `/` after `@` in a locator starts the
-  path, so slashed branches are name-form only; hex and hosts are lower-cased on parse; stamps
-  now carry the pinned address in any form (`format_stamped` signature changed). Acceptance
-  walked by hand from `/tmp`: the plan's locator command, a locator link expanded, run under
-  `python3 -I`, and checked ok. 55 → 113 tests. Server restarted on the new code.
+
 ## How to run
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"          # uv lives here
 uv sync                                        # once; creates .venv
-uv run pytest -q                               # 295 tests, no network
+uv run pytest -q                               # 321 tests, no network; -m slow adds the corpus tests (~2.5 min)
 uv run ruff check . && uv run ruff format --check .
 
 git clone https://github.com/leorinaldi/cttp-registry ~/.local/share/cttp/registry   # once
@@ -699,6 +805,12 @@ uv run cttp mcp install                                    # prints: claude mcp 
 uv run cttp mcp install --claude-code                      # runs it (writes Claude Code's config) — Leo's call
 uv run cttp mcp                                            # the server itself, over stdio; Ctrl-C
 uv run python -m cttp.schemas                              # regenerate docs/json-schemas.md after a schema change
+
+bash bench/drivers/fetch.sh                                # the corpus: Linux v7.3-rc1, five directories, ~60 MB
+uv run cttp index add bench/drivers/corpus && uv run cttp index crawl github.com/torvalds/linux   # ~2 min
+uv run cttp dups --shape | head                            # the four eight-bit decoders are one group
+uv run python bench/drivers/measure.py                     # the line-level duplicate figures
+uv run pytest -m slow tests/test_acceptance_drivers.py     # acceptance test 1 and the measurement, as tests
 ```
 
 `scripts/make_local_registry.py` still builds an offline registry from the fixture if needed.
