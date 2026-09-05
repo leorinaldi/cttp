@@ -1,8 +1,8 @@
-name        = "hello-world"
+name = "hello-world"
 description = "Prints 'hello world'."
-owner       = "github.com/leorinaldi"
-target      = "github.com/leorinaldi/cttp-registry/snippets/hello_world.py"
-default     = "latest"
+owner = "github.com/leorinaldi"
+target = "github.com/leorinaldi/cttp-registry/snippets/hello_world.py"
+default = "latest"
 
 [versions]
 latest = "main"

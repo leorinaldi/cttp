@@ -129,7 +129,7 @@ def test_claim_by_another_owner_is_refused_unless_transfer(registry, tmp_path, c
     err = run("name", "claim", "hello-world", "--target", target, "--no-pr", code=1)
     assert "owned by github.com/leorinaldi" in err["error"] and "--transfer" in err["error"]
     before = (tmp_path / "registry" / "names" / "hello-world.toml").read_text()
-    assert 'owner       = "github.com/leorinaldi"' in before  # untouched
+    assert 'owner = "github.com/leorinaldi"' in before  # untouched
     body = run(
         "name", "claim", "hello-world", "--target", target, "--transfer", "--no-pr",
         schema="name claim",

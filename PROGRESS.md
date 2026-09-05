@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 7 COMPLETE BUT FOR THE `cttp.ai` DNS (LEO). NEXT IS P8-T1 (THE HARNESS).** Phase 0
+**Status: PHASES 0 TO 7 COMPLETE (the `cttp.ai` DNS is Leo's; localhost stands in until then). NEXT IS P8-T1 (THE HARNESS).** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -44,28 +44,23 @@ them, the `CTTP_TOKEN` secret, enabling Pages, the DNS for `cttp.ai` and the two
 requests are Leo's, and are the open items of P7-T2/T3. 334 fast tests green plus 2 `slow`
 corpus tests (deselected by default), ruff clean.
 
-_Last updated: 2026-09-05 (Phase 7; cttp.ai DNS pending)._
+_Last updated: 2026-09-05 (Phase 7 done; cttp.ai DNS pending, not blocking)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**Start here: the last two P7-T3 steps, which wait on Leo's DNS.** Everything else in Phase 7
-is done and recorded (see **Environment** and the build history):
-1. **DNS for `cttp.ai`** — Leo, at the registrar: apex `A` records 185.199.108.153,
-   185.199.109.153, 185.199.110.153, 185.199.111.153 (or an `ALIAS` to `leorinaldi.github.io`).
-   Pages is enabled from Actions with `cname = cttp.ai` and the first deploy succeeded;
-   `https://leorinaldi.github.io/cttp-registry/hello-world.json` already answers 301 to
-   `http://cttp.ai/hello-world.json`, which is dead until the records exist. Once they do,
-   GitHub issues the certificate; then `gh api -X PUT repos/leorinaldi/cttp-registry/pages -f
-   https_enforced=true`.
-2. The P7-T3 acceptance, once DNS resolves: `curl -s https://cttp.ai/hello-world.json` equals
-   `localhost:3120/hello-world.json`; a fresh config (`CTTP_CONFIG=/tmp/x/config.toml uv run
-   cttp run hello-world --yes`) prints `hello world!` through cttp.ai, with `resolve --json`
-   naming `https://cttp.ai` as the registry.
-3. Decide what to do with **registry PR #1** (the tool's own re-claim of `hello-world`, checks
-   green): merge it (the entry is rewritten in `tomli_w`'s format, same content) or close it.
+**Start here: P8-T1 — the benchmark harness.** Phase 7 is finished but for one item that is
+Leo's alone and does not block anything: the **DNS for `cttp.ai`** (apex `A` records
+185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153, or an `ALIAS` to
+`leorinaldi.github.io`). Pages is enabled with `cname = cttp.ai` and every push to the registry's
+`main` deploys; today `https://cttp.ai/hello-world.json` answers 404 from whatever the domain
+points at now, which the tool treats as a miss, so **localhost:3120 stands in for cttp.ai** and
+everything works. When the records exist: `gh api -X PUT repos/leorinaldi/cttp-registry/pages -f
+https_enforced=true`, then `curl -s https://cttp.ai/hello-world.json` against
+`localhost:3120/hello-world.json`, and the fresh-config run below again with `registry` naming
+`https://cttp.ai`.
 
 **Then P8-T1 — the benchmark harness.** Read its entry in [`docs/plan.md`](docs/plan.md) in
 full and consult the `claude-api` skill before writing a line: two arms differing only in tools,
@@ -504,7 +499,14 @@ Also pending Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced b
   `hello-world@5125a659a10f sha256:75a27070015e` in CI; **PR #2** (`claim/bogus`, a hand-written
   entry for an undeclared name) → `verify` **failed** on `declaration` ("declares
   'cttp-registry', 'hello-world' … not 'bogus'"), the other checks ok; closed with a comment,
-  branch deleted. PR #1 is left open for Leo. Runs 33974607931 and 33974629545.
+  branch deleted. **PR #1 merged** (`b18bf33c1cb6`, 2026-09-05; the entry is now in the tool's
+  `tomli_w` format, and `tests/fixtures/registry/` mirrors it file for file). Runs 33974607931
+  and 33974629545; the merge's `pages` run 33976466047 deployed. **P7-T3 acceptance, the half
+  that needs no DNS (2026-09-05):** from a scratch directory with `CTTP_CONFIG` and `CTTP_HOME`
+  pointing at empty paths — no config, no cache — `uv run --project ~/Claude/cttp cttp run
+  hello-world --yes` printed `hello world!` in 0.8 s; the first run wrote the default config
+  (`https://cttp.ai`, `http://localhost:3120`, the clone), the miss on cttp.ai fell through, and
+  `resolve --json` named `http://localhost:3120`.
 - **On this machine (2026-09-04):** `~/.config/cttp/config.toml` is the first-run default *as it
   was before P7-T3* (localhost first, then `~/.local/share/cttp/registry`, which is a **real
   clone** of the public repo); an existing file is never rewritten, so `https://cttp.ai` is not in
@@ -714,7 +716,9 @@ is the archive, and a bloated history taxes every future session start.
   `main` pushed, Pages enabled from Actions with the `cttp.ai` domain, and the P7-T2 acceptance
   run for real — PR #1 opened by the tool itself passed `verify` (the `resolves` check ran a real
   resolution in CI); PR #2, a hand-written undeclared name, failed on `declaration` and was
-  closed. The DNS is Leo's; the P7-T3 acceptance waits on it.
+  closed, then #1 merged and the fixture re-synced (one test asserted the old aligned file
+  format — fixed). The fresh-machine half of the P7-T3 acceptance ran clean with cttp.ai
+  missing and localhost answering. The DNS is Leo's and blocks nothing.
 - **2026-09-05 (fifteenth session) — Phase 6 end to end: P6-T1 the tree-sitter extractor,
   P6-T2 the corpus and acceptance test 1, P6-T3 the measurement.** Three commits. P6-T1:
   `tree-sitter` 0.26.0 segfaulted on nodes returned from query captures (a `Point` read from
