@@ -62,13 +62,23 @@ def main(
 
 
 @app.command()
-def resolve(address: str, registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
+def resolve(
+    address: str,
+    registry: RegistryOpt = None,
+    id_: Annotated[
+        str | None,
+        typer.Option(
+            "--id", help="The identity the page should have (a link's id=); exit 1 on a mismatch."
+        ),
+    ] = None,
+    json_: JsonOpt = False,
+) -> None:
     """Resolve an address to the page it names."""
     want_json(json_)
     from cttp.resolve import resolve as _resolve
 
     try:
-        r = _resolve(address, open_registries(registry))
+        r = _resolve(address, open_registries(registry), expect=id_)
     except ERRORS as e:
         fail(str(e))
     lic = r.license or "not available"

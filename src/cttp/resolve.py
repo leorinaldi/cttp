@@ -10,13 +10,25 @@ from dataclasses import asdict, dataclass, replace
 
 from cttp import gitcache
 from cttp.address import Address, parse
-from cttp.extract import ExtractError, Page, extract, language_of
+from cttp.extract import ExtractError, Page, definitions, extract, language_of
 from cttp.hashing import ShapeError, identity, shape, short
 from cttp.registry import Entry, HttpRegistry, Registries, RegistryError, ref_for, split_target
 
 
 class ResolveError(LookupError):
     pass
+
+
+class Mismatch(ResolveError):
+    """The page resolved, but its identity is not the one the link's `id=` claims."""
+
+    def __init__(self, resolved: "Resolved", claimed: str):
+        self.resolved = resolved
+        self.claimed = claimed
+        super().__init__(
+            f"id mismatch: the link says {claimed} but {resolved.address} hashes to "
+            f"{resolved.identity}"
+        )
 
 
 @dataclass(frozen=True)
@@ -70,8 +82,18 @@ class Resolved:
         return d
 
 
-def resolve(text: str, registries: Registries) -> Resolved:
-    a = parse(text)
+def resolve(text: str, registries: Registries, expect: str | None = None) -> Resolved:
+    """The page an address names. With `expect` (an `id=` value, `sha256:<hex>`), a page whose
+    identity does not start with it is a `Mismatch` — reported, never hidden (spec §5)."""
+    r = _resolve(parse(text), registries)
+    if expect is not None:
+        claimed = expect.removeprefix("sha256:").lower()
+        if not claimed or not r.identity_full.startswith(claimed):
+            raise Mismatch(r, expect)
+    return r
+
+
+def _resolve(a: Address, registries: Registries) -> Resolved:
     if a.form == "identity":
         raise ResolveError("identity addresses need the object cache (P2-T2)")
     if a.form == "locator":
@@ -86,11 +108,21 @@ def resolve(text: str, registries: Registries) -> Resolved:
 
 
 def resolve_entry(a: Address, entry: Entry, registry, registries: Registries) -> Resolved:
-    """Name → entry → locator → fetch → extract → hash, against a local registry repository."""
+    """Name → entry → locator → fetch → extract → hash, against a local registry repository.
+
+    An entry naming a whole repository (no path) needs a `#symbol`, found by searching the
+    repository at that rev; it must be unique there, else the candidates are listed and
+    resolution stops (spec §5).
+    """
     locator, path = split_target(entry.target)
-    if path is None:
-        raise ResolveError(f"{a.name!r} names a whole repository; symbol search arrives in P2-T1")
     ref = ref_for(entry, a.rev)
+    if path is None:
+        if a.symbol is None:
+            raise ResolveError(
+                f"{a.name!r} names the whole repository {locator}; add a #symbol to say which "
+                "definition"
+            )
+        path = find_symbol(locator, ref, a.symbol, registries)
     sha, page, license = _fetch_page(locator, ref, path, a.symbol, registries)
     return _resolved(
         replace(a, rev=short(sha)),
@@ -177,12 +209,35 @@ def _shape_of(page: Page) -> str | None:
         return None
 
 
-def _fetch_page(locator: str, ref: str, path: str, symbol: str | None, registries: Registries):
+def find_symbol(locator: str, ref: str, symbol: str, registries: Registries) -> str:
+    """The one file at `ref` that defines `symbol`; every file with an extractor is searched."""
+    repo, sha = _repo_at(locator, ref, registries)
+    found = [
+        path
+        for path in gitcache.ls_tree(repo, sha)
+        if language_of(path) != "text"
+        and symbol in definitions(path, gitcache.show(repo, sha, path))
+    ]
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        raise ResolveError(f"{symbol!r} is not defined anywhere in {locator} at {short(sha)}")
+    raise ResolveError(
+        f"{symbol!r} is defined {len(found)} times in {locator} at {short(sha)}; say which with a "
+        "locator: " + ", ".join(f"{locator}@{short(sha)}/{p}#{symbol}" for p in found)
+    )
+
+
+def _repo_at(locator: str, ref: str, registries: Registries) -> tuple:
     repo = gitcache.ensure_repo(locator, registries.url_for(locator), want=ref)
     try:
-        sha = gitcache.rev_parse(repo, ref)
+        return repo, gitcache.rev_parse(repo, ref)
     except gitcache.GitError as e:
         raise ResolveError(f"{ref!r} is not a revision of {locator}: {e}") from e
+
+
+def _fetch_page(locator: str, ref: str, path: str, symbol: str | None, registries: Registries):
+    repo, sha = _repo_at(locator, ref, registries)
     try:
         text_at_rev = gitcache.show(repo, sha, path)
     except gitcache.GitError as e:

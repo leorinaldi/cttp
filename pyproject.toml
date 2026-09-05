@@ -27,6 +27,7 @@ packages = ["src/cttp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["network: the test talks to a closed local port; the no-socket guard is lifted"]
 
 [tool.ruff]
 extend-exclude = ["docs", "bench/drivers/corpus"]

@@ -17,7 +17,7 @@ from cttp.address import AddressError, parse
 from cttp.hashing import identity, short
 from cttp.links import Link, find_links, format_stamped
 from cttp.registry import Registries, RegistryError
-from cttp.resolve import Resolved, ResolveError, resolve
+from cttp.resolve import Mismatch, Resolved, ResolveError, resolve
 
 
 class ExpandError(RuntimeError):
@@ -32,7 +32,7 @@ class NotConfirmed(RuntimeError):
 class Report:
     line: int  # 1-based
     address: str
-    status: str  # expanded | unchanged | ok | unexpanded | drift | unresolvable
+    status: str  # expanded | unchanged | ok | unexpanded | drift | mismatch | unresolvable
     detail: str | None = None
     relation: str = "is"
 
@@ -109,10 +109,13 @@ def expand_file(path: Path, registry: Registries) -> list[Report]:
 
 
 def _check_one(lines: list[str], link: Link, registry: Registries) -> Report:
-    """An `is` link must be stamped and its block must hash to its id; every link must resolve.
-    `from` and `see` links are never checked for identity (spec §4)."""
+    """An `is` link must be stamped, its block must hash to its id, and the page at its address
+    must too (else `mismatch`); every link must resolve. `from` and `see` links are never
+    checked for identity (spec §4)."""
     n = link.line + 1
+    expect = None
     if link.relation == "is":
+        expect = link.fields["id"] if link.stamped else None
         if not link.stamped:
             return Report(n, link.address, "unexpanded")
         block = link.block(lines)
@@ -123,7 +126,9 @@ def _check_one(lines: list[str], link: Link, registry: Registries) -> Report:
         if not actual.startswith(claimed):
             return Report(n, link.address, "drift", f"code hashes to sha256:{short(actual)}")
     try:
-        resolve(link.address, registry)
+        resolve(link.address, registry, expect)
+    except Mismatch as e:
+        return Report(n, link.address, "mismatch", str(e), link.relation)
     except (ResolveError, RegistryError, AddressError, gitcache.GitError) as e:
         return Report(n, link.address, "unresolvable", str(e), link.relation)
     return Report(n, link.address, "ok", relation=link.relation)

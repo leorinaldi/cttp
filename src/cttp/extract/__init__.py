@@ -46,6 +46,15 @@ def language_of(path: str) -> str:
     return LANGUAGES.get(PurePosixPath(path).suffix, "text")
 
 
+def definitions(path: str, source: str) -> list[str]:
+    """The addressable symbols of a file, in order; empty for a file without an extractor."""
+    if language_of(path) == "python":
+        from cttp.extract import python
+
+        return python.definitions(source)
+    return []
+
+
 def extract(path: str, source: str, symbol: str | None = None, files: Iterable[str] = ()) -> Page:
     """The page at `path` (or its definition `symbol`); `files` lists the repository at that rev,
     for resolving references. A file without an extractor is a script page as it is."""

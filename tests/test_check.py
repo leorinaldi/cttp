@@ -36,6 +36,18 @@ def test_check_reports_every_failure_kind(registry, hello, tmp_path):
     assert "000000000000" in reports[2].detail and "nothing beneath" in reports[3].detail
 
 
+def test_check_reports_a_stamp_whose_page_does_not_hash_to_its_id(registry, hello):
+    """The block hashes to its id — no drift — but the page at the address does not: mismatch."""
+    from cttp.hashing import identity, short
+
+    expand_file(hello, registry)
+    address = hello.read_text().split()[2]  # the pinned hello-world address
+    block = 'print("something else")\n'
+    hello.write_text(f"# cttp: {address} id=sha256:{short(identity(block))}\n{block}")
+    (report,) = check_file(hello, registry)
+    assert report.status == "mismatch" and report.detail.startswith("id mismatch: the link says")
+
+
 def test_check_cli_exit_codes_and_json(registry, hello):
     assert runner.invoke(app, ["check", str(hello)]).exit_code == 1  # unexpanded
     assert runner.invoke(app, ["expand", str(hello)]).exit_code == 0

@@ -81,6 +81,7 @@ def test_missing_local_registry_is_a_miss_that_says_so(tmp_path):
         resolve("hello-world", regs)
 
 
+@pytest.mark.network  # a closed local port, so the socket guard is lifted for this one test
 def test_unreachable_http_registry_is_a_miss(config_file):
     cfg = load_config()
     both = Config(("http://127.0.0.1:1", *cfg.registries), cfg.remotes, cfg.path)  # nothing listens

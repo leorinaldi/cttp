@@ -50,6 +50,16 @@ def extract(source: str, path: str, symbol: str | None = None, files: Iterable[s
     return module.definition(symbol) if symbol else module.script()
 
 
+def definitions(source: str) -> list[str]:
+    """Every addressable symbol of the file, in source order; none when it is not valid Python."""
+    text = normalize(source)
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    return list(Module(tree, text, "", set()).defs)
+
+
 class Module:
     def __init__(self, tree: ast.Module, text: str, path: str, files: set[str]):
         self.tree = tree

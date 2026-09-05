@@ -1,14 +1,53 @@
-"""The git cache: bare clones under ~/.cache/cttp/repos/<host>/<owner>/<repo>. Spec §5."""
+"""The git cache: bare clones under ~/.cache/cttp/repos/<host>/<owner>/<repo>. Spec §5.
+
+Plain `git` does everything: `clone --bare` and `fetch` bring a repository in, `rev-parse` turns a
+tag or branch into a SHA, `cat-file` reads a blob at a rev, `ls-tree` enumerates one. The license
+is derived from the `LICENSE*` / `COPYING*` file at the rev by a small SPDX matcher; a file that
+matches nothing is `None` — "not available" — never its first line.
+"""
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
 from cttp.address import is_sha
 
-LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
-# Spike: a first line → SPDX id map. P2-T1 brings a real matcher.
-LICENSE_FIRST_LINES = {"MIT License": "MIT", "Apache License": "Apache-2.0"}
+LICENSE_FILE_RE = re.compile(r"^(LICEN[CS]E|COPYING)(\.[A-Za-z0-9]+)?$", re.IGNORECASE)
+
+# SPDX id → the phrases that identify the license text, all of which must appear. Versioned
+# licenses are recognized by their title, in the head of the file (a preamble may come first),
+# because their bodies quote other licenses: the MPL cites the GPL and LGPL, the GPL the AGPL
+# and LGPL. The GNU family is told apart by which of its titles comes first. BSD-3 is tried
+# before BSD-2 because it contains it.
+HEAD = 2000  # characters of normalized text that hold a title, preamble included
+SPDX_PHRASES: list[tuple[str, tuple[str, ...], bool]] = [
+    ("Apache-2.0", ("apache license", "version 2.0"), True),
+    ("MPL-2.0", ("mozilla public license", "2.0"), True),
+    ("GPL-3.0", ("gnu general public license", "version 3"), True),
+    ("GPL-2.0", ("gnu general public license", "version 2"), True),
+    (
+        "MIT",
+        ("permission is hereby granted, free of charge, to any person obtaining a copy",),
+        False,
+    ),
+    (
+        "ISC",
+        ("permission to use, copy, modify, and/or distribute this software for any purpose",),
+        False,
+    ),
+    (
+        "BSD-3-Clause",
+        ("redistribution and use in source and binary forms", "neither the name"),
+        False,
+    ),
+    ("BSD-2-Clause", ("redistribution and use in source and binary forms",), False),
+]
+GNU_TITLES = (
+    "gnu general public license",
+    "gnu lesser general public license",
+    "gnu affero general public license",
+)
 
 
 class GitError(RuntimeError):
@@ -67,16 +106,35 @@ def rev_parse(repo: Path, ref: str) -> str:
 
 
 def show(repo: Path, sha: str, path: str) -> str:
-    return _git("show", f"{sha}:{path}", cwd=repo)
+    """The blob at `path` in the tree at `sha`."""
+    return _git("cat-file", "blob", f"{sha}:{path}", cwd=repo)
 
 
 def license_of(repo: Path, sha: str) -> str | None:
-    """Derived: the repository's license, from its license file; None when there is none."""
-    names = set(_git("ls-tree", "--name-only", sha, cwd=repo).split())
-    for candidate in LICENSE_FILES:
-        if candidate in names:
-            first = show(repo, sha, candidate).strip().split("\n", 1)[0].strip()
-            return LICENSE_FIRST_LINES.get(first, first or None)
+    """Derived: the SPDX id of the repository's license file at `sha`; None when there is no
+    license file, or none that the matcher knows."""
+    names = _git("ls-tree", "--name-only", sha, cwd=repo).split("\n")
+    for name in sorted(n for n in names if LICENSE_FILE_RE.match(n)):
+        if found := spdx_of(show(repo, sha, name)):
+            return found
+    return None
+
+
+def spdx_of(text: str) -> str | None:
+    """The SPDX id of a license text, by its identifying phrases; None when unrecognized."""
+    flat = " ".join(text.lower().split())
+    head = flat[:HEAD]
+    gnu = {t: head.find(t) for t in GNU_TITLES if t in head}
+    gpl_title = min(gnu, key=gnu.get) == GNU_TITLES[0] if gnu else False
+    for spdx, phrases, in_head in SPDX_PHRASES:
+        if spdx.startswith("GPL"):
+            if not gpl_title:
+                continue  # the LGPL and AGPL name the GPL in their preambles; not this
+            where = head[gnu[GNU_TITLES[0]] :]  # the version follows the title
+        else:
+            where = head if in_head else flat
+        if all(phrase in where for phrase in phrases):
+            return spdx
     return None
 
 
