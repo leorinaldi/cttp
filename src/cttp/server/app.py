@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from cttp import __version__, gitcache
-from cttp.address import AddressError
+from cttp.address import AddressError, parse
 from cttp.registry import RegistryError, open_registries
 from cttp.resolve import ResolveError, resolve
 
@@ -33,11 +33,13 @@ def name_page(slug: str):
     want_json = slug.endswith(".json")
     if want_json:
         slug = slug[: -len(".json")]
-    name, _, version = slug.partition("@")
     reg = open_registries(local_only=True)
     try:
-        r = resolve(f"{name}@{version}" if version else name, reg)
-        entry, _ = reg.lookup(name)
+        a = parse(slug)  # `name[@version][#symbol]`; the `#` arrives percent-encoded as %23
+        if a.form != "name":
+            raise AddressError(f"{slug!r} is not a name; the contract serves names only")
+        r = resolve(str(a), reg)
+        entry, _ = reg.lookup(a.name)
     except (RegistryError, ResolveError, AddressError, gitcache.GitError) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     if want_json:

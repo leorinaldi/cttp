@@ -116,8 +116,9 @@ class HttpRegistry:
     def lookup(self, name: str) -> Entry:
         raise RegistryError(f"{name!r}: {self.url} answers resolutions, not entries; use fetch()")
 
-    def fetch(self, name: str, version: str | None) -> dict:
-        slug = f"{name}@{version}" if version else name
+    def fetch(self, name: str, version: str | None, symbol: str | None = None) -> dict:
+        """A `#symbol` rides the same route, percent-encoded: `/<name>@<ver>%23<symbol>.json`."""
+        slug = (f"{name}@{version}" if version else name) + (f"%23{symbol}" if symbol else "")
         try:
             res = self.client.get(f"{self.url}/{slug}.json")
         except httpx.HTTPError as e:
@@ -210,6 +211,11 @@ def open_registries(registry: str | Path | None = None, local_only: bool = False
 
 
 def create_local_registry(dest: Path, files: Path) -> Path:
+    """Make a registry repository at `dest` from the files in `files` (see `git_repo_from`)."""
+    return git_repo_from(dest, files, "Registry contents")
+
+
+def git_repo_from(dest: Path, files: Path, message: str = "Contents") -> Path:
     """Make a git repository at `dest` from the files in `files`, on branch `main`, tagged v1."""
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
@@ -224,7 +230,7 @@ def create_local_registry(dest: Path, files: Path) -> Path:
         run("init", "--quiet", "--initial-branch=main")
     run("add", "-A")
     if subprocess.run([*git, "diff", "--cached", "--quiet"], cwd=dest).returncode != 0:
-        run("commit", "--quiet", "-m", "Registry contents")
+        run("commit", "--quiet", "-m", message)
     if (
         subprocess.run(
             [*git, "rev-parse", "-q", "--verify", "v1"], cwd=dest, capture_output=True

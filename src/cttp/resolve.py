@@ -3,15 +3,15 @@
 Name form: the registries are asked in order (an HTTP registry hands back its object, a local one
 does the git work). Locator form: straight to git through `[remotes]` — no registry is needed,
 though a local registry that names the same target lends its name and description. Identity form
-needs the object cache (P2-T2).
+needs the object cache (P2-T2). A `#symbol` on either form selects one definition of the file.
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 from cttp import gitcache
 from cttp.address import Address, parse
-from cttp.extract.python import extract_script
-from cttp.hashing import identity, short
+from cttp.extract import ExtractError, Page, extract, language_of
+from cttp.hashing import ShapeError, identity, shape, short
 from cttp.registry import Entry, HttpRegistry, Registries, RegistryError, ref_for, split_target
 
 
@@ -22,22 +22,31 @@ class ResolveError(LookupError):
 @dataclass(frozen=True)
 class Resolved:
     name: str | None  # None when a locator has no entry in any local registry
-    address: str  # pinned: name@<12-hex rev>, or host/owner/repo@<12-hex rev>/path
+    address: str  # pinned: name@<12-hex rev> or host/owner/repo@<12-hex rev>/path, [#symbol]
     rev: str  # full commit SHA
     identity: str  # sha256:<12 hex>
     identity_full: str
+    shape: str | None  # sha256:<12 hex>; None when the page has no shape (not Python)
+    shape_full: str | None
     kind: str
     language: str
+    symbol: str | None
+    signature: str | None
+    docstring: str | None
+    span: list[int]  # [first, last] 1-based inclusive lines in the origin file
     source: str
     description: str | None
     license: str | None
     target: str
     path: str
     registry: str | None  # which registry answered, or lent the name; None for a bare locator
+    refs: list[dict]  # derived references: {"address", "relation": "ref", "origin": "derived"}
+    imports: dict  # {"stdlib": [...], "third_party": [...]} — top-level modules the page needs
 
     FIELDS = (
-        "name", "address", "rev", "identity", "identity_full", "kind", "language", "source",
-        "description", "license", "target", "path", "registry",
+        "name", "address", "rev", "identity", "identity_full", "shape", "shape_full", "kind",
+        "language", "symbol", "signature", "docstring", "span", "source", "description",
+        "license", "target", "path", "registry", "refs", "imports",
     )  # fmt: skip
 
     @classmethod
@@ -52,8 +61,10 @@ class Resolved:
         d = asdict(self)
         d["origin"] = {
             "identity": "derived",
+            "shape": "derived",
             "license": "derived",
             "rev": "derived",
+            "refs": "derived",
             "description": "asserted" if self.description is not None else None,
         }
         return d
@@ -61,8 +72,6 @@ class Resolved:
 
 def resolve(text: str, registries: Registries) -> Resolved:
     a = parse(text)
-    if a.symbol:
-        raise ResolveError("symbols are not resolvable yet (P1-T3)")
     if a.form == "identity":
         raise ResolveError("identity addresses need the object cache (P2-T2)")
     if a.form == "locator":
@@ -70,7 +79,7 @@ def resolve(text: str, registries: Registries) -> Resolved:
 
     def ask(registry):
         if isinstance(registry, HttpRegistry):
-            return Resolved.from_json(registry.fetch(a.name, a.rev), registry.url)
+            return Resolved.from_json(registry.fetch(a.name, a.rev, a.symbol), registry.url)
         return resolve_entry(a, registry.lookup(a.name), registry, registries)
 
     return registries.first(a.name, ask)
@@ -82,50 +91,93 @@ def resolve_entry(a: Address, entry: Entry, registry, registries: Registries) ->
     if path is None:
         raise ResolveError(f"{a.name!r} names a whole repository; symbol search arrives in P2-T1")
     ref = ref_for(entry, a.rev)
-    sha, page, license = _fetch_page(locator, ref, path, registries)
-    ident = identity(page.source)
-    return Resolved(
-        name=a.name,
-        address=f"{a.name}@{short(sha)}",
-        rev=sha,
-        identity=f"sha256:{short(ident)}",
-        identity_full=ident,
-        kind=page.kind,
-        language=page.language,
-        source=page.source,
-        description=entry.description,
-        license=license,
-        target=entry.target,
-        path=path,
-        registry=registry.describe(),
+    sha, page, license = _fetch_page(locator, ref, path, a.symbol, registries)
+    return _resolved(
+        replace(a, rev=short(sha)),
+        sha,
+        page,
+        license,
+        locator,
+        path,
+        entry,
+        registry.describe(),
     )
 
 
 def resolve_locator(a: Address, registries: Registries) -> Resolved:
     """Locator → fetch → extract → hash. A local registry naming the target lends its entry."""
-    sha, page, license = _fetch_page(a.locator, a.rev, a.path, registries)
-    target = f"{a.locator}/{a.path}"
-    found = registries.entry_for_target(target)
+    sha, page, license = _fetch_page(a.locator, a.rev, a.path, a.symbol, registries)
+    found = registries.entry_for_target(f"{a.locator}/{a.path}")
     entry, registry = found if found else (None, None)
-    ident = identity(page.source)
-    return Resolved(
-        name=entry.name if entry else None,
-        address=f"{a.locator}@{short(sha)}/{a.path}",
-        rev=sha,
-        identity=f"sha256:{short(ident)}",
-        identity_full=ident,
-        kind=page.kind,
-        language=page.language,
-        source=page.source,
-        description=entry.description if entry else None,
-        license=license,
-        target=target,
-        path=a.path,
-        registry=registry.describe() if registry else None,
+    return _resolved(
+        replace(a, rev=short(sha)),
+        sha,
+        page,
+        license,
+        a.locator,
+        a.path,
+        entry,
+        registry.describe() if registry else None,
     )
 
 
-def _fetch_page(locator: str, ref: str, path: str, registries: Registries):
+def _resolved(
+    pinned: Address,
+    sha: str,
+    page: Page,
+    license: str | None,
+    locator: str,
+    path: str,
+    entry: Entry | None,
+    registry: str | None,
+) -> Resolved:
+    ident = identity(page.source)
+    shp = _shape_of(page)
+    rev12 = short(sha)
+    return Resolved(
+        name=entry.name if entry else None,
+        address=str(pinned),
+        rev=sha,
+        identity=f"sha256:{short(ident)}",
+        identity_full=ident,
+        shape=f"sha256:{short(shp)}" if shp else None,
+        shape_full=shp,
+        kind=page.kind,
+        language=page.language,
+        symbol=page.symbol,
+        signature=page.signature,
+        docstring=page.docstring,
+        span=list(page.span),
+        source=page.source,
+        description=entry.description if entry else None,
+        license=license,
+        target=f"{locator}/{path}",
+        path=path,
+        registry=registry,
+        refs=[
+            {
+                "address": str(
+                    Address("locator", locator=locator, path=r.path, rev=rev12, symbol=r.symbol)
+                ),
+                "relation": "ref",
+                "origin": "derived",
+            }
+            for r in page.refs
+        ],
+        imports={"stdlib": list(page.stdlib), "third_party": list(page.third_party)},
+    )
+
+
+def _shape_of(page: Page) -> str | None:
+    if page.language != "python":
+        return None
+    try:
+        return shape(page.source)
+    except ShapeError:
+        return None
+
+
+def _fetch_page(locator: str, ref: str, path: str, symbol: str | None, registries: Registries):
     repo = gitcache.ensure_repo(locator, registries.url_for(locator), want=ref)
     try:
         sha = gitcache.rev_parse(repo, ref)
@@ -135,4 +187,9 @@ def _fetch_page(locator: str, ref: str, path: str, registries: Registries):
         text_at_rev = gitcache.show(repo, sha, path)
     except gitcache.GitError as e:
         raise ResolveError(f"{path!r} is not in {locator} at {short(sha)}: {e}") from e
-    return sha, extract_script(text_at_rev), gitcache.license_of(repo, sha)
+    files = gitcache.ls_tree(repo, sha) if language_of(path) == "python" else ()
+    try:
+        page = extract(path, text_at_rev, symbol, files)
+    except ExtractError as e:
+        raise ResolveError(f"{locator}@{short(sha)}: {e}") from e
+    return sha, page, gitcache.license_of(repo, sha)

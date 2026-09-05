@@ -78,3 +78,8 @@ def license_of(repo: Path, sha: str) -> str | None:
             first = show(repo, sha, candidate).strip().split("\n", 1)[0].strip()
             return LICENSE_FIRST_LINES.get(first, first or None)
     return None
+
+
+def ls_tree(repo: Path, sha: str) -> list[str]:
+    """Every file path in the repository at `sha`."""
+    return _git("ls-tree", "-r", "--name-only", sha, cwd=repo).split("\n")[:-1]

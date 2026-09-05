@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from cttp.config import load_config
-from cttp.registry import Registries, create_local_registry
+from cttp.registry import Registries, create_local_registry, git_repo_from
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LOCATOR_PREFIX = "github.com/leorinaldi/"
@@ -20,12 +20,13 @@ def config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("CTTP_HOME", str(tmp_path / "cache"))
     monkeypatch.delenv("CTTP_REGISTRY", raising=False)
     reg = create_local_registry(tmp_path / "registry", FIXTURES / "registry")
+    thermo = git_repo_from(tmp_path / "thermo", FIXTURES / "thermo", "thermo package")
     remotes = tmp_path / "remotes" / LOCATOR_PREFIX
     remotes.mkdir(parents=True)
-    subprocess.run(
-        ["git", "clone", "--bare", "--quiet", str(reg), str(remotes / "cttp-registry")],
-        check=True,
-    )
+    for src, name in ((reg, "cttp-registry"), (thermo, "thermo")):
+        subprocess.run(
+            ["git", "clone", "--bare", "--quiet", str(src), str(remotes / name)], check=True
+        )
     cfg = tmp_path / "config.toml"
     cfg.write_text(
         f'registries = ["{reg}"]\n\n[remotes]\n"{LOCATOR_PREFIX}" = "{remotes}/"\n',
@@ -48,14 +49,25 @@ def hello(tmp_path: Path) -> Path:
     return f
 
 
-def add_to_registry(tmp_path: Path, name: str, source: str, description: str = "") -> None:
-    """Add a snippet + name to the tmp registry repo and push it to the bare remote."""
+def add_to_registry(
+    tmp_path: Path,
+    name: str,
+    source: str | None = None,
+    description: str = "",
+    target: str | None = None,
+) -> None:
+    """Add a name to the tmp registry repo and push it to the bare remote.
+
+    With `source`, the name points at a new snippet in the registry repo itself; with `target`,
+    at that target (a file in another repository the config's `[remotes]` can reach).
+    """
     reg = tmp_path / "registry"
-    (reg / "snippets" / f"{name}.py").write_text(source, encoding="utf-8")
+    if source is not None:
+        (reg / "snippets" / f"{name}.py").write_text(source, encoding="utf-8")
+        target = f"github.com/leorinaldi/cttp-registry/snippets/{name}.py"
     (reg / "names" / f"{name}.toml").write_text(
         f'name = "{name}"\ndescription = "{description}"\nowner = "github.com/leorinaldi"\n'
-        f'target = "github.com/leorinaldi/cttp-registry/snippets/{name}.py"\n'
-        'default = "latest"\n\n[versions]\nlatest = "main"\n',
+        f'target = "{target}"\ndefault = "latest"\n\n[versions]\nlatest = "main"\n',
         encoding="utf-8",
     )
     git = ["git", "-c", "user.name=cttp", "-c", "user.email=cttp@localhost"]

@@ -1,25 +1,36 @@
 {% extends "base.html" %}
-{% block title %}{{ r.name }} · cttp{% endblock %}
+{% block title %}{{ r.name }}{% if r.symbol %}#{{ r.symbol }}{% endif %} · cttp{% endblock %}
 {% block body %}
-<h1>cttp:{{ r.name }}</h1>
+<h1>cttp:{{ r.name }}{% if r.symbol %}#{{ r.symbol }}{% endif %}</h1>
 {% if r.description %}<p>{{ r.description }}<span class="tag asserted">asserted</span></p>{% endif %}
 
 <h2>Resolves to</h2>
 <dl>
   <dt>pinned address</dt><dd><code>{{ r.address }}</code><span class="tag derived">derived</span></dd>
   <dt>identity</dt><dd><code>{{ r.identity }}</code><span class="tag derived">derived</span></dd>
-  <dt>kind</dt><dd>{{ r.kind }} · {{ r.language }}<span class="tag derived">derived</span></dd>
+  <dt>shape</dt><dd><code>{{ r.shape if r.shape is not none else "not available" }}</code><span class="tag derived">derived</span></dd>
+  <dt>kind</dt><dd>{{ r.kind }} · {{ r.language }}{% if r.signature %} · <code>{{ r.signature }}</code>{% endif %}<span class="tag derived">derived</span></dd>
+{% if r.docstring %}  <dt>docstring</dt><dd>{{ r.docstring }}<span class="tag derived">derived</span></dd>
+{% endif %}  <dt>span</dt><dd><code>{{ r.path }}</code> lines {{ r.span[0] }}–{{ r.span[1] }}<span class="tag derived">derived</span></dd>
   <dt>license</dt><dd>{{ r.license if r.license is not none else "not available" }}<span class="tag derived">derived</span></dd>
   <dt>target</dt><dd><code>{{ r.target }}</code><span class="tag asserted">asserted</span></dd>
   <dt>versions</dt><dd>{% for label, ref in entry.versions.items() %}<code>{{ label }}</code> → <code>{{ ref }}</code>{{ ", " if not loop.last }}{% endfor %}
       (default <code>{{ entry.default }}</code>)<span class="tag asserted">asserted</span></dd>
-  <dt>json</dt><dd><a href="/{{ r.name }}.json"><code>/{{ r.name }}.json</code></a></dd>
+  <dt>json</dt><dd><a href="/{{ r.name }}{% if r.symbol %}%23{{ r.symbol }}{% endif %}.json"><code>/{{ r.name }}{% if r.symbol %}%23{{ r.symbol }}{% endif %}.json</code></a></dd>
 </dl>
+{% if r.refs or r.imports.stdlib or r.imports.third_party %}
+<h2>References</h2>
+<ul>
+{% for ref in r.refs %}  <li><code>cttp:{{ ref.address }}</code><span class="tag derived">derived</span></li>
+{% endfor %}{% if r.imports.stdlib %}  <li>stdlib: {% for m in r.imports.stdlib %}<code>{{ m }}</code>{{ ", " if not loop.last }}{% endfor %}<span class="tag derived">derived</span></li>
+{% endif %}{% if r.imports.third_party %}  <li>third party: {% for m in r.imports.third_party %}<code>{{ m }}</code>{{ ", " if not loop.last }}{% endfor %}<span class="tag derived">derived</span></li>
+{% endif %}</ul>
+{% endif %}
 
 <h2>Source</h2>
 <pre>{{ r.source }}</pre>
 
 <h2>Use it</h2>
-<pre># cttp: {{ r.name }}</pre>
+<pre># cttp: {{ r.name }}{% if r.symbol %}#{{ r.symbol }}{% endif %}</pre>
 <p>Write that line in a Python file and run <code>cttp expand</code>. Or just <code>cttp run {{ r.name }}</code>.</p>
 {% endblock %}

@@ -70,11 +70,13 @@ def resolve(address: str, registry: RegistryOpt = None, json_: JsonOpt = False) 
         r = _resolve(address, open_registries(registry))
     except ERRORS as e:
         fail(str(e))
-    emit(
-        r.to_json(),
-        f"{r.address}  {r.identity}  {r.kind}/{r.language}  "
-        f"license={r.license or 'not available'}\n# {r.description or ''}\n{r.source}".rstrip(),
-    )
+    lic = r.license or "not available"
+    head = f"{r.address}  {r.identity}  {r.kind}/{r.language}  license={lic}"
+    if r.signature:
+        head += f"\n# {r.signature}" + (f" — {r.docstring}" if r.docstring else "")
+    if r.description:
+        head += f"\n# {r.description}"
+    emit(r.to_json(), f"{head}\n{r.source}".rstrip())
 
 
 @app.command()
