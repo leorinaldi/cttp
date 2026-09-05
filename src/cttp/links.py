@@ -158,6 +158,27 @@ def _indent_of(line: str) -> int:
     return len(line) - len(line.lstrip(" \t"))
 
 
+def strip_links(lines: list[str]) -> tuple[list[str], list[Link]]:
+    """A page's own text: the lines with every link line removed, and — for a stamped `is` link —
+    the block beneath it and the one blank line that separated it, since that code is another
+    page's, stamped as such. Leading blank lines go with them. Returns the remaining lines and the
+    links that were taken out, each still knowing its line and indent in the original."""
+    links = find_links(lines)
+    if not links:
+        return list(lines), []
+    drop: set[int] = set()
+    for link in links:
+        drop.add(link.line)
+        if link.relation == "is" and link.stamped:
+            drop.update(range(link.start, link.end))
+            if link.end < len(lines) and lines[link.end].strip() == "":
+                drop.add(link.end)
+    kept = [line for i, line in enumerate(lines) if i not in drop]
+    while kept and kept[0].strip() == "":
+        kept.pop(0)
+    return kept, links
+
+
 def format_stamped(
     pinned: str, id12: str, description: str | None, derived: bool = False, comment: str = "#"
 ) -> str:

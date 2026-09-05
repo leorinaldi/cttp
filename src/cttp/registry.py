@@ -66,7 +66,7 @@ class LocalRegistry:
         d = tomllib.loads(f.read_text(encoding="utf-8"))
         return Entry(
             name=d.get("name", name),
-            description=d.get("description"),
+            description=(d.get("description") or "").strip() or None,  # "" is no description
             owner=d.get("owner"),
             target=d["target"],
             default=d.get("default", "latest"),

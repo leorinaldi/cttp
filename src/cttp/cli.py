@@ -9,10 +9,11 @@ import typer
 
 from cttp import __version__, gitcache
 from cttp.address import AddressError
+from cttp.closure import ClosureError
 from cttp.config import ConfigError, load_config
 from cttp.links import LinkError
 from cttp.registry import RegistryError, open_registries
-from cttp.resolve import Resolved, ResolveError
+from cttp.resolve import ResolveError
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, rich_markup_mode=None)
 cache_app = typer.Typer(no_args_is_help=True, rich_markup_mode=None)
@@ -24,8 +25,12 @@ RegistryOpt = Annotated[
     typer.Option("--registry", help="Use only this registry (a local registry repository)."),
 ]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Emit JSON.")]
-ERRORS = (RegistryError, ResolveError, AddressError, gitcache.GitError, ConfigError, LinkError)
+ERRORS = (
+    RegistryError, ResolveError, AddressError, gitcache.GitError, ConfigError, LinkError,
+    ClosureError,
+)  # fmt: skip
 NOT_RUN = 2  # exit code of `run` when the first run of an address is not confirmed
+NOT_CONFIRMED = 2  # exit code of `update` when a change waited for a confirmation it did not get
 
 
 def want_json(flag: bool) -> None:
@@ -128,6 +133,27 @@ def _resolve_latest(address: str, registry: Path | None) -> None:
 
 
 @app.command()
+def closure(address: str, registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
+    """Everything the page needs to run inline, dependencies first: what `expand` would write."""
+    want_json(json_)
+    from cttp.closure import closure as _closure
+
+    try:
+        c = _closure(address, open_registries(registry), budget=None)
+    except ERRORS as e:
+        fail(str(e))
+    lines = [
+        f"{n.page.address}  {n.page.identity}  {n.page.kind}  {n.lines} line(s)  via {n.via}"
+        for n in c.nodes
+    ]
+    if c.imports:
+        lines.append("imports: " + "; ".join(c.imports))
+    lines.append("requires: " + (", ".join(c.requires) or "nothing outside the stdlib"))
+    lines.append(f"{len(c.nodes)} definition(s), {c.lines} line(s)")
+    emit(c.to_json(), "\n".join(lines))
+
+
+@app.command()
 def config(registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
     """Show the effective configuration: the file, the registry list, the remotes."""
     want_json(json_)
@@ -164,9 +190,40 @@ def serve(
     uvicorn.run("cttp.server.app:app", host="127.0.0.1", port=port, log_level="warning")
 
 
+PackageOpt = Annotated[
+    bool,
+    typer.Option(
+        "--package",
+        help="Write the closure into cttp_vendor/<module>.py and an import beneath the link.",
+    ),
+]
+WriteDepsOpt = Annotated[
+    bool,
+    typer.Option(
+        "--write-deps", help="Add third-party requirements to pyproject.toml dependencies."
+    ),
+]
+
+
+def _report_lines(results: dict[str, list]) -> str:
+    return "\n".join(
+        f"{f}:{r.line}: {r.status} {r.address} {r.detail or ''}".rstrip()
+        if r.line
+        else f"{f}: {r.status} {r.address}: {r.detail or ''}".rstrip()
+        for f, rs in results.items()
+        for r in rs
+    )
+
+
 @app.command()
-def expand(files: list[Path], registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
-    """Expand every unexpanded `# cttp:` link in the given files, in place."""
+def expand(
+    files: list[Path],
+    registry: RegistryOpt = None,
+    package: PackageOpt = False,
+    write_deps: WriteDepsOpt = False,
+    json_: JsonOpt = False,
+) -> None:
+    """Expand every unexpanded `# cttp:` link in the given files, in place, with its closure."""
     want_json(json_)
     from cttp.expand import ExpandError, expand_file
 
@@ -174,22 +231,49 @@ def expand(files: list[Path], registry: RegistryOpt = None, json_: JsonOpt = Fal
     try:
         reg = open_registries(registry)
         for f in files:
-            results[str(f)] = expand_file(f, reg)
+            results[str(f)] = expand_file(f, reg, package, write_deps)
     except (*ERRORS, ExpandError) as e:
         fail(str(e))
     emit(
         {f: [r.to_json() for r in rs] for f, rs in results.items()},
-        "\n".join(
-            f"{f}:{r.line}: {r.status} {r.address} {r.detail or ''}".rstrip()
-            for f, rs in results.items()
-            for r in rs
-        )
-        or "nothing to expand",
+        _report_lines(results) or "nothing to expand",
     )
 
 
 @app.command()
-def check(files: list[Path], registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
+def add(
+    address: str,
+    file: Annotated[
+        Path, typer.Argument(help="The file to add the link to; default main.py.")
+    ] = Path("main.py"),
+    at: Annotated[
+        int | None, typer.Option("--at", help="Insert the link before this 1-based line.")
+    ] = None,
+    registry: RegistryOpt = None,
+    package: PackageOpt = False,
+    json_: JsonOpt = False,
+) -> None:
+    """Write `# cttp: <address>` into the file (creating it if needed) and expand it."""
+    want_json(json_)
+    from cttp.expand import ExpandError, add_link
+
+    try:
+        reports = add_link(address, file, open_registries(registry), at, package)
+    except (*ERRORS, ExpandError) as e:
+        fail(str(e))
+    emit({str(file): [r.to_json() for r in reports]}, _report_lines({str(file): reports}))
+
+
+@app.command()
+def check(
+    files: list[Path],
+    registry: RegistryOpt = None,
+    fix: Annotated[
+        bool,
+        typer.Option("--fix", help="Turn each drifted `# cttp:` link into `# cttp-from:`."),
+    ] = False,
+    json_: JsonOpt = False,
+) -> None:
     """Verify every link: stamped, code hashes to its id, resolvable. Exit 1 on any failure."""
     want_json(json_)
     from cttp.expand import check_file
@@ -198,21 +282,109 @@ def check(files: list[Path], registry: RegistryOpt = None, json_: JsonOpt = Fals
     try:
         reg = open_registries(registry)
         for f in files:
-            results[str(f)] = check_file(f, reg)
+            results[str(f)] = check_file(f, reg, fix)
     except ERRORS as e:
         fail(str(e))
-    bad = [r for rs in results.values() for r in rs if r.status != "ok"]
+    bad = [r for rs in results.values() for r in rs if r.status not in ("ok", "fixed")]
     emit(
         {"ok": not bad, "links": {f: [r.to_json() for r in rs] for f, rs in results.items()}},
-        "\n".join(
-            f"{f}:{r.line}: {r.status} {r.address} {r.detail or ''}".rstrip()
-            for f, rs in results.items()
-            for r in rs
-        )
-        or "no links",
+        _report_lines(results) or "no links",
     )
     if bad:
         raise typer.Exit(1)
+
+
+@app.command()
+def update(
+    targets: Annotated[
+        list[str], typer.Argument(help="Files to update, and optionally addresses to select.")
+    ],
+    all_: Annotated[bool, typer.Option("--all", help="Update every stamped link.")] = False,
+    to: Annotated[
+        str | None, typer.Option("--to", help="Move to this rev instead of the latest.")
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", help="Apply every change without asking.")] = False,
+    registry: RegistryOpt = None,
+    json_: JsonOpt = False,
+) -> None:
+    """Follow pinned links forward and rewrite stamp and code on confirmation.
+
+    Selects links marked track=latest (or all, under a project cttp.toml with track = "latest");
+    name addresses to select those links, or pass --all. A `# cttp-from:` link is never rewritten:
+    the upstream diff since the fork is shown instead. Exit 2 when a change waits for confirmation.
+    """
+    want_json(json_)
+    from cttp.expand import is_address, update_file
+
+    files = [Path(t) for t in targets if not is_address(t)]
+    addresses = [t for t in targets if is_address(t)]
+    if not files:
+        fail("update needs at least one file to update")
+    confirm = None if yes else _ask_before_update
+    results = {}
+    try:
+        reg = open_registries(registry)
+        for f in files:
+            results[str(f)] = update_file(f, reg, addresses, all_, to, confirm)
+    except ERRORS as e:
+        fail(str(e))
+    except FileNotFoundError as e:
+        fail(f"{e.filename}: no such file")
+    pending = [r for rs in results.values() for r in rs if r.status == "not-confirmed"]
+    text = []
+    for f, rs in results.items():
+        for r in rs:
+            text.append(f"{f}:{r.line}: {r.status} {r.address} {r.detail or ''}".rstrip())
+            if r.extra.get("diff") and (state["json"] is False) and r.status == "upstream":
+                text += ["  " + line for line in r.extra["diff"].rstrip("\n").split("\n")]
+    emit(
+        {"ok": not pending, "links": {f: [r.to_json() for r in rs] for f, rs in results.items()}},
+        "\n".join(text) or "no links selected",
+    )
+    if pending:
+        raise typer.Exit(NOT_CONFIRMED)
+
+
+def _interactive() -> bool:
+    """Whether a person can answer a prompt. Tests patch this to exercise the prompts."""
+    return sys.stdin.isatty()
+
+
+def _ask_before_update(up) -> bool:
+    typer.echo(f"{up.message}", err=True)
+    for line in up.diff.rstrip("\n").split("\n"):
+        typer.echo(f"  {line}", err=True)
+    if not _interactive():
+        typer.echo("  (not applied: pass --yes to apply without a terminal)", err=True)
+        return False
+    return typer.confirm("Apply it?", default=False, err=True)
+
+
+@app.command()
+def fold(
+    files: list[Path],
+    open_: Annotated[
+        list[str] | None,
+        typer.Option("--open", help="Leave this link's block unfolded (repeatable)."),
+    ] = None,
+    json_: JsonOpt = False,
+) -> None:
+    """Print each file with every expanded block collapsed to its link line. Writes nothing."""
+    want_json(json_)
+    from cttp.expand import fold_text
+
+    out: dict[str, list] = {}
+    texts: list[str] = []
+    try:
+        for f in files:
+            folded, entries = fold_text(f.read_text(encoding="utf-8"), open_ or [])
+            out[str(f)] = entries
+            texts.append(folded if len(files) == 1 else f"==> {f} <==\n{folded}")
+    except LinkError as e:
+        fail(str(e))
+    except FileNotFoundError as e:
+        fail(f"{e.filename}: no such file")
+    emit(out, "\n".join(t.rstrip("\n") for t in texts))
 
 
 @cache_app.command("status")
@@ -280,19 +452,30 @@ def run(
     sys.exit(code)
 
 
-def _ask_before_first_run(r: Resolved) -> bool:
-    """Show what is about to run and ask; without a terminal, decline and say how to proceed."""
+def _ask_before_first_run(c) -> bool:
+    """Show everything about to run — every page of the closure, with source, identity and
+    license — and ask; without a terminal, decline and say how to proceed."""
     from cttp.expand import NotConfirmed
 
+    r = c.root
+    deps = f"; {len(c.nodes) - 1} dependenc(ies)" if len(c.nodes) > 1 else ""
     typer.echo(
         f"first run of {r.address}  {r.identity}  license={r.license or 'not available'}  "
-        f"(from {r.registry})",
+        f"(from {r.registry}){deps}",
         err=True,
     )
-    if r.description:
-        typer.echo(f"  # {r.description}", err=True)
-    for line in r.source.rstrip("\n").split("\n"):
-        typer.echo(f"  {line}", err=True)
-    if not sys.stdin.isatty():
+    for n in c.nodes:
+        p = n.page
+        if len(c.nodes) > 1:
+            typer.echo(
+                f"  {p.address}  {p.identity}  license={p.license or 'not available'}", err=True
+            )
+        if n.description:
+            typer.echo(f"  # {n.description}", err=True)
+        for line in p.source.rstrip("\n").split("\n"):
+            typer.echo(f"  {line}", err=True)
+    if c.requires:
+        typer.echo(f"  requires: {', '.join(c.requires)}", err=True)
+    if not _interactive():
         raise NotConfirmed(f"{r.address}: first run needs confirmation; pass --yes")
     return typer.confirm("Run it?", default=False, err=True)

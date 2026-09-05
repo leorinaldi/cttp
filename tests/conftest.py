@@ -33,7 +33,8 @@ def no_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) 
 
 @pytest.fixture
 def config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A registry repository, a bare target repo, and a config reaching both — all in tmp_path.
+    """A registry repository, bare target repos (thermo, pyrepo), and a config reaching them all —
+    in tmp_path.
 
     No network: `[remotes]` maps the `github.com/leorinaldi/` prefix at the bare repositories
     under `tmp_path/remotes/`, and `CTTP_HOME` moves the caches there too.
@@ -42,9 +43,10 @@ def config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv("CTTP_REGISTRY", raising=False)
     reg = create_local_registry(tmp_path / "registry", FIXTURES / "registry")
     thermo = git_repo_from(tmp_path / "thermo", FIXTURES / "thermo", "thermo package")
+    pyrepo = git_repo_from(tmp_path / "pyrepo", FIXTURES / "pyrepo", "pyrepo contents")
     remotes = tmp_path / "remotes" / LOCATOR_PREFIX
     remotes.mkdir(parents=True)
-    for src, name in ((reg, "cttp-registry"), (thermo, "thermo")):
+    for src, name in ((reg, "cttp-registry"), (thermo, "thermo"), (pyrepo, "pyrepo")):
         subprocess.run(
             ["git", "clone", "--bare", "--quiet", str(src), str(remotes / name)], check=True
         )

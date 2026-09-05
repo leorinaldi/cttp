@@ -58,8 +58,10 @@ class Resolved:
     target: str
     path: str
     registry: str | None  # which registry answered, or lent the name; None for a bare locator
-    refs: list[dict]  # derived references: {"address", "relation": "ref", "origin": "derived"}
-    imports: dict  # {"stdlib": [...], "third_party": [...]} — top-level modules the page needs
+    refs: list[dict]  # derived: {"address", "name", "relation": "ref", "origin": "derived"}
+    imports: dict  # {"stdlib": [...], "third_party": [...], "statements": [...]} — see Page
+    links: list[dict] = field(default_factory=list)  # asserted: the link lines in the page's text
+    unresolved: list[str] = field(default_factory=list)  # derived: free names (see Page)
     # not part of the registry contract: set when an identity address was answered from a cache
     locations: list[dict] = field(
         default_factory=list
@@ -71,6 +73,7 @@ class Resolved:
         "language", "symbol", "signature", "docstring", "span", "source", "description",
         "license", "target", "path", "registry", "refs", "imports",
     )  # fmt: skip
+    OPTIONAL = {"links": list, "unresolved": list}  # newer than the first contract; may be absent
 
     @classmethod
     def from_json(cls, d: dict, registry: str) -> "Resolved":
@@ -78,7 +81,8 @@ class Resolved:
         missing = [f for f in cls.FIELDS if f not in d]
         if missing:
             raise RegistryError(f"{registry}: resolution is missing {missing}")
-        return cls(**{f: d[f] for f in cls.FIELDS if f != "registry"}, registry=registry)
+        extra = {k: d.get(k) or make() for k, make in cls.OPTIONAL.items()}
+        return cls(**{f: d[f] for f in cls.FIELDS if f != "registry"}, registry=registry, **extra)
 
     def to_json(self) -> dict:
         d = asdict(self)
@@ -88,6 +92,9 @@ class Resolved:
             "license": "derived",
             "rev": "derived",
             "refs": "derived",
+            "imports": "derived",
+            "unresolved": "derived",
+            "links": "asserted",
             "description": "asserted" if self.description is not None else None,
             "location": self.via or "repository",
         }
@@ -205,6 +212,8 @@ def resolve_identity(a: Address) -> Resolved:
         registry=at["registry"],
         refs=stored.meta["refs"],
         imports=stored.meta["imports"],
+        links=stored.meta.get("links") or [],
+        unresolved=stored.meta.get("unresolved") or [],
         locations=[{**x, "origin": "cache"} for x in stored.locations],
         via="cache",
     )
@@ -248,12 +257,31 @@ def _resolved(
                 "address": str(
                     Address("locator", locator=locator, path=r.path, rev=rev12, symbol=r.symbol)
                 ),
+                "name": r.name,
                 "relation": "ref",
                 "origin": "derived",
             }
             for r in page.refs
         ],
-        imports={"stdlib": list(page.stdlib), "third_party": list(page.third_party)},
+        imports={
+            "stdlib": list(page.stdlib),
+            "third_party": list(page.third_party),
+            "statements": list(page.imports),
+        },
+        links=[
+            {
+                "address": k.address,
+                "relation": k.relation,
+                "fields": dict(k.fields),
+                "description": k.description,
+                "derived": k.description_derived,
+                "line": k.line + 1,
+                "indent": k.indent,
+                "origin": "asserted",
+            }
+            for k in page.links
+        ],
+        unresolved=list(page.unresolved),
     )
 
 

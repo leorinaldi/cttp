@@ -17,7 +17,7 @@ from cttp import gitcache
 
 METADATA = (
     "kind", "language", "symbol", "signature", "docstring", "span", "shape", "shape_full",
-    "refs", "imports",
+    "refs", "imports", "links", "unresolved",
 )  # fmt: skip
 LOCATION = ("address", "target", "path", "rev", "name", "registry", "description", "license")
 

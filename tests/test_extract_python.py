@@ -88,14 +88,15 @@ def test_derived_references_name_the_sibling_modules_locator(registry):
     assert j["refs"] == [
         {
             "address": f"{THERMO}@{rev}/src/thermo/decode.py#reg_to_millicelsius",
+            "name": "reg_to_millicelsius",  # how the page reaches it: by the definition's name
             "relation": "ref",
             "origin": "derived",
         }
     ]
     # references within the same file, through an alias (`from . import decode`), and to a class
     step = resolve_json(f"{LM75}#LM75.step")
-    assert [r["address"] for r in step["refs"]] == [
-        f"{THERMO}@{rev}/src/thermo/decode.py#STEP_MILLICELSIUS"
+    assert [(r["address"], r["name"]) for r in step["refs"]] == [
+        (f"{THERMO}@{rev}/src/thermo/decode.py#STEP_MILLICELSIUS", "decode.STEP_MILLICELSIUS")
     ]
     cls = resolve_json(f"{LM75}#LM75")
     assert [r["address"].split("/src/thermo/")[1] for r in cls["refs"]] == [
@@ -112,22 +113,34 @@ def test_imports_outside_the_repository_are_split_into_stdlib_and_third_party(re
     assert resolve_json(DECODE)["imports"] == {
         "stdlib": ["asyncio", "functools", "struct"],
         "third_party": [],
+        "statements": [],  # a script's imports are in its own text
     }
-    assert resolve_json(LM75)["imports"] == {"stdlib": [], "third_party": ["smbus2"]}
-    # a definition: only what it uses
+    assert resolve_json(LM75)["imports"] == {
+        "stdlib": [],
+        "third_party": ["smbus2"],
+        "statements": [],
+    }
+    # a definition: only what it uses, with the statements that bind those names
     assert resolve_json(f"{DECODE}#read_async")["imports"] == {
         "stdlib": ["asyncio", "struct"],
         "third_party": [],
+        "statements": ["import struct", "from asyncio import sleep"],
     }
     assert resolve_json(f"{DECODE}#decode_cached")["imports"]["stdlib"] == ["functools"]
     assert resolve_json(f"{LM75}#LM75.__init__")["imports"]["third_party"] == ["smbus2"]
+    assert resolve_json(f"{LM75}#LM75.__init__")["imports"]["statements"] == ["import smbus2"]
     assert resolve_json(f"{LM75}#LM75.read_temp")["imports"] == {
         "stdlib": [],
         "third_party": [],
+        "statements": [],
     }
     # the package's __init__ references both modules of the package, nothing outside it
     init = resolve_json(f"{THERMO}@main/src/thermo/__init__.py")
-    assert init["kind"] == "script" and init["imports"] == {"stdlib": [], "third_party": []}
+    assert init["kind"] == "script" and init["imports"] == {
+        "stdlib": [],
+        "third_party": [],
+        "statements": [],
+    }
     assert [r["address"].split("/src/thermo/")[1] for r in init["refs"]] == [
         "decode.py#reg_to_millicelsius",
         "lm75.py#LM75",
@@ -179,17 +192,28 @@ def test_a_symbol_link_expands_and_checks(registry, tmp_path):
     reports = expand_file(f, registry)
     assert [r.status for r in reports] == ["expanded"]
     lines = f.read_text().split("\n")
-    assert lines[0].startswith(f"# cttp: {THERMO}@")
-    assert "/src/thermo/decode.py#reg_to_millicelsius id=sha256:" in lines[0]
+    # the two constants the definition needs come first, each beneath its own stamp (P3-T2)
+    stamps = [i for i, line in enumerate(lines) if line.startswith(f"# cttp: {THERMO}@")]
+    assert [lines[i].split("#")[2].split(" ")[0] for i in stamps] == [
+        "REG_BITS",
+        "STEP_MILLICELSIUS",
+        "reg_to_millicelsius",
+    ]
+    own = lines[stamps[-1]]
+    assert "/src/thermo/decode.py#reg_to_millicelsius id=sha256:" in own
     # no registry description: the stamp carries one derived from the page, marked `~`
-    assert lines[0].endswith(
+    assert own.endswith(
         '  ~"def reg_to_millicelsius(reg: int) -> int — Convert a raw temperature register to '
         'millidegrees Celsius."'
     )
-    assert lines[1] == "def reg_to_millicelsius(reg: int) -> int:"
+    assert lines[stamps[-1] + 1] == "def reg_to_millicelsius(reg: int) -> int:"
     # the user's code after the definition, separated by the blank line expand wrote, is not drift
     assert lines[-3:] == ["", "print(reg_to_millicelsius(0x1900))", ""]
-    assert [r.status for r in check_file(f, registry)] == ["ok"]
+    assert [r.status for r in check_file(f, registry)] == ["ok", "ok", "ok"]
+    import subprocess
+
+    out = subprocess.run(["/usr/bin/python3", "-I", str(f)], capture_output=True, text=True)
+    assert out.stdout == "25000\n", out.stderr  # the note in P2's PROGRESS: it now runs
 
 
 def test_a_parameter_shadows_a_module_level_import():

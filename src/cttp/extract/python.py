@@ -19,7 +19,14 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 
 from cttp.extract import ExtractError, Page, Ref
-from cttp.hashing import normalize
+from cttp.hashing import BUILTINS, normalize
+from cttp.links import find_links, strip_links
+
+# names every module has without binding them
+MODULE_GLOBALS = frozenset(
+    {"__name__", "__file__", "__doc__", "__spec__", "__package__", "__loader__", "__builtins__",
+     "__path__", "__annotations__", "__dict__", "__debug__"}
+)  # fmt: skip
 
 Function = ast.FunctionDef | ast.AsyncFunctionDef
 Definition = Function | ast.ClassDef | ast.Assign | ast.AnnAssign
@@ -32,6 +39,7 @@ class Binding:
     level: int
     module: tuple[str, ...]
     attr: str | None = None
+    stmt: str = ""  # the import statement that makes this one binding, as the tool rewrites it
 
     @property
     def parts(self) -> tuple[str, ...]:
@@ -45,7 +53,14 @@ def extract(source: str, path: str, symbol: str | None = None, files: Iterable[s
     except SyntaxError as e:
         if symbol:
             raise ExtractError(f"{path!r} is not valid Python (line {e.lineno}: {e.msg})") from e
-        return Page(kind="script", source=text, language="python", span=(1, text.count("\n")))
+        kept, links = strip_links(text.split("\n"))
+        return Page(
+            kind="script",
+            source=normalize("\n".join(kept)) if links else text,
+            language="python",
+            span=(1, text.count("\n")),
+            links=tuple(links),
+        )
     module = Module(tree, text, path, set(files))
     return module.definition(symbol) if symbol else module.script()
 
@@ -94,16 +109,22 @@ class Module:
         refs: list[Ref] = []
         stdlib: list[str] = []
         third: list[str] = []
-        for b in _all_bindings(self.tree).values():
-            self._classify(b, b.parts, refs, stdlib, third)
+        bindings = _all_bindings(self.tree)
+        for name, b in bindings.items():
+            self._classify(b, b.parts, name, refs, stdlib, third)
+        bound = _bound_names(self.tree) | set(bindings)
+        free = [c[0] for c in _chains(self.tree) if c[0] not in bound]
+        kept, links = strip_links(self.lines)
         return Page(
             kind="script",
-            source=self.text,
+            source=normalize("\n".join(kept)) if links else self.text,
             language="python",
             span=(1, self.text.count("\n")),
             refs=tuple(_dedupe(refs)),
             stdlib=tuple(sorted(set(stdlib))),
             third_party=tuple(sorted(set(third))),
+            unresolved=tuple(_free(free)),
+            links=tuple(links),
         )
 
     def definition(self, symbol: str) -> Page:
@@ -113,10 +134,11 @@ class Module:
         decorators = getattr(node, "decorator_list", None)
         start = decorators[0].lineno if decorators else node.lineno
         end = node.end_lineno or start
-        refs, stdlib, third = self._references(node, symbol)
+        refs, stdlib, third, stmts, free = self._references(node, symbol)
+        own = self.lines[start - 1 : end]
         return Page(
             kind=_kind(node),
-            source=normalize("\n".join(self.lines[start - 1 : end])),
+            source=normalize("\n".join(own)),
             language="python",
             span=(start, end),
             symbol=symbol,
@@ -125,6 +147,9 @@ class Module:
             refs=tuple(refs),
             stdlib=tuple(sorted(set(stdlib))),
             third_party=tuple(sorted(set(third))),
+            imports=tuple(stmts),
+            unresolved=tuple(free),
+            links=tuple(find_links(own)),
         )
 
     def _not_found(self, symbol: str) -> str:
@@ -141,34 +166,49 @@ class Module:
     # -- references --------------------------------------------------------------------------
 
     def _references(self, node: ast.AST, symbol: str):
+        """What a definition needs from outside its own text: references into the repository,
+        the stdlib and third-party modules it uses (with the module-level import statements that
+        bind them), and the free names nothing accounts for."""
         inner = _all_bindings(node)
         bindings = self.bindings | inner
         local = _bound_names(node) - set(inner)  # a parameter shadows a module-level import
         refs: list[Ref] = []
         stdlib: list[str] = []
         third: list[str] = []
+        stmts: list[str] = []
+        free: list[str] = []
         for chain in _chains(node):
             root = chain[0]
             if root in local:
                 continue
             if root in bindings:
                 b = bindings[root]
-                self._classify(b, b.parts + tuple(chain[1:]), refs, stdlib, third)
+                outside = self._classify(
+                    b, b.parts + tuple(chain[1:]), ".".join(chain), refs, stdlib, third
+                )
+                if outside and root not in inner and b.stmt not in stmts:
+                    stmts.append(b.stmt)
             elif root in self.defs:
                 sibling = root
                 if len(chain) > 1 and f"{root}.{chain[1]}" in self.defs:
                     sibling = f"{root}.{chain[1]}"
                 if sibling != symbol:
-                    refs.append(Ref(self.path, sibling))
-        return _dedupe(refs), stdlib, third
+                    refs.append(Ref(self.path, sibling, sibling))
+            else:
+                free.append(root)
+        return _dedupe(refs), stdlib, third, stmts, _free(free)
 
-    def _classify(self, b: Binding, parts: tuple[str, ...], refs, stdlib, third) -> None:
+    def _classify(self, b: Binding, parts: tuple[str, ...], name: str, refs, stdlib, third) -> bool:
+        """File a binding as a repository reference or an outside module; True when outside."""
         found = self._module_file(b.level, parts)
         if found:
             file, rest = found
-            refs.append(Ref(file, ".".join(rest) or None))
-        elif b.level == 0 and parts:
+            refs.append(Ref(file, ".".join(rest) or None, name))
+            return False
+        if b.level == 0 and parts:
             (stdlib if parts[0] in sys.stdlib_module_names else third).append(parts[0])
+            return True
+        return False
 
     def _module_file(self, level: int, parts: tuple[str, ...]) -> tuple[str, list[str]] | None:
         """The repository file for the longest module prefix of `parts`, and what is left over.
@@ -253,16 +293,20 @@ def _import_bindings(node: ast.AST) -> dict[str, Binding]:
     out: dict[str, Binding] = {}
     if isinstance(node, ast.Import):
         for alias in node.names:
+            stmt = f"import {alias.name}" + (f" as {alias.asname}" if alias.asname else "")
             if alias.asname:
-                out[alias.asname] = Binding(0, tuple(alias.name.split(".")))
+                out[alias.asname] = Binding(0, tuple(alias.name.split(".")), stmt=stmt)
             else:  # `import a.b.c` binds `a`; the rest is reached by attribute access
                 top = alias.name.split(".")[0]
-                out[top] = Binding(0, (top,))
+                out[top] = Binding(0, (top,), stmt=stmt)
     elif isinstance(node, ast.ImportFrom):
         module = tuple(node.module.split(".")) if node.module else ()
+        head = "." * node.level + (node.module or "")
         for alias in node.names:
             if alias.name != "*":
-                out[alias.asname or alias.name] = Binding(node.level, module, alias.name)
+                stmt = f"from {head} import {alias.name}"
+                stmt += f" as {alias.asname}" if alias.asname else ""
+                out[alias.asname or alias.name] = Binding(node.level, module, alias.name, stmt)
     return out
 
 
@@ -323,6 +367,15 @@ def _flatten(n: ast.expr) -> list[str] | None:
         base = _flatten(n.value)
         return base + [n.attr] if base else None
     return None
+
+
+def _free(names: list[str]) -> list[str]:
+    """Free names in first-use order, builtins and module globals excepted."""
+    out: list[str] = []
+    for n in names:
+        if n not in BUILTINS and n not in MODULE_GLOBALS and n not in out:
+            out.append(n)
+    return out
 
 
 def _dedupe(refs: list[Ref]) -> list[Ref]:
