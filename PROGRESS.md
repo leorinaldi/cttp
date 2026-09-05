@@ -4,14 +4,16 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASE 0 COMPLETE; PHASE 1 THREE-QUARTERS DONE — P1-T1, P1-T2, P1-T3 DONE. NEXT IS
-P1-T4 (the link convention in full).** Phase 0 (2026-09-04): the spike, the public registry
-`github.com/leorinaldi/cttp-registry` tagged `v1`, the config with an ordered registry list and
-`[remotes]`, the registry as an **HTTP contract** (`http://localhost:3120` first, the local clone
-second), `run` asking before the first run. Phase 1 so far (2026-09-04/05): the **full address
-grammar**, **identity and shape hashing** in `hashing.py`, and the **Python extractor in full** —
-every definition of spec §3 addressable by `#symbol` on either address form, with signature,
-docstring, span, shape and **derived references**. 138 tests green, ruff clean.
+**Status: PHASES 0, 1 AND 2 COMPLETE. NEXT IS P3-T1 (the closure).** Phase 0 (2026-09-04): the
+spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`, the config with an
+ordered registry list and `[remotes]`, the registry as an **HTTP contract**, `run` asking before
+the first run. Phase 1 (2026-09-04/05): the **full address grammar**, **identity and shape
+hashing**, the **Python extractor in full** with derived references, and the **link convention in
+full** — three markers, fields, `~`, stacks, any comment syntax, and the block beneath a link
+recorded as `start`/`end`. Phase 2 (2026-09-05): **the resolver in full** — an SPDX license
+matcher, symbol search for a name without a path, `id=` mismatch, the **object cache** so
+identity addresses resolve offline, and **`resolve --latest`** rules 1 and 2. All three address
+forms resolve. 205 tests green, ruff clean.
 
 _Last updated: 2026-09-05._
 
@@ -20,26 +22,29 @@ _Last updated: 2026-09-05._
 
 ## Next session — suggested next steps
 
-**Start here: P1-T4 — the link convention in full.** Read its entry in
-[`docs/plan.md`](docs/plan.md) in full. `links.py` finishes spec §4: the three markers (`cttp:`,
-`cttp-from:`, `cttp-see:`), `key=value` fields, the `~` derived-description marker, stacked links,
-and — the part that bites today — **the block beneath a stamped link defined properly** (to the
-next link line or a blank line followed by a non-indented line, recorded as `end` on the parsed
-link) so that user code after an expanded definition no longer reads as drift. `expand.py` then
-uses that delimiter instead of `block_end()`'s to-EOF rule. One regex must find a link in any
-comment syntax (`#`, `//`, `--`, `/* */`, `;`); the C file in `bench/drivers/corpus/` is the
-acceptance case for that. `test_extract_python.py::test_a_symbol_link_expands_and_checks` is
-the test to extend once the block rule exists (it deliberately puts nothing after the link).
+**Start here: P3-T1 — the closure.** Read its entry in [`docs/plan.md`](docs/plan.md) in full.
+From a page, compute the definitions it references, recursively, within the origin repository at
+the pinned rev, using the extractor's derived `refs`; stdlib left as written; third-party imports
+kept and reported; anything unresolvable stops the operation naming it; the 50-definition /
+2,000-line budget with the `--package` suggestion. Output is an ordered list, dependencies before
+dependents, that `cttp closure <address>` prints. This is what lets `expand` stop refusing pages
+that link out (`ExpandError` today) and lets `reg_to_millicelsius` — which needs `REG_BITS` and
+`STEP_MILLICELSIUS` — actually run after expansion (see the note in
+`test_extract_python.py::test_a_symbol_link_expands_and_checks`). The plan wants a
+`tests/fixtures/pyrepo/` fixture; the thermo fixture already has the sibling-reference shapes
+and may serve, but check the acceptance list before deciding.
 
-Then **Phase 2**: P2-T1 (locator resolution in full: symbol search across a repository, `id=`
-mismatch, a real license matcher) and P2-T2 (the object cache, so identity addresses resolve).
+Then **P3-T2** (closure expansion beneath the link, each definition with its own stamp) and the
+rest of Phase 3: `add`, `update`, `fold`.
 
-If Leo wants to play, the demo is in **How to run** below; a definition link
-(`# cttp: <locator>#<symbol>`) expands there too now.
+If Leo wants to play, the demo is in **How to run** below. New since last time:
+`cttp resolve sha256:75a27070015e` (from the object cache), `cttp resolve <pinned> --latest`,
+`cttp resolve <address> --id sha256:…`, `cttp cache status`, and a `# cttp-see:` /
+`# cttp-from:` line in a file passing `cttp check`.
 
 ## Current state — working & verified
 
-**Code (`src/cttp/`), 2026-09-05.** Real modules; Phase 0 minimal, Phase 1 in full:
+**Code (`src/cttp/`), 2026-09-05.** Real modules; Phases 1 and 2 in full:
 - `config.py` — **P0-T3/T4.** `~/.config/cttp/config.toml` (XDG; `CTTP_CONFIG` overrides the
   path): `registries` (ordered list of HTTP URLs or local paths; first match wins) and
   `[remotes]` (locator prefix → URL prefix, longest prefix wins, else `https://<locator>.git`).
@@ -77,10 +82,16 @@ If Leo wants to play, the demo is in **How to run** below; a definition link
   longest module prefix wins), plus sibling definitions in the same file; a parameter shadows a
   module-level import. A script's references are every import it makes; a definition's are the
   names it uses.
-- `gitcache.py` — bare clones under `$CTTP_HOME` (default `~/.cache/cttp`)`/repos/<locator>`,
-  cloned from `config.url_for(locator)`; rev-parse, blob at rev, license from the first line of
-  `LICENSE*`/`COPYING`. **A fetch is skipped when the wanted rev is a SHA already in the cache**,
-  so `check` on an expanded file is offline once the repo is cached; labels always fetch.
+- `gitcache.py` — **P2-T1.** Bare clones under `$CTTP_HOME` (default `~/.cache/cttp`)
+  `/repos/<locator>`, cloned from `config.url_for(locator)`; `rev_parse` (tags and branches to
+  SHAs), `show` (`cat-file blob`), `ls_tree`, `default_branch` (the bare clone's HEAD).
+  `license_of` finds `LICENSE*`/`COPYING*` at the rev (case-insensitive) and `spdx_of` matches
+  the text: Apache-2.0, MPL-2.0, GPL-2.0, GPL-3.0 by title in the first 2,000 normalized chars
+  (a preamble may come first — git's COPYING does), the GNU family told apart by which title
+  comes first; MIT, ISC, BSD-2/3-Clause by their grant. Anything else is `None`; LGPL, AGPL and
+  Unlicense deliberately return `None`. Verified against the twelve canonical SPDX texts. **A
+  fetch is skipped when the wanted rev is a SHA already in the cache**, so `check` on an expanded
+  file is offline once the repo is cached; labels always fetch.
 - `registry.py` — `Registries`: the configured list, asked in order; a `RegistryError` from
   one is a miss and the next is asked; when all miss, the error names them all with each reason.
   `LocalRegistry` reads `cttp.toml` + `names/*.toml`. `HttpRegistry.fetch(name, version,
@@ -103,11 +114,46 @@ If Leo wants to play, the demo is in **How to run** below; a definition link
   last]`), `refs` (`{address, relation: "ref", origin: "derived"}`, addresses in pinned locator
   form at the same rev) and `imports` (`{stdlib, third_party}`). `to_json()` adds `origin`.
   `gitcache.ls_tree()` supplies the file list for reference resolution (Python files only).
-- `links.py` — parse and write `# cttp:` lines (stamp, `key=value` fields, quoted description).
-  `format_stamped(pinned_address, id12, description)` takes the pinned address in any form, so a
-  locator link expands to `# cttp: host/owner/repo@<sha12>/path id=sha256:… "…"`.
+  **P2-T1:** an entry naming a whole repository (no path) takes a `#symbol`, found by
+  `find_symbol()` over every Python file at the rev — one hit resolves, none or several stop with
+  the candidates as locators. `resolve(text, registries, expect=id)` raises `Mismatch` (a
+  `ResolveError` carrying `resolved` and `claimed`) when the page's identity does not start with
+  the claimed hex. **P2-T2:** every resolution is `objects.store()`d on the way out; the identity
+  form goes to `resolve_identity()` — the object cache, then `objects.index_lookup()` (returns
+  `None` until Phase 4) — and answers with the most recently seen location as the address,
+  `locations` (each with `origin: cache`) and `via="cache"`; `to_json()["origin"]["location"]`
+  is `"cache"` or `"repository"`. `locations` and `via` are not part of the registry contract.
+  **P2-T3:** `latest(text, registries)` → `Latest(pinned, head, found, rule, to, changed,
+  message)`: a pinned name follows its entry's default ref, a pinned locator the repository's
+  default branch; rule 1 `same-path` (with `changed`), rule 2 `same-identity` (a move within the
+  repository; whole file for a script page; definitions with the pinned name tried first), else
+  `found=False` saying rule 3 needs the index. A rename is not found — the identity includes the
+  name.
+- `objects.py` — **P2-T2.** The object cache: `objects/<sha256>` is the normalized source,
+  `objects/<sha256>.json` the sidecar — the page's metadata (kind, language, symbol, signature,
+  docstring, span, shape, refs, imports) and `locations`, each a pinned locator address with
+  target, path, rev, name, registry, description, license and a `seen` timestamp; a location seen
+  again is refreshed, not duplicated. `lookup(prefix)` (12+ hex, with or without `sha256:`) →
+  `Stored` or `None`; `AmbiguousIdentity` lists the candidates. `status()` and `clear(repos,
+  objects, run)` cover both caches and the run cache.
+- `links.py` — **P1-T4.** Spec §4 in full. One regex finds a link line in any comment syntax
+  (`#`, `//`, `--`, `;`, `/* … */` closed on the same line); `cttp:` / `cttp-from:` / `cttp-see:`
+  set `relation` (`is` / `from` / `see`); fields are ordered `key=value`, the description the last
+  and only quoted field, `~` marking a derived one; `Link.format()` writes the canonical form
+  (two spaces before the description) and every spec §4 example round-trips byte for byte. A
+  malformed line is a `LinkError` naming the line and the field (a space in a value, a duplicate
+  key, a quoted string that is not last). `find_links(lines)` records each link's **block** as
+  `start`/`end`: it begins after the link's *stack* (consecutive link lines share one block) and
+  ends at the next link line, at a blank line followed by a line indented no more than the link,
+  or at EOF. `format_stamped(pinned, id12, description, derived=False, comment="#")`.
 - `expand.py` — `expand` (one link, no closure; a page that itself contains `# cttp:` lines is
-  refused with `ExpandError` until P3-T1), `check` (unexpanded / drift / unresolvable / ok),
+  refused with `ExpandError` until P3-T1). **P1-T4:** the source goes beneath the link's whole
+  stack, followed by a blank line when something non-blank follows, so the block is delimited;
+  a page with no registry description gets one derived from its kind, signature and docstring
+  (`def f(x) -> int — Summary.`), written `~"…"`. `check` (unexpanded / drift / **mismatch** /
+  unresolvable / ok): `is` links are hashed over `link.block(lines)` and then resolved with
+  `expect=` their id — `mismatch` means the block hashes to the stamp but the origin page does
+  not; `from` and `see` links are resolved, never hashed. `Report` carries `relation`.
   `run` for an address (`~/.cache/cttp/run/<pin>/main.py`) or a file (copy, expand, run). **The
   first run of a pinned address asks** — source, hash, license, which registry — unless `--yes`;
   the run-cache entry's existence is the "confirmed" marker, so it is created only after a yes.
@@ -117,11 +163,24 @@ If Leo wants to play, the demo is in **How to run** below; a definition link
   each optionally with `%23<symbol>` before `.json`; the slug is parsed with `address.parse()`.
   The page shows shape, signature, docstring, span and the derived references. Looked at in a
   headless browser (hello-world and a symbol page): renders correctly.
-- `cli.py` — `cttp --version | config | resolve | serve | expand | check | run`; `--json` is
-  accepted before or after the subcommand. `resolve`'s text form prints the signature and
-  docstring on a `#` line when the page is a definition.
-- Tests: 138 in `tests/` — `test_{address,hashing,extract_python,config,links,resolve,expand,
-  check,run,server,cli}.py`. `test_address.py` is table-driven over the spec §2 examples plus
+- `cli.py` — `cttp --version | config | resolve [--id …] [--latest] | serve | expand | check |
+  run | cache status | cache clear [--run]`; `--json` is accepted before or after the subcommand.
+  `resolve`'s text form prints the signature and docstring on a `#` line when the page is a
+  definition, `# seen:` lines when an identity came from the object cache, and `from → to` with
+  the rule under `--latest` (exit 1 when not found). `cache clear` removes repos and objects; the
+  run cache — the confirmation record — only with `--run`.
+- Tests: 205 in `tests/` — `test_{address,hashing,extract_python,config,links,gitcache,resolve,
+  objects,latest,expand,check,run,server,cli}.py`. **Tests never connect a socket:** an autouse
+  fixture in `conftest.py` patches `socket.socket.connect` to raise; `@pytest.mark.network`
+  (registered in `pyproject.toml`) lifts it for the one test that talks to a closed local port.
+  `test_links.py` is the P1-T4 acceptance (spec §4 lines round-trip; three relations in one
+  file; the corpus C file with a `// cttp-see:` line, skipped when the corpus is absent; block
+  rules; expand/check through the block). `test_gitcache.py` is the P2-T1 matcher and cache
+  acceptance, `test_objects.py` the P2-T2 acceptance (identity resolves after the remote and the
+  git cache are deleted), `test_latest.py` the P2-T3 acceptance over a fixture history.
+  `conftest.py` also has `add_remote_repo(tmp_path, name, files)` (a repository reachable as
+  `github.com/leorinaldi/<name>`) and `commit_to_remote(tmp_path, name, changes, message)`
+  (advance it: write or delete files, commit, push to the bare remote). `test_address.py` is table-driven over the spec §2 examples plus
   valid/invalid inputs. `test_hashing.py` holds the plan P1-T2 acceptance (same shape / different
   identity, reordering, CRLF) and the pinned hello-world identity. `test_extract_python.py` is
   the plan P1-T3 acceptance through `cttp resolve <locator>#<symbol> --json` against
@@ -139,16 +198,12 @@ If Leo wants to play, the demo is in **How to run** below; a definition link
   the FastAPI app in-process (`via_http` fixture). No network.
   `test_no_runtime_component` guards the no-runtime rule.
 
-**Corners the spike cut (each is closed by the named task):**
-- `[remotes]` exists but no mirror has been exercised outside the tests → **P2-T1**
-- No object cache; identity addresses parse but do not resolve → **P2-T2**
-- A name whose entry names a whole repository (no path) cannot resolve a symbol yet → **P2-T1**
+**Corners still cut (each is closed by the named task):**
 - Stamps use 12-hex for rev and identity (the plan's choice), full SHA returned in JSON → keep
-- The block beneath a link runs to the next link line or EOF, so **user code after an expanded
-  definition reads as drift** → **P1-T4** defines it properly
-- License detection is a two-entry first-line map (itsdangerous shows as "Copyright 2011
-  Pallets", the first line of its BSD file) → **P2-T1**
-- `# cttp-from:` and `# cttp-see:` are not recognised → **P1-T4**
+- `expand` refuses a page that itself links out; a definition that references siblings
+  (`reg_to_millicelsius` needs `REG_BITS`) expands but does not run alone → **P3-T1/P3-T2**
+- `check --fix` (drift → `cttp-from:`), `update`, `fold`, `add` are not built → **Phase 3**
+- The index hook `objects.index_lookup()` returns `None`; `--latest` rule 3 says so → **P4**
 - A class attribute used as a default in a method signature (`address: int = ADDRESS`) is not a
   derived reference — bare names only match module-level definitions → **unscheduled**; trigger:
   the index (P4) needing class-scope name resolution
@@ -179,9 +234,13 @@ If Leo wants to play, the demo is in **How to run** below; a definition link
   `drivers/{gpio,hwmon,iio,rtc}`), copied from the fisheye session's scratchpad. The measurement
   scripts and the Linux commit did **not** survive; P6-T2 reconstructs them. The LM75 teardown
   files are at `bench/drivers/lm75-teardown/` (gitignored).
-- The server was restarted on the P1-T3 code on 2026-09-05 (`.local/serve.log`).
-- `~/.cache/cttp/repos/github.com/pallets/itsdangerous` exists from the P1-T3 by-hand check (a
-  real symbol resolved over the network, then again offline at its pinned rev).
+- The server was restarted on the P2-T1 code on 2026-09-05 (`.local/serve.log`); P2-T2/T3
+  touched nothing it serves.
+- `~/.cache/cttp/repos/` holds four real repositories from by-hand checks (2026-09-05):
+  `pallets/itsdangerous`, `psf/requests`, `leorinaldi/cttp-registry`, and **`git/git`, which is
+  ~340 MB** (cloned to check the matcher on a COPYING with a long preamble). `cttp cache status`
+  shows it; `rm -rf ~/.cache/cttp/repos/github.com/git` frees the space. `~/.cache/cttp/objects/`
+  holds a few pages from the P2-T2 by-hand check.
 - A headless Chromium exists at `~/.cache/ms-playwright/chromium-1223/chrome-linux/chrome`
   (`--headless=new --screenshot=…`); system Firefox's headless screenshot did not work.
 
@@ -207,12 +266,51 @@ trigger that would schedule it.
 - The `%23<symbol>` extension of the registry contract is in the code and `overview.md` but not
   in spec §8's route table → **unscheduled**; trigger: the next spec edit, or publishing the spec
   on `cttp.ai` (P7-T3)
+- A **script page with a blank line followed by a non-indented statement** ends its block early
+  under spec §4's delimiter, so `check` reports drift on it; no fixture hits this yet →
+  **unscheduled**; trigger: the first real script page with an internal blank line (a fix would
+  let `expand` record the block's `end` on the link, or indent-fold scripts)
+- The **derived description prefixes `def` / `async def` / `class`** to the extractor's signature
+  (which has no keyword, a P1-T3 choice used by the viewer and `resolve`); spec §4's example
+  reads `def greet(...) — …`, so both are consistent, but the two representations of a signature
+  should be reconciled once → **unscheduled**; trigger: the next change to `_signature`
+- **`GPL-2.0` / `GPL-3.0` are the plan's spellings** and SPDX has deprecated them in favour of
+  `-only` / `-or-later`; a license file alone cannot say which → **unscheduled**; trigger: the
+  spec edit that publishes the license list (P7-T3), decide then
+- **A renamed definition is not found by `--latest`** — its identity changed with its name; its
+  shape did not, and a shape-based rule would find it → **unscheduled**; trigger: a real
+  `--latest` miss on a rename (rule 3 via the index may also cover it, P4-T3)
+- `--latest` on a **locator uses the bare clone's HEAD** as the default branch, which is the
+  origin's default at clone time; a repository that changes its default branch later keeps the
+  old one until the cache is cleared → **unscheduled**; trigger: it happens
+- `latest()` resolves the pinned page and then the head page through `resolve()`, so **`--latest`
+  stores both in the object cache** — intended, but it means the head page's location is
+  recorded as "seen" without anyone linking to it → **standing**, revisit at P4
 
 ## Build history
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-05 (eleventh session) — P1-T4, P2-T1, P2-T2, P2-T3: Phases 1 and 2 done.**
+  Four task commits. P1-T4 rewrote `links.py` around one regex for any comment syntax, three
+  relations, ordered fields and a recorded block (`start`/`end`, beginning after the link's
+  stack, ending at the next link, a blank line before a line no deeper than the link, or EOF);
+  `expand` writes beneath the stack and adds a blank line before what follows, so user code after
+  an expanded definition stopped reading as drift; the derived `~"…"` description arrived.
+  Decisions: stacked links share one block; `check` hashes only `is` links; a page's own inner
+  links still refuse expansion until the closure exists. P2-T1: `cat-file` for blobs, an SPDX
+  matcher by title-in-head for versioned licenses and by grant for the rest — the GNU family
+  told apart by which title comes first, because the LGPL/AGPL preambles and the GPL-2's own
+  preamble all name other GNU licenses; symbol search across a repository for a name without a
+  path; `Mismatch` with both hashes; a socket guard so tests provably never reach the network.
+  P2-T2: `objects.py`, every resolution stored, identity addresses answered from it with all
+  their locations, `cttp cache status|clear`. P2-T3: `latest()` with rules 1 and 2 and the
+  plain "rule 3 needs the index" answer; a rename is a different identity (test says so). By
+  hand against real repositories: itsdangerous now reads BSD-3-Clause, requests at a tag pins
+  and reads Apache-2.0, git's COPYING reads GPL-2.0 (a preamble longer than the first head size
+  tried — widened to 2,000 chars), the twelve canonical SPDX texts all classify as intended, and
+  `--latest` followed itsdangerous from tag 2.1.2 to head. 138 → 205 tests.
 - **2026-09-04/05 (tenth session) — P1-T2 identity and shape hashing; P1-T3 the Python
   extractor in full.** `hashing.py` took `normalize`, `identity` and `short` out of `address.py`
   (re-exported) and added `shape()`: `tokenize` over the normalized text, identifiers positional,
@@ -268,12 +366,6 @@ is the archive, and a bloated history taxes every future session start.
   stated fields, and acceptance test 4 walked again end to end. Two traps found and recorded
   under Environment: the spike's poisoned git cache, and `uv --directory` changing cwd (use
   `uv run --project` from another directory).
-- **2026-09-04 (fifth session) — P0-T2: the public registry repository.** Created
-  `github.com/leorinaldi/cttp-registry` (public) from `tests/fixtures/registry/`, one commit
-  tagged `v1`, and ran the acceptance check: anonymous clone from a credential-free shell, files
-  identical to the fixture, `git tag` lists `v1`. The only content change was the README gaining
-  the link to spec §8 the plan asked for; the fixture was updated to stay identical. Leo also
-  asked how to see a file both expanded and folded; `cttp fold` is P3-T4 and was left there.
 
 ## How to run
 

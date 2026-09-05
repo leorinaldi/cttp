@@ -20,13 +20,15 @@ stamping the line with the pinned revision and a content hash. The runtime, the 
 reader only ever see ordinary source. A program that uses expanded code runs with cttp
 uninstalled — that is the founding rule, and a test guards it.
 
-Today the whole of the hello-world loop exists in real form: all three address forms, with a
+Today the address, the link and the resolver exist in full: all three address forms resolve — a
+name through a registry, a locator through git, an identity from the object cache — with a
 `#symbol` selecting one Python definition of a file; a registry that is a public git repository
 (`github.com/leorinaldi/cttp-registry`) or an HTTP server speaking the registry contract;
-identity and shape hashes; a Python extractor that is exact (`ast`) and derives references;
-`expand`, `check` and `run` over one link at a time; and a viewer on port 3120. Identity-address
-resolution, the object cache, the index, closure expansion, `fold`, `update` and the benchmark
-are still ahead — [`plan.md`](plan.md) lays out the phases.
+identity and shape hashes; a Python extractor that is exact (`ast`) and derives references; the
+three link markers in any comment syntax, with the block beneath a link defined; a license
+matcher; `resolve --latest` following a pinned address to the repository's head; `expand`,
+`check` and `run` over one link at a time; and a viewer on port 3120. Closure expansion, `fold`,
+`update`, the index and the benchmark are still ahead — [`plan.md`](plan.md) lays out the phases.
 
 ## 2. Architecture
 
@@ -46,16 +48,26 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   same text tokenized with identifiers as positional placeholders and literals as typed ones,
   keywords and builtins kept, comments and blank lines dropped, structure tokens kept. Python
   only; `ShapeError` otherwise. `address.py` re-exports both.
-- **Links** (`links.py`) — one regex finds every `# cttp:` line; fields are `key=value`, the
-  description is the trailing quoted string. A link with an `id=` field is *stamped*.
+- **Links** (`links.py`) — one regex finds every link line in any comment syntax (`#`, `//`,
+  `--`, `;`, `/* … */`); the marker gives the relation — `cttp:` *is*, `cttp-from:` *from*,
+  `cttp-see:` *see*; fields are ordered `key=value`, the description is the trailing quoted
+  string, `~"…"` when derived by the tool. A link with an `id=` field is *stamped*. A malformed
+  link line is a `LinkError` naming the line and the field. `find_links()` records every link's
+  **block** as `start`/`end` — see §4 — so nothing downstream guesses at it.
 - **Registry** (`registry.py`) — an ordered list from the config. Each is a **local registry
   repository** (`cttp.toml` + `names/<name>.toml`, each entry mapping a name to a
   `host/owner/repo/path` target and version labels to refs) or an **HTTP registry** serving
   `GET /<name>[@<version>][%23<symbol>].json` — a symbol rides the same route, percent-encoded.
   First that knows the name answers; a miss falls through.
 - **Git cache** (`gitcache.py`) — bare clones under `$CTTP_HOME/repos/<host>/<owner>/<repo>`,
-  fetched from wherever `[remotes]` in the config points, else `https://<locator>.git`. Reads
-  blobs at a rev and the license file at that rev.
+  fetched from wherever `[remotes]` in the config points, else `https://<locator>.git`. Plain
+  `git`: `rev-parse` for tags and branches, `cat-file` for blobs, `ls-tree` for a rev, the bare
+  clone's HEAD for the default branch. The license is the SPDX id of the `LICENSE*`/`COPYING*`
+  file at the rev, matched by phrase (nine ids; anything else is `None`).
+- **Object cache** (`objects.py`) — every page `resolve` returns is stored by identity under
+  `$CTTP_HOME/objects/<sha256>` with a JSON sidecar of its metadata and every location it was
+  seen at. An identity address is answered from here; the index (Phase 4) is the second place
+  to ask, and its hook says "not indexed" until it exists.
 - **Extractor** (`extract/`) — `extract(path, source, symbol, files)` turns a file at a rev,
   or one definition of it, into a `Page`: kind, language, normalized source, span, and for a
   definition its symbol, signature, first docstring paragraph, **derived references** (`Ref`s
@@ -67,15 +79,22 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   target, refs (as pinned locator addresses at the same rev, `origin: derived`), imports, and
   which registry answered. Against a local registry it does the
   git and extraction work itself; against an HTTP registry it takes the server's object as is.
-  **The server resolves, the client asks** — that is the contract.
-- **Materializer** (`expand.py`) — `expand` (write source beneath the link), `check` (stamped?
-  hashes to its id? still resolvable?), `run` (materialize into a run cache and execute with the
-  host interpreter).
+  **The server resolves, the client asks** — that is the contract. A name whose entry names a
+  whole repository takes a `#symbol` and searches the rev for it; several hits stop with the
+  candidates. `resolve(…, expect=id)` raises `Mismatch` with both hashes when the page's identity
+  is not the one a link claims. `latest()` follows a pinned address forward — rule 1 same path
+  and symbol, rule 2 same identity anywhere at head, and a plain "rule 3 needs the index".
+- **Materializer** (`expand.py`) — `expand` (write source beneath the link's stack, then a blank
+  line so the block is delimited; derive a `~"…"` description when the registry has none),
+  `check` (`is` links: stamped? block hashes to its id? origin page hashes to it too — else
+  `mismatch`? `from` and `see` links: resolvable only), `run` (materialize into a run cache and
+  execute with the host interpreter).
 - **Server** (`server/app.py`) — FastAPI on **3120**, Jinja2 templates. Serves the contract
   (`/<name>.json`, `/<name>@<version>.json`) and the human pages (`/`, `/<name>`) over the
   configured **local** registries only.
-- **CLI** (`cli.py`) — Typer. `cttp --version | config | resolve | serve | expand | check | run`.
-  Every subcommand takes `--json`, before or after the subcommand name.
+- **CLI** (`cli.py`) — Typer. `cttp --version | config | resolve [--id] [--latest] | serve |
+  expand | check | run | cache status | cache clear`. Every subcommand takes `--json`, before or
+  after the subcommand name.
 
 Data an address needs lives in three places on disk, all of them derivable:
 
@@ -83,7 +102,7 @@ Data an address needs lives in three places on disk, all of them derivable:
 |---|---|---|
 | `~/.config/cttp/config.toml` | `registries` (ordered) and `[remotes]`; **written with defaults on first run** | `CTTP_CONFIG` (path), `CTTP_REGISTRY` (replace the list with one entry) |
 | `~/.local/share/cttp/registry` | a clone of the public registry repo; the second default registry | (an entry in the config) |
-| `~/.cache/cttp/` | `repos/<locator>` bare clones; `run/<pinned address>/main.py` and `run/file-<hash>/` run caches | `CTTP_HOME` |
+| `~/.cache/cttp/` | `repos/<locator>` bare clones; `objects/<sha256>` + `.json` the object cache; `run/<pinned address>/main.py` and `run/file-<hash>/` run caches | `CTTP_HOME` |
 
 ## 3. Repo map
 
@@ -92,7 +111,7 @@ Data an address needs lives in three places on disk, all of them derivable:
 | `src/cttp/` | the package; see §2 | authored |
 | `src/cttp/extract/` | `__init__.py` (`Page`, `Ref`, `extract()` dispatch by suffix), `python.py` (the `ast` extractor) | authored |
 | `src/cttp/server/templates/` | `base.html`, `index.html`, `name.html` | authored |
-| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_config`, `_links`, `_resolve`, `_expand`, `_check`, `_run`, `_server`, `_cli`); `conftest.py` builds the offline world | authored |
+| `tests/` | pytest, one file per concern (`test_address`, `_hashing`, `_extract_python`, `_config`, `_links`, `_gitcache`, `_resolve`, `_objects`, `_latest`, `_expand`, `_check`, `_run`, `_server`, `_cli`); `conftest.py` builds the offline world and forbids sockets | authored |
 | `tests/fixtures/registry/` | the registry repository's contents — **identical to the public repo at `v1`**; keep them in sync | authored |
 | `tests/fixtures/hello/hello.py` | one line, `# cttp: hello-world` | authored |
 | `tests/fixtures/thermo/` | a fake sensor package (`src/thermo/{__init__,decode,lm75}.py`) with every definition kind the extractor must handle; served in tests as `github.com/leorinaldi/thermo` | authored |
@@ -122,6 +141,17 @@ links to spec §8 in this private repo.
   shadows a module-level import.
 - **A `#symbol` travels the HTTP contract as `%23` in the existing route.** The contract grew
   no route; spec §8's table does not yet say so (a follow-up in `PROGRESS.md`).
+- **The block beneath a link is recorded, never guessed.** It begins after the link's *stack*
+  (consecutive link lines share one block) and ends at the next link line, at a blank line
+  followed by a line indented no deeper than the link, or at EOF. `find_links()` writes it onto
+  every `Link` as `start`/`end`; `expand` writes a blank line after the source it inserts so the
+  rule holds; `check` and, later, `fold` read it. Indentation is relative to the link, so a
+  method expanded inside a class ends where the next method starts.
+- **Every resolution feeds the object cache.** Nothing has to be asked for; the cache is a
+  by-product of use, keyed by identity, and each entry remembers every location the page was seen
+  at. That is how an identity address resolves offline and how a page survives its origin.
+- **The identity includes the name.** A renamed definition is a new identity; only its shape
+  survives a rename. `--latest` therefore finds edits and moves, not renames.
 - **No lockfile.** The document alone says what runs — web subresource-integrity, not pip. A link
   moves only when asked (`track=latest` and `cttp update` are in the plan, not yet built).
 - **Derived versus asserted.** `rev`, `identity`, `license` are derived by the tool from the
@@ -141,11 +171,13 @@ links to spec §8 in this private repo.
 
 - **address** — what a link points at. Three forms in spec §2: **name** (`hello-world`,
   `leo.thermo@stable#LM75.read_temp`), **locator** (`host/owner/repo@rev/path#symbol`),
-  **identity** (`sha256:<hex>`). Only the name form is implemented.
+  **identity** (`sha256:<hex>`, full or a prefix of 12+). All three resolve.
 - **pinned** — an address whose rev is a commit SHA and which carries an `id=`.
 - **stamp** — the pinned address plus identity that expansion writes onto the link line.
-- **link** — a `# cttp:` comment line. Later also `# cttp-from:` (derived from) and `# cttp-see:`
-  (reference only); neither is recognised yet.
+- **link** — a whole-line comment carrying one of three markers: `# cttp:` (*is* — the code
+  beneath is that page), `# cttp-from:` (*from* — derived from it, never hashed), `# cttp-see:`
+  (*see* — a reference, no code claimed). The **relation** is `is`, `from` or `see`.
+- **stack** — consecutive link lines above one statement. They share one block.
 - **page** — what an address resolves to: a definition (`function`, `class`, `constant`) or a
   script, with its normalized source. A definition's source is its span, dedented.
 - **symbol** — the dotted name of a definition within a file: `reg_to_millicelsius`,
@@ -155,9 +187,8 @@ links to spec §8 in this private repo.
   with different identities mean a near-duplicate.
 - **ref** — a derived reference from a page to another file or definition in its repository,
   emitted as a link with `relation: ref`, `origin: derived`.
-- **block** — the lines beneath a stamped link that `check` hashes. Currently: to the next link
-  line or EOF, trailing blanks dropped — so **user code after an expanded definition reads as
-  drift** until the plan's P1-T4 defines the block properly.
+- **block** — the lines beneath a link's stack that the link stands for; `check` hashes it for
+  an `is` link. Recorded on the parsed link as `start`/`end` (§4).
 - **entry** — a registry's record for a name: target, description, owner, default, versions.
 - **locator** — `host/owner/repo`, no scheme. `split_target` splits an entry's target into
   locator and path.
@@ -166,6 +197,12 @@ links to spec §8 in this private repo.
 - **miss** — a registry that does not know a name, is unreachable, or is a configured path with
   nothing at it (`MissingRegistry`). A miss asks the next registry; the final error names them all.
 - **drift** — a stamped link whose block no longer hashes to its `id=`.
+- **mismatch** — a stamped link whose block hashes to its `id=` but whose origin page, resolved
+  again, does not: the stamp is wrong, not the copy. `check` reports it; `resolve --id` exits 1.
+- **location** — one place a page was seen: a pinned locator address plus name, registry,
+  description, license and when. The object cache keeps every location per identity.
+- **rule** — which of spec §5's `--latest` rules found a definition at head: `same-path`,
+  `same-identity`, or none (rule 3 needs the index). Derived metadata.
 - **derived / asserted** — computed by the tool from the repository versus stated by a person.
 
 ## 6. Invariants — never violate
@@ -175,10 +212,12 @@ links to spec §8 in this private repo.
   guards this.
 - **The server never asks an HTTP registry.** It opens registries `local_only=True`; a config that
   lists `http://localhost:3120` first would otherwise make the server query itself.
-- **Tests never touch the network.** `conftest.py` puts a registry repo, a bare "remote" and a
-  config in `tmp_path`, points `CTTP_CONFIG` and `CTTP_HOME` there, and maps the
-  `github.com/leorinaldi/` prefix at the bare repo through `[remotes]`. The server tests drive
-  the FastAPI app in-process through the test client.
+- **Tests never touch the network — and cannot.** `conftest.py` puts a registry repo, a bare
+  "remote" and a config in `tmp_path`, points `CTTP_CONFIG` and `CTTP_HOME` there, and maps the
+  `github.com/leorinaldi/` prefix at the bare repo through `[remotes]`. An autouse fixture
+  patches `socket.socket.connect` to raise; only a test marked `network` (there is one, against
+  a closed local port) escapes it. The server tests drive the FastAPI app in-process through the
+  test client, whose event loop makes a socketpair — no connect, so it passes the guard.
 - **Never invent a value.** A missing license is `None` and prints `not available`; a missing
   description stays absent. Nothing is coerced to a plausible default.
 - **Stamps carry commit SHAs only.** Tags and branches are for humans; they never appear in a
@@ -202,6 +241,14 @@ links to spec §8 in this private repo.
   until then the refusal is correct behaviour, not a bug.
 - **A non-Python file resolves with `shape: null` and `language: "text"`.** Not an error: only
   Python has an extractor today. Asking for a `#symbol` in such a file is the error.
+- **LGPL, AGPL and Unlicense files give `license: null`.** The matcher knows nine ids (the
+  plan's list) and refuses to guess; "not available" is the honest answer for the rest.
+- **`cttp cache clear` leaves the run cache.** It is the record of what the user confirmed to
+  run; `--run` removes it deliberately.
+- **`--latest` does not find a rename.** The identity changed with the name (§4). The test in
+  `test_latest.py` says so on purpose.
+- **A `from` or `see` link with an unresolvable address is `unresolvable`, not ignored.** Spec
+  §7: every link resolves. `see` links to things that are not cttp addresses are not supported.
 - **The docstring is the first paragraph, joined into one line.** Not the first physical line —
   a summary that wraps would be cut mid-sentence.
 - **The first run of `cttp` writes `~/.config/cttp/config.toml`.** That is the designed first-run
@@ -247,6 +294,8 @@ uv run cttp config                             # writes the default config on fi
 uv run cttp serve                              # http://localhost:3120
 curl -s localhost:3120/hello-world.json        # the contract; /hello-world is the page
 uv run cttp resolve hello-world --json
+uv run cttp resolve sha256:75a27070015e   # from the object cache, once resolved by name
+uv run cttp cache status                  # what ~/.cache/cttp holds
 ```
 
 Site: **http://localhost:3120** — the viewer and the registry contract, nothing else. The product
