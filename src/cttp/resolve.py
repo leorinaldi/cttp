@@ -6,6 +6,10 @@ though a local registry that names the same target lends its name and descriptio
 the object cache, then the index — every location known to carry that identity, the most recent
 one as the address. A `#symbol` on either form selects one definition of the file. Every page
 resolved is stored in the object cache on the way out.
+
+`latest()` is the forward direction: from a pinned address, the same definition at the
+repository's current head — same path and symbol (rule 1), else the same identity anywhere at
+head (rule 2). Rule 3, across repositories through the index, is Phase 4.
 """
 
 from dataclasses import asdict, dataclass, field, replace
@@ -301,3 +305,135 @@ def _fetch_page(locator: str, ref: str, path: str, symbol: str | None, registrie
     except ExtractError as e:
         raise ResolveError(f"{locator}@{short(sha)}: {e}") from e
     return sha, page, gitcache.license_of(repo, sha)
+
+
+# --- forward: `resolve --latest` --------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Latest:
+    """Where a pinned definition is at the repository's head, and which rule found it."""
+
+    pinned: Resolved
+    head: str  # the full SHA of the head that was searched
+    found: bool
+    rule: str | None  # "same-path" | "same-identity" | None — derived
+    to: Resolved | None
+    changed: bool | None  # the identity differs from the pinned one (rule 1 only)
+    message: str
+
+    def to_json(self) -> dict:
+        return {
+            "from": self.pinned.to_json(),
+            "head": self.head,
+            "found": self.found,
+            "rule": self.rule,
+            "to": self.to.to_json() if self.to else None,
+            "changed": self.changed,
+            "message": self.message,
+            "origin": {"rule": "derived", "head": "derived"},
+        }
+
+
+def latest(text: str, registries: Registries) -> Latest:
+    """Spec §5's `--latest`: follow a pinned address forward to the repository's current head.
+
+    A name goes to the ref its registry entry calls default; a locator to the repository's
+    default branch. Rule 1: the same path and symbol still exist there (the identity may have
+    changed — a normal edit). Rule 2: the same identity is somewhere else at head (a move within
+    the repository). Neither: rule 3 needs the index.
+    """
+    a = parse(text)
+    if not a.is_pinned or a.form == "identity":
+        raise ResolveError(
+            f"--latest follows a pinned name or locator address forward; {text!r} is not one"
+        )
+    pinned = resolve(text, registries)
+    locator, path = split_target(pinned.target)
+    path = pinned.path
+    if a.form == "name":
+        entry, _ = registries.lookup(a.name)
+        ref = ref_for(entry)
+    else:
+        ref = gitcache.default_branch(gitcache.ensure_repo(locator, registries.url_for(locator)))
+    repo, head = _repo_at(locator, ref, registries)
+    at = Address("locator", locator=locator, path=path, rev=short(head), symbol=a.symbol)
+    to_address = replace(a, rev=short(head)) if a.form == "name" else at
+
+    # rule 1: the same path and symbol at head
+    try:
+        page = _page_at(repo, head, locator, path, a.symbol)
+    except ResolveError:
+        page = None
+    if page is not None:
+        to = resolve(str(to_address), registries)
+        changed = to.identity_full != pinned.identity_full
+        return Latest(
+            pinned, head, True, "same-path", to, changed,
+            f"{'the identity changed' if changed else 'unchanged'} at the same path and symbol",
+        )  # fmt: skip
+
+    # rule 2: the same identity anywhere at head
+    for found_path, found_symbol in _same_identity_at(repo, head, locator, pinned):
+        to = resolve(
+            str(
+                Address(
+                    "locator",
+                    locator=locator,
+                    path=found_path,
+                    rev=short(head),
+                    symbol=found_symbol,
+                )
+            ),
+            registries,
+        )
+        return Latest(
+            pinned, head, True, "same-identity", to, False,
+            f"moved within {locator}: {path}{'#' + a.symbol if a.symbol else ''} → "
+            f"{found_path}{'#' + found_symbol if found_symbol else ''}",
+        )  # fmt: skip
+
+    return Latest(
+        pinned, head, False, None, None, None,
+        f"{path}{'#' + a.symbol if a.symbol else ''} is not at {locator}@{short(head)} by path "
+        "or by identity; rule 3 (a move across repositories, or a fork) needs the index, which "
+        "arrives in Phase 4",
+    )  # fmt: skip
+
+
+def _page_at(repo, sha: str, locator: str, path: str, symbol: str | None) -> Page:
+    try:
+        text_at_rev = gitcache.show(repo, sha, path)
+    except gitcache.GitError as e:
+        raise ResolveError(f"{path!r} is not in {locator} at {short(sha)}") from e
+    files = gitcache.ls_tree(repo, sha) if language_of(path) == "python" else ()
+    try:
+        return extract(path, text_at_rev, symbol, files)
+    except ExtractError as e:
+        raise ResolveError(str(e)) from e
+
+
+def _same_identity_at(repo, sha: str, locator: str, pinned: Resolved):
+    """Every (path, symbol) at `sha` whose page has the pinned identity; definitions with the
+    pinned symbol's own name are tried first, since a move usually keeps the name."""
+    files = gitcache.ls_tree(repo, sha)
+    want = pinned.identity_full
+    name = pinned.symbol.split(".")[-1] if pinned.symbol else None
+    candidates: list[tuple[str, str | None]] = []
+    for path in files:
+        if pinned.symbol is None:
+            candidates.append((path, None))
+            continue
+        if language_of(path) != "python":
+            continue
+        symbols = definitions(path, gitcache.show(repo, sha, path))
+        first = [s for s in symbols if s.split(".")[-1] == name]
+        candidates += [(path, s) for s in first] + [(path, s) for s in symbols if s not in first]
+    candidates.sort(key=lambda c: 0 if c[1] and c[1].split(".")[-1] == name else 1)
+    for path, symbol in candidates:
+        try:
+            page = _page_at(repo, sha, locator, path, symbol)
+        except ResolveError:
+            continue
+        if identity(page.source) == want:
+            yield path, symbol

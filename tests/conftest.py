@@ -109,3 +109,25 @@ def add_remote_repo(tmp_path: Path, name: str, files: dict[str, str]) -> str:
     bare = tmp_path / "remotes" / LOCATOR_PREFIX / name
     subprocess.run(["git", "clone", "--bare", "--quiet", str(repo), str(bare)], check=True)
     return LOCATOR_PREFIX + name
+
+
+def commit_to_remote(
+    tmp_path: Path, name: str, changes: dict[str, str | None], message: str
+) -> str:
+    """Advance the repository `name` (made by `add_remote_repo`, or the thermo fixture): write each
+    path's text, or delete it when None; commit; push to the bare remote. Returns the new SHA."""
+    src = tmp_path / name
+    for path, text in changes.items():
+        if text is None:
+            (src / path).unlink()
+        else:
+            (src / path).parent.mkdir(parents=True, exist_ok=True)
+            (src / path).write_text(text, encoding="utf-8")
+    git = ["git", "-c", "user.name=cttp", "-c", "user.email=cttp@localhost"]
+    subprocess.run([*git, "add", "-A"], cwd=src, check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-q", "-m", message], cwd=src, check=True)
+    bare = tmp_path / "remotes" / LOCATOR_PREFIX / name
+    subprocess.run(["git", "push", "-q", str(bare), "main"], cwd=src, check=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=src, check=True, capture_output=True, text=True
+    ).stdout.strip()

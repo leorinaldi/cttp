@@ -73,12 +73,21 @@ def resolve(
             "--id", help="The identity the page should have (a link's id=); exit 1 on a mismatch."
         ),
     ] = None,
+    latest: Annotated[
+        bool,
+        typer.Option(
+            "--latest",
+            help="Follow a pinned address forward to the repository's head; exit 1 when not found.",
+        ),
+    ] = False,
     json_: JsonOpt = False,
 ) -> None:
     """Resolve an address to the page it names."""
     want_json(json_)
     from cttp.resolve import resolve as _resolve
 
+    if latest:
+        return _resolve_latest(address, registry)
     try:
         r = _resolve(address, open_registries(registry), expect=id_)
     except ERRORS as e:
@@ -93,6 +102,29 @@ def resolve(
     if r.description:
         head += f"\n# {r.description}"
     emit(r.to_json(), f"{head}\n{r.source}".rstrip())
+
+
+def _resolve_latest(address: str, registry: Path | None) -> None:
+    from cttp.resolve import latest as _latest
+
+    try:
+        found = _latest(address, open_registries(registry))
+    except ERRORS as e:
+        fail(str(e))
+    lines = [f"{found.pinned.address}  {found.pinned.identity}"]
+    if found.to:
+        lines.append(
+            f"-> {found.to.address}  {found.to.identity}  rule={found.rule}  {found.message}"
+        )
+        lines += [
+            "",
+            *(f"  {line}" for line in found.to.source.rstrip("\n").split("\n")),
+        ]
+    else:
+        lines.append(f"-> not found at {found.head[:12]}: {found.message}")
+    emit(found.to_json(), "\n".join(lines))
+    if not found.found:
+        raise typer.Exit(1)
 
 
 @app.command()

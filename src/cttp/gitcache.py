@@ -101,6 +101,14 @@ def _has_commit(repo: Path, sha: str) -> bool:
     return True
 
 
+def default_branch(repo: Path) -> str:
+    """The branch a bare clone's HEAD points at — the origin's default branch when it was cloned."""
+    try:
+        return _git("symbolic-ref", "--short", "HEAD", cwd=repo).strip()
+    except GitError:
+        return "main"
+
+
 def rev_parse(repo: Path, ref: str) -> str:
     return _git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", cwd=repo).strip()
 
