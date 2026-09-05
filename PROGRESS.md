@@ -49,8 +49,8 @@ Also worth doing early in P6, since the corpus is local: `cttp index add bench/d
 after P6-T1 is the P6-T2 acceptance's first half.
 
 If Leo wants to play with Phase 5: `uv run cttp mcp install` prints the `claude mcp add` line
-(`--claude-code` runs it; not run this session — see **Environment**); after that, in Claude
-Code, *who links to hello-world?* calls the `who` tool. `uv run cttp --json <anything>` now
+(already run at user scope — see **Environment**); in any Claude Code session, *who links to
+hello-world?* calls the `who` tool. `uv run cttp --json <anything>` now
 prints `schema_version` first, and `docs/json-schemas.md` says what every field means.
 
 ## Current state — working & verified
@@ -429,9 +429,13 @@ prints `schema_version` first, and `docs/json-schemas.md` says what every field 
   --output-format stream-json` produced one call to `mcp__cttp__who` with `{"address":
   "hello-world"}` and the answer "3 links to hello-world: docs/spec.md (lines 138 and 142) and
   tests/fixtures/hello/hello.py (line 1), both in github.com/leorinaldi/cttp" — correct against
-  `cttp who hello-world`. **`cttp mcp install --claude-code` was not run** (it writes Leo's
-  Claude Code config); the line to run is `claude mcp add --transport stdio cttp --
-  /home/leo/Claude/cttp/.venv/bin/cttp mcp`.
+  `cttp who hello-world`. Then, on Leo's decision (2026-09-05), **the server was attached at
+  user scope** — `claude mcp add -s user --transport stdio cttp --
+  /home/leo/Claude/cttp/.venv/bin/cttp mcp` — so every Claude Code session on this machine has
+  the six tools (`claude mcp get cttp` shows it connected; `claude mcp remove cttp -s user`
+  detaches). It launches the venv's binary fresh each session, so code changes need no
+  reinstall; it breaks if the venv moves. `who`, `search` and `dups` answer from the real index,
+  so a new project needs `cttp index add` + `crawl` before backlinks appear.
 - `~/.cache/cttp/repos/` holds four real repositories from by-hand checks (2026-09-05):
   `pallets/itsdangerous`, `psf/requests`, `leorinaldi/cttp-registry`, and **`git/git`, which is
   ~340 MB** (cloned to check the matcher on a COPYING with a long preamble). `cttp cache status`
@@ -522,8 +526,6 @@ trigger that would schedule it.
   or look the registry name up per location)
 - **The `resolve` schema's `language` enum is `python` | `text`**; P6-T1 adds `c` (and more), a
   schema change → **P6-T1** (bump `SCHEMA_VERSION`, re-pin, regenerate the doc)
-- **`cttp mcp install --claude-code` has not been run on this machine** → **unscheduled**;
-  trigger: Leo wanting the server attached to his Claude Code (he runs it, or says so)
 - **`resolve` through the index for a file that is its one definition says `kind: function`**
   (the definition's view won the `definitions` row) where git would say `script` for the file
   address — same text, same identity → **unscheduled**; trigger: it confuses someone
