@@ -11,7 +11,7 @@ from cttp import __version__, gitcache
 from cttp.address import AddressError
 from cttp.config import ConfigError, load_config
 from cttp.registry import RegistryError, open_registries
-from cttp.resolve import ResolveError
+from cttp.resolve import Resolved, ResolveError
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, rich_markup_mode=None)
 state = {"json": False}
@@ -22,6 +22,7 @@ RegistryOpt = Annotated[
 ]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Emit JSON.")]
 ERRORS = (RegistryError, ResolveError, AddressError, gitcache.GitError, ConfigError)
+NOT_RUN = 2  # exit code of `run` when the first run of an address is not confirmed
 
 
 def want_json(flag: bool) -> None:
@@ -117,14 +118,14 @@ def serve(
 def expand(files: list[Path], registry: RegistryOpt = None, json_: JsonOpt = False) -> None:
     """Expand every unexpanded `# cttp:` link in the given files, in place."""
     want_json(json_)
-    from cttp.expand import expand_file
+    from cttp.expand import ExpandError, expand_file
 
     results = {}
     try:
         reg = open_registries(registry)
         for f in files:
             results[str(f)] = expand_file(f, reg)
-    except ERRORS as e:
+    except (*ERRORS, ExpandError) as e:
         fail(str(e))
     emit(
         {f: [r.to_json() for r in rs] for f, rs in results.items()},
@@ -169,19 +170,47 @@ def run(
     target: str,
     registry: RegistryOpt = None,
     yes: Annotated[
-        bool, typer.Option("--yes", help="Skip confirmation (spike: always skipped).")
+        bool, typer.Option("--yes", help="Run without asking on the first run of an address.")
     ] = False,
     json_: JsonOpt = False,
 ) -> None:
-    """Run an address, or a file with links, without touching the file."""
-    want_json(json_)
-    from cttp.expand import is_address, run_address, run_file
+    """Run an address, or a file with links, without touching the file.
 
+    The first run of an address shows its source, hash and license and asks; later runs of the
+    same pinned address do not. Exit code 2 when not confirmed.
+    """
+    want_json(json_)
+    from cttp.expand import ExpandError, NotConfirmed, is_address, run_address, run_file
+
+    confirm = None if yes else _ask_before_first_run
     try:
         reg = open_registries(registry)
-        code = run_address(target, reg) if is_address(target) else run_file(Path(target), reg)
-    except ERRORS as e:
+        if is_address(target):
+            code = run_address(target, reg, confirm)
+        else:
+            code = run_file(Path(target), reg, confirm)
+    except NotConfirmed as e:
+        fail(str(e), NOT_RUN)
+    except (*ERRORS, ExpandError) as e:
         fail(str(e))
     except FileNotFoundError:
         fail(f"{target!r} is neither an address nor a file")
     sys.exit(code)
+
+
+def _ask_before_first_run(r: Resolved) -> bool:
+    """Show what is about to run and ask; without a terminal, decline and say how to proceed."""
+    from cttp.expand import NotConfirmed
+
+    typer.echo(
+        f"first run of {r.address}  {r.identity}  license={r.license or 'not available'}  "
+        f"(from {r.registry})",
+        err=True,
+    )
+    if r.description:
+        typer.echo(f"  # {r.description}", err=True)
+    for line in r.source.rstrip("\n").split("\n"):
+        typer.echo(f"  {line}", err=True)
+    if not sys.stdin.isatty():
+        raise NotConfirmed(f"{r.address}: first run needs confirmation; pass --yes")
+    return typer.confirm("Run it?", default=False, err=True)

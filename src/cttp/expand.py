@@ -1,9 +1,14 @@
-"""The materializer: expand, check, run. Spec §7. Spike: one link, no closure, no confirmation."""
+"""The materializer: expand, check, run. Spec §7.
+
+One link at a time, no closure: a page that itself links to other pages is refused until P3-T1.
+`run` asks before the first run of an address (source, hash, license) unless told `--yes`.
+"""
 
 import hashlib
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,7 +16,15 @@ from cttp import gitcache
 from cttp.address import AddressError, identity, parse_name, short
 from cttp.links import LINK_RE, Link, find_links, format_stamped
 from cttp.registry import Registries, RegistryError
-from cttp.resolve import ResolveError, resolve
+from cttp.resolve import Resolved, ResolveError, resolve
+
+
+class ExpandError(RuntimeError):
+    pass
+
+
+class NotConfirmed(RuntimeError):
+    """`run` did not run: the first run of an address was declined or could not be confirmed."""
 
 
 @dataclass
@@ -52,6 +65,11 @@ def expand_text(text: str, registry: Registries) -> tuple[str, list[Report]]:
                 reports.append(Report(i + 1, link.address, "unchanged"))
             continue
         r = resolve(link.address, registry)
+        if inner := find_links(r.source.split("\n")):
+            raise ExpandError(
+                f"{link.address} resolves to a page that links to {len(inner)} other page(s) "
+                f"(first: {inner[0].address}); closure expansion arrives in P3-T1"
+            )
         stamp = format_stamped(r.name, short(r.rev), short(r.identity_full), r.description)
         out.append(link.indent + stamp)
         out.extend(link.indent + s if s else s for s in r.source.rstrip("\n").split("\n"))
@@ -91,27 +109,48 @@ def check_file(path: Path, registry: Registries) -> list[Report]:
 
 
 def _run_dir(key: str) -> Path:
-    d = gitcache.home() / "run" / key
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    return gitcache.home() / "run" / key
 
 
-def run_address(text: str, registry: Registries) -> int:
-    """Expand an address into the run cache once and run it with the host runtime."""
-    r = resolve(text, registry)
+Confirm = Callable[[Resolved], bool] | None
+"""Asked before the first run of a pinned address; `None` means never ask (`--yes`)."""
+
+
+def _materialize(r: Resolved, registry: Registries, confirm: Confirm) -> Path:
+    """The run-cache entry for a pinned address; its presence means the address was confirmed."""
     main = _run_dir(r.address) / "main.py"
     if not main.exists():
+        if confirm is not None and not confirm(r):
+            raise NotConfirmed(f"{r.address}: not run")
+        main.parent.mkdir(parents=True, exist_ok=True)
         main.write_text(f"# cttp: {r.address}\n", encoding="utf-8")
         expand_file(main, registry)
+    return main
+
+
+def run_address(text: str, registry: Registries, confirm: Confirm = None) -> int:
+    """Expand an address into the run cache (asking, the first time) and run it with the host."""
+    main = _materialize(resolve(text, registry), registry, confirm)
     return subprocess.run([sys.executable, str(main)]).returncode
 
 
-def run_file(path: Path, registry: Registries) -> int:
-    """Expand a copy of the file into the run cache and run that, leaving the file untouched."""
+def run_file(path: Path, registry: Registries, confirm: Confirm = None) -> int:
+    """Expand a copy of the file into the run cache and run that, leaving the file untouched.
+
+    Every address the copy expands is confirmed the way `run <address>` confirms it; code already
+    expanded in the file is the user's own and runs as is.
+    """
     key = "file-" + hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:12]
     copy = _run_dir(key) / path.name
+    copy.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(path, copy)
-    expand_file(copy, registry)
+    text = copy.read_text(encoding="utf-8")
+    new, reports = expand_text(text, registry)
+    for report in reports:
+        if report.status == "expanded":
+            _materialize(resolve(report.detail, registry), registry, confirm)
+    if new != text:
+        copy.write_text(new, encoding="utf-8")
     return subprocess.run([sys.executable, str(copy)], cwd=path.resolve().parent).returncode
 
 

@@ -38,3 +38,28 @@ def config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 @pytest.fixture
 def registry(config_file: Path) -> Registries:
     return Registries(load_config())
+
+
+@pytest.fixture
+def hello(tmp_path: Path) -> Path:
+    """A copy of tests/fixtures/hello/hello.py: one line, `# cttp: hello-world`."""
+    f = tmp_path / "hello.py"
+    f.write_bytes((FIXTURES / "hello" / "hello.py").read_bytes())
+    return f
+
+
+def add_to_registry(tmp_path: Path, name: str, source: str, description: str = "") -> None:
+    """Add a snippet + name to the tmp registry repo and push it to the bare remote."""
+    reg = tmp_path / "registry"
+    (reg / "snippets" / f"{name}.py").write_text(source, encoding="utf-8")
+    (reg / "names" / f"{name}.toml").write_text(
+        f'name = "{name}"\ndescription = "{description}"\nowner = "github.com/leorinaldi"\n'
+        f'target = "github.com/leorinaldi/cttp-registry/snippets/{name}.py"\n'
+        'default = "latest"\n\n[versions]\nlatest = "main"\n',
+        encoding="utf-8",
+    )
+    git = ["git", "-c", "user.name=cttp", "-c", "user.email=cttp@localhost"]
+    subprocess.run([*git, "add", "-A"], cwd=reg, check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-q", "-m", f"add {name}"], cwd=reg, check=True)
+    bare = tmp_path / "remotes" / LOCATOR_PREFIX / "cttp-registry"
+    subprocess.run(["git", "push", "-q", str(bare), "main"], cwd=reg, check=True)

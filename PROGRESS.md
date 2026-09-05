@@ -4,13 +4,13 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: STAGE 3 — PHASE 0 UNDER WAY. P0-T1 TO P0-T4 ARE DONE; P0-T5 REMAINS.** On 2026-09-04
-Leo confirmed the spec and agreed the plan; the spike was built the same evening; the public
-registry `github.com/leorinaldi/cttp-registry` was published and tagged `v1`; the resolver runs
-off `~/.config/cttp/config.toml` with an ordered registry list and `[remotes]`; and the registry
-is now an **HTTP contract**: the default config lists `http://localhost:3120` first and the local
-clone second, `cttp resolve` goes through the server when it is up and through the clone when it
-is down, and the two answers differ only in `registry`. 41 tests green, ruff clean.
+**Status: PHASE 0 COMPLETE (P0-T1..T5). NEXT IS STAGE 4 — WRITE `docs/overview.md` — THEN
+PHASE 1.** All on 2026-09-04: Leo confirmed the spec and agreed the plan; the spike was built; the
+public registry `github.com/leorinaldi/cttp-registry` was published and tagged `v1`; the resolver
+runs off `~/.config/cttp/config.toml` with an ordered registry list and `[remotes]`; the registry
+is an **HTTP contract** (`http://localhost:3120` first, the local clone second); and `run` asks
+before the first run of an address. The spec's acceptance test 4 is a pytest test, verbatim, and
+was walked by hand. 55 tests green, ruff clean.
 
 _Last updated: 2026-09-04._
 
@@ -21,12 +21,16 @@ _Last updated: 2026-09-04._
 
 ## Next session — suggested next steps
 
-**Start here: P0-T5 — `expand`, `check`, `run` for a single link; acceptance test 4 as tests.**
-Read its entry in [`docs/plan.md`](docs/plan.md) in full. Much of it already exists from the
-spike (`tests/test_expand.py` walks expand → `python3 -I` → check → drift → run); what T5 adds is
-the **first-run confirmation** in `cttp run` (`--yes` is currently accepted and ignored) and
-whatever the plan's acceptance list still lacks. After T5, Phase 0 is complete: **write
-`docs/overview.md` (Stage 4)** before starting Phase 1.
+**Start here: Stage 4 — write [`docs/overview.md`](docs/overview.md).** It is still the blank
+skeleton. Per [`docs/project-start-sequence.md`](docs/project-start-sequence.md) it is the lay of
+the land for an agent who has never seen the repo: what exists, the module map under `src/cttp/`,
+the config and cache locations, the invariants (no runtime component, derived vs asserted, no
+lockfile, tests never touch the network), the deliberate oddities (the server opens registries
+`local_only`; a fetch is skipped for a cached SHA; `--json` in both positions), and the traps that
+cost time today (the spike's poisoned cache, `uv --directory` changing cwd, `pkill -f` matching
+its own shell). Conclusions only, no dates. Source: this file's **Current state** and
+**Environment**, then delete the "not written yet" blockquote. After that: **Phase 1** —
+P1-T1 (the full address grammar) is first; read its plan entry in full.
 
 If Leo wants to play with the spike first, the demo is in **How to run** below.
 
@@ -60,15 +64,23 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
   `Resolved.from_json(...)` with `registry` set to the URL; a local one goes through
   `resolve_entry()`: entry → locator → git → extract → hash. `to_json()` adds `origin` fields.
 - `links.py` — parse and write `# cttp:` lines (stamp, `key=value` fields, quoted description).
-- `expand.py` — `expand` (one link, no closure), `check` (unexpanded / drift / unresolvable / ok),
-  `run` for an address (`~/.cache/cttp/run/<pin>/main.py`) or a file (copy, expand, run).
+- `expand.py` — `expand` (one link, no closure; a page that itself contains `# cttp:` lines is
+  refused with `ExpandError` until P3-T1), `check` (unexpanded / drift / unresolvable / ok),
+  `run` for an address (`~/.cache/cttp/run/<pin>/main.py`) or a file (copy, expand, run). **The
+  first run of a pinned address asks** — source, hash, license, which registry — unless `--yes`;
+  the run-cache entry's existence is the "confirmed" marker, so it is created only after a yes.
+  Without a terminal and without `--yes` it prints the summary and exits **2** (`NotConfirmed`).
+  `run <file>` confirms each address the copy expands; code already in the file runs as is.
 - `server/app.py` — FastAPI on **3120**: `/`, `/<name>`, `/<name>.json`, `/<name>@<version>.json`;
   Jinja2 templates with derived/asserted tags. Looked at in a headless browser: renders correctly.
 - `cli.py` — `cttp --version | config | resolve | serve | expand | check | run`; `--json` is
   accepted before or after the subcommand.
-- Tests: 41 in `tests/`. `conftest.py` builds, in `tmp_path`, a registry repo, a **bare clone of
-  it under `remotes/github.com/leorinaldi/cttp-registry`**, and a config whose `[remotes]` maps
-  the prefix there; `CTTP_CONFIG` and `CTTP_HOME` point at `tmp_path`. `test_server.py` drives
+- Tests: 55 in `tests/` — `test_{address,config,links,resolve,expand,check,run,server,cli}.py`.
+  `test_expand.py::test_acceptance_test_4_hello_world` is spec §12 test 4 verbatim through the
+  CLI. `conftest.py` builds, in `tmp_path`, a registry repo, a **bare clone of it under
+  `remotes/github.com/leorinaldi/cttp-registry`**, and a config whose `[remotes]` maps the prefix
+  there; `CTTP_CONFIG` and `CTTP_HOME` point at `tmp_path`; `add_to_registry()` adds a name to
+  both for a test; `hello` copies `tests/fixtures/hello/hello.py`. `test_server.py` drives
   the FastAPI app in-process and points an `HttpRegistry` at it through the test client
   (`via_http` fixture), so the HTTP path is tested without a socket. No network.
   `test_no_runtime_component` guards the no-runtime rule.
@@ -77,7 +89,6 @@ If Leo wants to play with the spike first, the demo is in **How to run** below.
 - `[remotes]` exists but there is no license matcher beyond the first-line map, and no mirror
   has been exercised outside the tests → **P2-T1**
 - No object cache; no symbols; no locator/identity address forms → **P2-T2 / P1-T1 / P1-T3**
-- `run` never asks for confirmation (`--yes` is accepted and ignored) → **P0-T5**
 - Stamps use 12-hex for rev and identity (the plan's choice), full SHA returned in JSON → keep
 - The block beneath a link runs to the next link line or EOF → **P1-T4** defines it properly
 - License detection is a two-entry first-line map → **P2-T1**
@@ -133,6 +144,14 @@ trigger that would schedule it.
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-04 (eighth session) — P0-T5: first-run confirmation; test 4 as tests; Phase 0 done.**
+  `run` now asks before the first run of a pinned address (source, identity, license, registry)
+  and exits 2 with "pass --yes" when there is no terminal; the run-cache entry is the confirmed
+  marker and is only created after a yes (a declined run leaves nothing — found by a test).
+  `expand` refuses a page that contains `# cttp:` lines itself (closure is P3-T1). Tests split by
+  concern (`links`, `expand`, `check`, `run`), acceptance test 4 verbatim through the CLI, 41 →
+  55. Walked by hand against the live server including decline/accept through a pty via
+  `script(1)`. Also: `uv run --project <dir>` is the way to run cttp from another directory.
 - **2026-09-04 (seventh session) — P0-T4: the registry as an HTTP contract.** `HttpRegistry`
   now fetches `GET <url>/<name>@<version>.json` and the resolver dispatches: HTTP registries hand
   back the server's object (`Resolved.from_json`, `registry` = the URL), local ones do the git
@@ -182,11 +201,6 @@ is the archive, and a bloated history taxes every future session start.
   as a launcher; expanded on disk, folded in view; a one-line description rides on the link line;
   editing a copy is a fork (`cttp-from`); the registry is an HTTP contract served on localhost
   first, `cttp.ai` later (Leo bought the domain during the session).
-- **2026-09-04 (second session) — Direction changed; project renamed to cttp; vision rewritten.**
-  Honest assessment of the fisheye vision found the read side commoditized. Working from first
-  principles — a teardown of the Linux LM75 driver, a measurement across 736 driver files — landed
-  on a protocol: definitions get addresses, references are links, an index computes backlinks,
-  files remain the rendered form. Renamed every doc; created the private remote.
 
 ## How to run
 
@@ -201,6 +215,7 @@ uv run cttp config                             # first run writes ~/.config/cttp
 uv run cttp serve                              # http://localhost:3120  (Ctrl-C to stop)
 curl -s localhost:3120/hello-world.json        # the contract; /hello-world is the page
 uv run cttp resolve hello-world --json         # registry: http://localhost:3120 when up, the clone when down
+uv run --project ~/Claude/cttp cttp …          # from any other directory (not `uv --directory`, which changes cwd)
 ```
 
 The demo (acceptance test 4), from any directory with the server up or down:
@@ -209,7 +224,7 @@ The demo (acceptance test 4), from any directory with the server up or down:
 printf '# cttp: hello-world\n' > hello.py
 uv run cttp expand hello.py && cat hello.py    # stamped line + print("hello world!")
 /usr/bin/python3 -I hello.py                   # runs with cttp uninstalled
-uv run cttp run hello-world                    # runs with no file at all
+uv run cttp run hello-world                    # runs with no file at all; asks the first time (or --yes)
 uv run cttp check hello.py                     # exit 0
 sed -i 's/hello world!/goodbye/' hello.py && uv run cttp check hello.py   # drift, exit 1
 uv run cttp --json resolve hello-world         # what an agent sees
