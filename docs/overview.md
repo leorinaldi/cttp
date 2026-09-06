@@ -628,6 +628,12 @@ token would have broken claims by anyone but Leo.
   IGNORE` keeps the identity's existing `imports`, `unresolved`, signature and docstring, so the
   viewer's *third party* line can show a stale classification after an extractor change. The links
   and the backlinks are correct; the definition row's derived metadata is the first crawl's.
+- **A `--force` crawl fills `skipped`/`unmapped` for each repository's *head* only**, so any
+  older revision the index already held keeps NULLs and `who`'s `coverage.complete` stays `null`
+  over that index — correct, since `who` searches every crawled revision. The real index is in
+  that state and will stay there: `--rev <older>` would fill it but makes that rev *current* for
+  `dups`, `rank`, `search` and the viewer, which is worse. A fresh index (what every benchmark run
+  builds) reports `true`.
 - **The real index is `~/.local/share/cttp/index.db`.** It holds whatever was crawled by hand —
   including the driver corpus (`github.com/torvalds/linux [v7.3-rc1]`, ~34,000 pages), so
   `dups` and `search` answer at kernel scale; the tests never see it. `cttp index status` says
