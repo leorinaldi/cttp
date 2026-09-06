@@ -273,6 +273,17 @@ true when this answer has none of those gaps — the reader may stop. It is a cl
 that were read and nothing more: a repository never crawled is answered by the list of those that
 were. The same duty falls on any later query whose zero could be mistaken for an absence.
 
+**Decision — coverage is paid for only where it is needed.** Evidence for a doubt that has already
+been settled is not evidence, it is weight: a reader told in the first clause that the answer is
+complete has no use for the eight fields explaining how it could fail to be, and must decide to
+ignore them. So a **complete** answer is one line — `summary`: what was searched, and that every reference in it
+was attributed — and the evidence beneath it is `null`, because it is evidence for a doubt the line
+has already settled. An answer that is incomplete, or that cannot tell, carries the whole object,
+every field of it a reason to look further. `--coverage` asks for the whole object either way. The
+line is never optional: a count without it is the one number a reader must not take on trust.
+This is an argument about the interface, not a measured saving: the benchmark could not resolve
+the difference, and `benchmark.md` says so.
+
 ## 7. The materializer
 
 The materializer — the verb is **expand** — turns a link into code the host runtime can run. It is

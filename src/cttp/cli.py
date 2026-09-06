@@ -660,14 +660,21 @@ def index_status(index: IndexOpt = None, json_: JsonOpt = False) -> None:
 
 @app.command()
 def who(
-    address: str, registry: RegistryOpt = None, index: IndexOpt = None, json_: JsonOpt = False
+    address: str,
+    coverage: Annotated[
+        bool,
+        typer.Option("--coverage", help="Keep the whole coverage object on a complete answer."),
+    ] = False,
+    registry: RegistryOpt = None,
+    index: IndexOpt = None,
+    json_: JsonOpt = False,
 ) -> None:
     """Backlinks: every indexed page linking to the address, by relation and origin."""
     want_json(json_)
     from cttp.index.queries import who as _who
 
     try:
-        out = _who(_open_index(index), address, open_registries(registry))
+        out = _who(_open_index(index), address, open_registries(registry), detail=coverage)
     except ERRORS as e:
         fail(str(e))
     lines = [
@@ -677,34 +684,15 @@ def who(
     ]
     lines.append(f"{out['count']} backlink(s) to {address}")
     cov = out["coverage"]
-    for s in cov["searched"]:
+    # collapsed on a complete answer without `--coverage`; `summary` then says what was searched
+    for s in cov["searched"] or []:
         where = " ".join(f"{d}({n})" for d, n in s["paths"].items())
         lines.append(
             f"searched {s['repo']}@{s['rev']}{' current' if s['current'] else ''}  "
             f"{s['files']} file(s)  {where}"
         )
-    lines.append(_coverage_line(cov))
+    lines.append(cov["summary"])
     emit(out, "\n".join(lines))
-
-
-def _coverage_line(cov: dict) -> str:
-    """Whether the answer may be trusted, and what is missing when it may not — the one line that
-    saves an agent from corroborating a complete answer by hand."""
-    if cov["complete"]:
-        return "coverage: complete — every reference in the files read was attributed"
-    why = []
-    if cov["unresolved_matching"]:
-        why.append(f"{cov['unresolved_matching']} unidentified link(s) name this address")
-    if cov["unread"]:
-        why.append(f"{cov['unread']} file(s) unread")
-    if cov["ignored_links"]:
-        why.append(f"{cov['ignored_links']} link line(s) ignored — they did not parse")
-    if cov["unmapped_imports"]:
-        mods = ", ".join(sorted({u["module"] for u in cov["unmapped_imports"]}))
-        why.append(f"imports never mapped to a file: {mods}")
-    if not why:
-        why.append("this index predates the record of what a crawl skipped; `index crawl --force`")
-    return "coverage: incomplete — " + "; ".join(why)
 
 
 @app.command()

@@ -45,10 +45,10 @@ def index_conn():
     return open_index(p, create=False) if p.exists() else None
 
 
-def _safe(fn, *args):
+def _safe(fn, *args, **kw):
     """A query's answer, or None when the index cannot answer (an address it has not seen)."""
     try:
-        return fn(*args)
+        return fn(*args, **kw)
     except IndexingError:
         return None
 
@@ -99,7 +99,7 @@ def definition_page(identity: str) -> HTMLResponse:
     current = {x["address"] for x in queries.locations_of(conn, ident, current=True)}
     at = locs[-1] if locs else None
     page = queries.page_json(conn, d, at) if at else None
-    backlinks = _safe(queries.who, conn, f"sha256:{ident}")
+    backlinks = _safe(queries.who, conn, f"sha256:{ident}", detail=True)
     return render(
         "definition.html",
         d=d,
@@ -160,6 +160,6 @@ def name_page(slug: str):
     if want_json:
         return JSONResponse(stamp(r.to_json()))
     conn = index_conn()
-    backlinks = _safe(queries.who, conn, str(a), reg) if conn else None
+    backlinks = _safe(queries.who, conn, str(a), reg, detail=True) if conn else None
     hist = _safe(queries.history, conn, str(a), reg) if conn else None
     return render("name.html", r=r, entry=entry, backlinks=backlinks, history=hist)

@@ -81,6 +81,18 @@ def test_every_tool_answers_what_the_cli_prints(registry, world):
         assert validate("fold" if name == "fold" else name, result.structured_content) == []
 
 
+def test_who_collapses_a_complete_coverage_until_the_tool_is_asked_for_it(registry, world):
+    """The tool has the CLI's `--coverage`, and answers what the CLI prints either way."""
+    deep = f"{PYREPO}@v1/lib.py#deep"
+    small = call("who", {"address": deep}).structured_content["coverage"]
+    big = call("who", {"address": deep, "coverage": True}).structured_content["coverage"]
+    assert big["searched"] and big["caveats"]
+    assert small["summary"] == big["summary"] and small["complete"] == big["complete"]
+    if small["complete"]:  # only a complete answer collapses
+        assert small["searched"] is None and small["caveats"] is None
+    assert big == cli("who", deep, "--coverage")["coverage"]
+
+
 def test_closure_indexed_and_resolve_by_identity(registry, world):
     top = call("resolve", {"address": f"{PYREPO}@v1/lib.py#top"}).structured_content
     by_id = call("resolve", {"address": top["identity"]}).structured_content

@@ -17,12 +17,13 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 FINGERPRINTS = {
     1: "95c46a2dbc0766c1",
     2: "14c8b9e5c6d17b96",
     3: "b4d308f6b63419e7",
     4: "41ec61e8a59e6c78",  # `who` gained `coverage`
+    5: "3af030a09bd6e1d9",  # `coverage` gained `summary` and collapses when there is nothing to warn about
 }  # schema version → fingerprint(); a schema change bumps both
 
 # --- the schema language -----------------------------------------------------------------------
@@ -371,20 +372,21 @@ DEFS["unmapped_import"] = obj(
 )  # fmt: skip
 
 DEFS["coverage"] = obj(
-    "what the answer is an answer over: an agent that wants to stop reads this instead of corroborating by hand",
+    "what the answer is an answer over: an agent that wants to stop reads this instead of corroborating by hand. A complete answer is `summary` and the three counts; the rest is evidence for a doubt `complete` has already settled, and it is `null` unless `cttp who --coverage` (the MCP tool's `coverage`) asks for it",
     {
         "repos": integer("repositories searched"),
         "revisions": integer("crawled revisions searched — `who` sees every one of them"),
         "files": integer("files looked at across them"),
-        "searched": arr(ref("searched_revision"), "by repository, then crawl order").derived(),
-        "skipped": integer("files not read, across every revision; `null` when any revision predates the record").null().derived(),
+        "summary": string("the whole of the above in one line: what was searched, whether the count may be trusted, and what is missing when it may not. Always present — on a complete answer it is the only part that is"),
+        "searched": arr(ref("searched_revision"), "by repository, then crawl order; `null` on a collapsed complete answer — `summary` names the revisions").null().derived(),
+        "skipped": integer("files not read, across every revision; `null` when any revision predates the record, or on a collapsed complete answer").null().derived(),
         "unread": integer("of those, the files a language extractor would have read and did not").null().derived(),
         "ignored_links": integer("link lines the crawl had to ignore because they did not parse; an asserted link may be missing for each").null().derived(),
-        "unresolved_targets": integer("recorded links whose target identity the index cannot tell; `who` matches those by name or place only, so a match can be missed. Mostly re-exports: a reference to `click.echo` lands on the `__init__.py` that imports the name, which defines nothing").derived(),
-        "unresolved_matching": integer("of those, the ones naming *this* address — the misses this answer could have. Zero is `who` saying the total does not concern the question asked").derived(),
-        "unmapped_imports": arr(ref("unmapped_import"), "each one is a reference the crawl did not record, and so a backlink `who` cannot see").derived(),
-        "caveats": arr(string(), "the ways `who` is knowingly incomplete inside the files it did read; no count expresses these"),
-        "complete": boolean("true when this answer has no gap: no file went unread, no link line was ignored, no unidentified link names this address, no import into a repository went unmapped. The answer then needs no corroboration beyond `caveats`. It says nothing about a repository never crawled: `searched` answers that. `null` when `unread` is unknown").null().derived(),
+        "unresolved_targets": integer("recorded links whose target identity the index cannot tell; `who` matches those by name or place only, so a match can be missed. Mostly re-exports: a reference to `click.echo` lands on the `__init__.py` that imports the name, which defines nothing").null().derived(),
+        "unresolved_matching": integer("of those, the ones naming *this* address — the misses this answer could have. Zero is `who` saying the total does not concern the question asked, which is what a collapsed complete answer says by being collapsed").null().derived(),
+        "unmapped_imports": arr(ref("unmapped_import"), "each one is a reference the crawl did not record, and so a backlink `who` cannot see").null().derived(),
+        "caveats": arr(string(), "the ways `who` is knowingly incomplete inside the files it did read; no count expresses these. `null` on a collapsed complete answer: they are standing limits of the query, not findings about this one").null(),
+        "complete": boolean("true when this answer has no gap: no file went unread, no link line was ignored, no unidentified link names this address, no import into a repository went unmapped. The answer then needs no corroboration beyond `caveats`, and the fields above it collapse to `null` unless `--coverage` was asked for. It says nothing about a repository never crawled: `summary` and `searched` answer that. `null` when `unread` is unknown").null().derived(),
         "origin": DERIVED,
     },
 )  # fmt: skip
@@ -753,7 +755,7 @@ COMMANDS: dict[str, Command] = {
         ),
     ),
     "who": Command(
-        "cttp who <address> --json",
+        "cttp who <address> [--coverage] --json",
         "Backlinks: every indexed page linking to the address, by relation and origin.",
         obj(
             "",
@@ -781,10 +783,13 @@ COMMANDS: dict[str, Command] = {
         (
             "Matches by identity; by place or name only for links whose target identity the index "
             "could not tell.",
-            "Read `coverage` before trusting the count: it names the revisions searched and what "
-            "went unattributed inside them. `coverage.complete` true means every reference in the "
-            "files read was attributed — the answer needs no corroboration, except for the "
-            "`caveats`. It cannot speak for a repository that was never crawled.",
+            "Read `coverage.summary` before trusting the count: one line saying what was searched "
+            "and whether the count may be trusted. `coverage.complete` true means every reference "
+            "in the files read was attributed — the answer needs no corroboration, and the rest "
+            "of the object is then `null` because there is nothing to warn about; `--coverage` "
+            "(the tool's `coverage`) keeps it. When `complete` is false or null the object is "
+            "whole, and every field of it is a reason to look further. Coverage cannot speak for "
+            "a repository that was never crawled.",
         ),
     ),
     "dups": Command(

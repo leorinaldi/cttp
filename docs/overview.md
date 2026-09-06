@@ -57,7 +57,12 @@ closed the first: the family 16.28x → **6.65x**. **`who`'s `coverage` object**
 second — it states what the answer is an answer over, and `complete` says when there is no gap —
 and the family fell again to **2.40x** at 14 median turns, the worst question 23.62x → 8.65x. The
 two flat-layout tasks, which were never uncertain, got slightly *worse*: assurance costs on every
-call and repays only where the agent would have doubted. See [`benchmark.md`](benchmark.md).
+call and repays only where the agent would have doubted. **Collapsing the coverage object** on a
+complete answer (§4) then cut it 1,373 → 479 characters at the tool's mouth and gave those two
+tasks nothing back — the family read 3.26x on a fourth sweep, `im-nested-chain-click` alone
+spanning 141k–569k tokens over three runs. The effect is beneath the benchmark's resolution at
+three runs per arm; no ratio here should be trusted to a change of a few hundred tokens per call.
+See [`benchmark.md`](benchmark.md).
 
 ## 2. Architecture
 
@@ -170,7 +175,8 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   it has on disk**, since a blobless clone would fetch every other blob. `queries.py`: `target_of` (any address → the
   identities and place the index knows, resolving for real only when it must), `who`, `dups`,
   `closure`, `search`, `history`, `rank`, `forward` (rule 3), `lookup_identity`, `page_json`, and
-  `coverage` — what a `who` answer is an answer over (§4).
+  `coverage` — what a `who` answer is an answer over (§4), collapsed to its `summary` line
+  when the answer is complete.
 - **Server** (`server/app.py`) — FastAPI on **3120**, Jinja2 templates. Serves the contract
   (`/<name>.json`, `/<name>@<version>.json`, `%23<symbol>`) over the configured **local**
   registries only, and the viewer of spec §9 over the index: `/` (names, index status, `?q=`
@@ -184,7 +190,7 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
 - **CLI** (`cli.py`) — Typer. `cttp --version | config | resolve [--id] [--latest] | closure
   [--indexed] | serve | expand [--package] [--write-deps] | add [--at] | check [--fix] | update
   [--all] [--to] [--yes] | fold [--open] | run [--yes] | cache status | cache clear | index
-  add|crawl|status | who | dups [--shape] | search | history | rank | mcp [install] | name
+  add|crawl|status | who [--coverage] | dups [--shape] | search | history | rank | mcp [install] | name
   show|claim|verify | serve --export`. Every
   subcommand takes `--json`, before or after the subcommand name; every index reader takes
   `--index`. `emit()` prints every object through `schemas.stamp()`, so `schema_version` comes
@@ -327,6 +333,16 @@ token would have broken claims by anyone but Leo.
   files that were read and nothing more; a repository never crawled is answered by `searched`. The
   CLI prints one line of it, the viewer a note under *who links here*, and neither shows a count
   without it: a bare `0` is the one number a reader must not take on trust.
+- **A complete answer is the line and nothing else.** Evidence for a settled doubt is weight, not
+  evidence: a reader told the answer is complete must otherwise decide to ignore the eight fields
+  explaining how it could fail to be. So `coverage.summary` (always present) says in one
+  line what was searched and whether the count may be trusted, and when `complete` is true the
+  fields beneath it are `null`: they are evidence for a doubt the line has settled. An incomplete
+  answer, or one that cannot tell, carries the whole object. `cttp who --coverage` (the MCP tool's
+  `coverage`, `queries.who(detail=True)`) keeps it either way; the viewer always asks for it, since
+  a person reading a page has room. `queries.COLLAPSED` is the list of fields that collapse. The
+  justification is the interface, **not** a measured saving — the benchmark could not resolve the
+  difference and the family's ratio moved the wrong way on noise; see [`benchmark.md`](benchmark.md).
 - **`unresolved_matching` is what makes the total bearable.** Click's index holds 1,422 links
   whose target it cannot identify, nearly all references into an `__init__.py` that re-exports
   names it does not define. The total is alarming and almost always irrelevant; the count of them
@@ -489,7 +505,8 @@ token would have broken claims by anyone but Leo.
   query never creates an empty index as a side effect.
 - **A `who` count is never shown without its coverage.** The CLI, the MCP tool and the viewer all
   carry it; `complete` is `null` when it cannot be told, never `true` by default. Weakening this
-  puts back the thrash the benchmark measured.
+  puts back the thrash the benchmark measured. What collapses on a complete answer is the
+  *evidence*, never `coverage.summary` — that line is the coverage, and it is always printed.
 - **`docs/json-schemas.md` is never edited by hand.** `test_schemas.py` diffs it against
   `markdown()`; regenerate with `python -m cttp.schemas`.
 - **The identity of `print("hello world!")` is `75a27070015e…`**, pinned in `test_address.py`.

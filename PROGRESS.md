@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). THE BENCHMARK'S HEADLINE DEFECT IS CLOSED IN BOTH HALVES AND RE-MEASURED TWICE: THE IMPACT FAMILY 16.28x → 6.65x → 2.40x.** Phase 0
+**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). THE BENCHMARK'S HEADLINE DEFECT IS CLOSED IN BOTH HALVES AND RE-MEASURED TWICE: THE IMPACT FAMILY 16.28x → 6.65x → 2.40x. A FOURTH SWEEP READ 3.26x WITH NOTHING THAT SHOULD HAVE RAISED IT — AT THREE RUNS PER ARM THE BENCHMARK CANNOT RESOLVE A CHANGE OF THIS SIZE.** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -48,45 +48,48 @@ tool calls and grades, a `--replay` dry run, and the smoke task passing in both 
 task set** (2026-09-05) — fifteen tasks over `click`, `attrs` and `rich` (cloned by
 `bench/agent/fetch.sh`): five real merged fixes with the commit's tests as the hidden grader,
 five cross-repository reuses graded by hidden tests plus a link check, five impact questions
-graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). **424 fast tests
+graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). **436 fast tests
 green plus 17 `slow`** (the corpus, and the graders' acceptance over the real clones), ruff clean.
 
-_Last updated: 2026-09-05, session end (`who` states its own coverage — schema version 4 — and the five impact tasks re-run: the family's ratio 6.65 → 2.40, median turns 25 → 14)._
+_Last updated: 2026-09-06, session end (the coverage object collapses on a complete answer — schema version 5 — and the five impact tasks re-run: 1,373 → 479 characters at the tool's mouth, and no effect the benchmark could resolve)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**`who` now states its own coverage, and it moved the number twice over.** The impact family went
-16.28x (the sweep) → 6.65x (the source-root rule) → **2.40x**, median turns 25 → 14, and the links
-arm passes 15/15 where it passed 14/15. The worst question in the benchmark,
-`im-color-default-click`, fell 23.62x at 43 turns → **8.65x at 24**. Records in
-`bench/agent/results/2026-09-05-who-coverage/`; the reading is in
-[`docs/benchmark.md`](docs/benchmark.md) under *Coverage, and what it moved*.
+**The coverage object now collapses when there is nothing to warn about — and the benchmark could
+not see it.** A complete `who` answer is one `summary` line and eight `null` fields; incomplete or
+unknown answers carry the whole object; `cttp who --coverage` (the MCP tool's `coverage`) buys it
+back. Measured at the tool's mouth on rich at the benchmark's own commit: **1,373 → 479
+characters**. Measured by the benchmark: nothing. The two rich tasks the change was *for* went
+162,368 → 163,368 and 122,805 → 117,401 tokens, and the family ratio moved 2.40 → **3.26** on
+variance — `im-nested-chain-click` alone spanned 141,257–569,186 over three runs while
+`im-color-default-click` halved. Records in `bench/agent/results/2026-09-06-coverage-collapse/`;
+the reading is in [`docs/benchmark.md`](docs/benchmark.md) under *Collapsing the coverage object*.
+**Last session's diagnosis is therefore not confirmed**, and the docs no longer claim it: the
+collapse is justified as an interface decision, not as a measured saving.
 
-**The honest cost, and the next question it raises.** The two flat-layout rich tasks got *worse* —
-1.74 → 2.06 and 1.04 → 1.91 — because their agents were never uncertain and coverage hands them an
-object to read and three caveats to weigh for an assurance they did not need. In priority order:
+In priority order:
 
-1. **Shrink the coverage object when there is nothing to warn about.** The measured regression on
-   the two rich tasks is the whole of it: `complete: true` with a single crawled repository could
-   collapse to a line, keeping `searched` and the caveats behind a flag or only when
-   `complete` is false or null. This is a schema change → bump `SCHEMA_VERSION` (now 4) and the
-   fingerprint, then re-run the five impact tasks (30 runs, ~35 min at `--jobs 3`) — the cheap
-   direct measurement, twice proven.
-2. **`who` does not follow a re-export.** Unchanged and now *measured*: click's index holds 1,422
-   links whose target it cannot identify, nearly all references into `src/click/__init__.py`,
-   which re-exports names it does not define. `who` on `utils.py#echo` therefore answers 31
-   backlinks and `complete: false` with 259 matching. A re-export rule (an `__init__.py` binding
-   that is an import of a sibling definition forwards the reference) would close it and would turn
-   a large class of `complete: false` into `true`.
+1. **Decide what the benchmark can actually resolve, before spending on it again.** This sweep is
+   the third piece of evidence that three runs per arm cannot separate an effect from noise, and
+   it is now the limiting factor on every question the benchmark is asked. Options, cheapest
+   first: report the mean beside the median (the mean *fell* 295,180 → 260,980 in the same sweep
+   the median rose); raise `--runs` for the impact family alone and see where the spread settles;
+   or add a paired statistic per task rather than a ratio of medians. Until one of these lands, no
+   change under ~20 % should be argued from a ratio here.
+2. **`who` does not follow a re-export.** Unchanged and still the largest real defect: click's
+   index holds 1,422 links whose target it cannot identify, nearly all references into
+   `src/click/__init__.py`, which re-exports names it does not define. `who` on `utils.py#echo`
+   answers 31 backlinks and `complete: false` with 259 matching. A re-export rule (an `__init__.py`
+   binding that is an import of a sibling definition forwards the reference) would close it and
+   turn a large class of `complete: false` into `true` — and unlike the collapse, it changes
+   *answers*, not payload size, so the benchmark could see it.
 3. **A definition row keeps the first crawl's derived metadata.** `INSERT OR IGNORE` means
    `--force` refreshes locations and links but not `imports`, `unresolved`, signature or
    docstring, so the viewer's *third party* line can show a classification the extractor no longer
-   makes. Found this session — an early `coverage` read that column and claimed a gap the
-   source-root rule had already closed. The fix moved to crawl time; the stale row is still there.
-   Properly, `imports`/`unresolved` are per-place and belong on `locations`.
+   makes. Properly, `imports`/`unresolved` are per-place and belong on `locations`.
 4. **The closure keeps a function-local relative import** (`click.formatting.wrap_text` does
    `from ._textwrap import TextWrapper` in its body; `expand` inlines the definition and leaves
    the line, which fails at run time). Found in P8-T2, still open; spec §3's refusal list grows
@@ -391,7 +394,9 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   `14c8b9e5c6d17b96`): `language` is `python | c | text`, `kind` gained `type` and `macro`, the
   `signature`/`docstring` field notes say what they are for C. **Version 3** (P7,
   `b4d308f6b63419e7`). **Version 4** (2026-09-05, `41ec61e8a59e6c78`): `who` gained `coverage`,
-  and `index crawl` gained `unmapped` beside `skipped`.
+  and `index crawl` gained `unmapped` beside `skipped`. **Version 5** (2026-09-06,
+  `3af030a09bd6e1d9`): `coverage` gained `summary` and the eight gap fields became nullable —
+  they collapse to `null` on a complete answer unless `--coverage` asks for them.
   **Shapes frozen this session (deliberate, first version):** `expand`, `add` and `fold` wrap
   their per-file map in `files`; `index crawl` wraps its list in `crawled`; `closure` gained
   `source` (`repository` | `index`), `roots` and `missing` (empty for the live walk) so the live
@@ -442,8 +447,9 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   address without the flag is the live walk. `update` takes files and addresses mixed; exit 2
   when a change waited for a confirmation it did not get. `_interactive()` wraps the tty check
   so tests can drive the prompts. `who`'s text form prints one `searched <repo>@<rev>` line per crawled
-  revision with the directories it reached, then `_coverage_line()` — `coverage: complete` or
-  `coverage: incomplete — <reasons>`. `resolve`'s text form prints the signature and docstring on a
+  revision with the directories it reached — omitted when the coverage collapsed — then
+  `coverage["summary"]`: `coverage complete — searched …`, `coverage incomplete — <reasons>`, or
+  `coverage unknown — …`. `--coverage` keeps the whole object on a complete answer. `resolve`'s text form prints the signature and docstring on a
   `#` line, `# seen:` lines when an identity came from a cache (`cache` or `index`), and `from →
   to` with the rule (`via index` when the index found it) under `--latest`.
 - `bench/drivers/` — **P6-T2, P6-T3.** `fetch.sh` (the corpus: a sparse, blobless clone of
@@ -491,7 +497,7 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   verifies every pinned commit; `--list` marks an unfetched task and a run refuses to start
   without the clones. `pyproject.toml`: a `bench` dependency group (hypothesis, pygments,
   markdown-it-py) installed by default; `bench/agent/tasks` and `repos` excluded from ruff.
-- Tests: 424 fast + 17 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
+- Tests: 436 fast + 17 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
   config,links,gitcache,resolve,objects,latest,closure,expand,check,update,fold,run,package,
   server,cli,index_crawl,index_queries,acceptance_move,acceptance_provenance,
   acceptance_drivers,schemas,mcp,name,registry_federation,export,bench_agent}.py`.
@@ -534,12 +540,14 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   malformed link line costing the line not the file, `--force`); `test_index_queries.py` P4-T2
   (`who` on `deep` — the copy asserted, the sibling derived; `dups` and `--shape` over `twins`;
   `search greet`; `history` over two revs; `rank`; the indexed closure equal to the live one;
-  and **eight `coverage` tests** — the revisions and directories named; `complete` true over a
+  and **nine `coverage` tests** — the revisions and directories named; `complete` true over a
   src-layout where every reference was attributed; a binary counted as `skipped` but not as a
   gap; an unparsable Python file counted as `unread`; a link line the crawl ignored counted as
   `ignored_links`; an import into a package under no source root reported as `unmapped`; a
   re-export making `unresolved_matching` non-zero while another address in the same index stays
-  clear; and an index with the record stripped answering `null`, not `0` — plus one for the
+  clear; an index with the record stripped answering `null`, not `0`, and refusing to collapse;
+  and the collapse itself — every gap field `null` on a complete answer, the object less than half
+  the size, `--coverage` buying it back, and the CLI printing no per-revision block — plus one for the
   `ALTER TABLE` migration of a `revisions` table written without the columns);
   `test_acceptance_move.py` spec §12 test 2 (a renamed move found by its `from` link, a plain
   move by identity once B is crawled, the no-index message, rules 1 and 2 still first);
@@ -852,14 +860,23 @@ trigger that would schedule it.
   by 1.7x / 3.9x / 3.3x, the two flat rich ones unmoved (the control). Records in
   `results/2026-09-05-impact-srcroots/`
 - ~~An agent cannot tell that a `who` answer is complete~~ — closed 2026-09-05 and
-  **re-measured**: `who` returns `coverage` (schema version 4). The impact family fell
-  6.65x → **2.40x**, median turns 25 → 14, `im-color-default-click` 23.62 → 8.65 at 43 → 24
-  turns. Records in `results/2026-09-05-who-coverage/`
-- **Coverage costs where it is not needed.** The two flat-layout rich tasks — the control — got
-  worse (1.74 → 2.06, 1.04 → 1.91): their agents were never uncertain, and the object plus its
-  three caveats is context they read for nothing. Shrinking it when `complete` is true, or
-  putting `searched` and `caveats` behind a flag, is the obvious lever → **next session**, first
-  item; it is a schema change
+  **re-measured**: `who` returns `coverage` (schema version 4, collapsing since 5). The impact
+  family fell 6.65x → **2.40x**, median turns 25 → 14, `im-color-default-click` 23.62 → 8.65 at
+  43 → 24 turns. Records in `results/2026-09-05-who-coverage/`. A fourth sweep read 3.26x with no
+  change that should have raised it, so treat the 2.40 as a wide interval, not a point
+- ~~Coverage costs where it is not needed~~ — **done 2026-09-06, and the premise did not survive
+  the measurement.** The object now collapses on a complete answer (schema version 5): 1,373 → 479
+  characters at the tool's mouth. But re-running the same five tasks gave the two rich ones nothing
+  back (162,368 → 163,368 and 122,805 → 117,401) and the family ratio read 3.26. The 1.74 → 2.06 /
+  1.04 → 1.91 that motivated it was very likely noise. Records in
+  `results/2026-09-06-coverage-collapse/`
+- **The benchmark cannot resolve an effect smaller than its own variance**, and that is now the
+  limiting factor on every question it is asked. Three runs of `im-nested-chain-click` spanned
+  141,257–569,186 tokens; across two sweeps the family's ratio moved 2.40 → 3.26 on no change that
+  should have raised it, and the mean fell while the median rose. Report the mean beside the
+  median, raise `--runs` for one family and see where the spread settles, or pair runs per task
+  instead of taking a ratio of medians → **next session**, first item; until then, no change under
+  ~20 % should be argued from a ratio here
 - **A definition row keeps the first crawl's derived metadata.** `INSERT OR IGNORE` on
   `definitions` means a `--force` re-crawl refreshes locations and links but not `imports`,
   `unresolved`, signature or docstring; the viewer's *third party* line shows the stale
@@ -890,6 +907,36 @@ trigger that would schedule it.
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
+
+- **2026-09-06 (twenty-second session) — the coverage object collapses; the benchmark could not
+  resolve it.** Last session's first item, done and honestly reported. `who`'s `coverage` gains
+  **`summary`** — one line, always present: what was searched, whether the count may be trusted,
+  and what is missing when it is not (`queries._summary()`, the one definition, printed by the
+  CLI, the MCP tool and the viewer alike). When `complete` is true the eight fields beneath it
+  (`queries.COLLAPSED`) are **`null`**: they are evidence for a doubt the line has settled. An
+  incomplete answer, or one that cannot tell, still carries the whole object. `cttp who
+  --coverage`, the MCP tool's `coverage`, and `queries.who(detail=True)` keep it either way; the
+  viewer always asks for it, since a person reading a page has room. Schema **4 → 5**, fingerprint
+  `3af030a09bd6e1d9`, `docs/json-schemas.md` regenerated; new decision in spec §6.
+  **The direct measurement holds:** over a fresh index of rich at the benchmark's own commit
+  `9d8f9a372cc5`, the object goes **1,373 → 479 characters** and the three `caveats` the
+  flat-layout agents were weighing are gone.
+  **The benchmark's does not.** Five impact tasks, 3 runs per arm, 30 records in
+  `results/2026-09-06-coverage-collapse/`. The two rich tasks the change was *for* did not move
+  (162,368 → 163,368 and 122,805 → 117,401); the family ratio went 2.40 → **3.26**, driven by
+  `im-nested-chain-click` 173,728 → 321,008 while `im-color-default-click` halved 635,046 →
+  310,891 in the same sweep. Three runs of one task span 141,257–569,186 tokens; the mean over all
+  fifteen links runs *fell* 295,180 → 260,980 while the median rose. Correctness unchanged — links
+  15/15 strict, baseline 12 strict / 15 folded.
+  **So the previous session's diagnosis is not confirmed**, and every doc that stated it was
+  corrected: `benchmark.md` gains *Collapsing the coverage object, and what it did not move* and
+  its headline now warns about n=3; `spec.md` and `overview.md` justify the collapse as an
+  interface decision — evidence for a settled doubt is weight, not evidence — and say plainly that
+  the saving was not measurable. **The change was kept** because it returns strictly less for the
+  same information and the escape hatch exists, not because the benchmark endorsed it; reverting
+  on a null result would repeat the error that produced the change, pointed the other way.
+  436 fast tests green (2 new: the collapse and its CLI flag, the MCP parameter), ruff clean, the
+  viewer re-checked in the browser.
 
 - **2026-09-05 (twenty-first session) — `who` states its own coverage; the impact family
   6.65x → 2.40x.** Last session's re-run found that completeness was necessary and not
@@ -1028,30 +1075,6 @@ is the archive, and a bloated history taxes every future session start.
   its tools from the denial, gets whole JSON pages back where `grep -A` returned lines, and on
   the impact task read every definition `who` listed before answering. The five-hour window
   went ~0.25 → 0.41 over the six runs (~480k tokens).
-
-- **2026-09-05 (seventeenth session) — P8-T1 built: the benchmark harness, and the arm design
-  amended on evidence.** The flags were checked against `code.claude.com/docs/en/headless` and
-  the CLI reference and probed on Claude Code 2.1.261 with two haiku runs before writing:
-  `--tools` restricts the built-ins and keeps MCP tools; `--disallowedTools "Bash(cat *)"`
-  beats `dontAsk`'s read-only auto-approval; `--setting-sources ""` drops `~/.claude`'s
-  settings; a `rate_limit_event` in the stream carries the five-hour and seven-day
-  utilizations; the result object's `usage` is the main thread's cumulative count and
-  `modelUsage` adds side requests. Decisions: **stream-json, not json**, so `system/init` (tools,
-  MCP status), every tool call, denials and the rate-limit event are recorded with the result
-  (the last line is the same result object); the per-run world is built the test suite's way
-  (bare remote + clone + `[remotes]`) so the checkout has a locator without a network; the
-  links arm gets a per-run index and cache; results are committed with their streams. **The
-  smoke run changed the plan's arms:** without `Read`, the links arm found the bug through
-  `fold`, `search`, `closure`, `resolve` and `who` and then could not apply it — `Edit` and
-  `Write` refuse a file the session has not read — and burned 41 turns and 471k tokens; both
-  arms now have `Read` and differ in how code is *found* (the cttp tools against the shell's
-  `grep`/`find`/`cat`, which this Claude Code has no `Grep`/`Glob` tool for). With `Read`: links
-  pass, 36,787 tokens, 6 turns; baseline pass, 29,428 tokens, 5 turns — and the links arm
-  never called a cttp tool. Found and fixed on the way: two MCP calls in one turn raced to clone
-  one repository into the git cache ("destination path already exists"); `gitcache._clone` now
-  clones into a temporary sibling and renames. `tests/test_bench_agent.py` (10 tests, one a
-  replay of each committed record) and a concurrent-clone test. `pythonpath = ["."]` in
-  `pyproject.toml`. The plan's P8-T1 entry carries the amendment.
 
 ## How to run
 

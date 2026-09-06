@@ -77,12 +77,13 @@ def resolve(address: str, id: str | None = None) -> CallToolResult:
         raise ToolError(str(e)) from e
 
 
-def who(address: str) -> CallToolResult:
-    """Backlinks: every indexed page linking to the address."""
+def who(address: str, coverage: bool = False) -> CallToolResult:
+    """Backlinks: every indexed page linking to the address. `coverage` keeps the whole coverage
+    object on an answer that is already complete."""
     from cttp.index.queries import who as _who
 
     try:
-        return _result(_who(_index(), address, open_registries()))
+        return _result(_who(_index(), address, open_registries(), detail=coverage))
     except ERRORS as e:
         raise ToolError(str(e)) from e
 

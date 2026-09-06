@@ -11,7 +11,7 @@ from cttp.cli import app
 from cttp.closure import closure as live_closure
 from cttp.expand import expand_file
 from cttp.index.crawl import MAX_FILE_BYTES, add, crawl
-from cttp.index.queries import closure, dups, history, rank, search, who
+from cttp.index.queries import COLLAPSED, closure, dups, history, rank, search, who
 from cttp.index.schema import IndexingError, open_index
 from cttp.resolve import resolve
 
@@ -222,7 +222,7 @@ def test_who_sees_a_src_layouts_tests(registry, tmp_path, monkeypatch):
 def test_coverage_names_the_revisions_and_the_directories_reached(world, registry):
     """`who` says what it searched, so an agent can see whether the question was in scope."""
     conn, consumer, twins = world
-    cov = who(conn, f"{PYREPO}@v1/lib.py#deep", registry)["coverage"]
+    cov = who(conn, f"{PYREPO}@v1/lib.py#deep", registry, detail=True)["coverage"]
     assert cov["repos"] == 3 and cov["revisions"] == 4  # pyrepo twice, consumer and twins once
     assert {s["repo"] for s in cov["searched"]} == {PYREPO, consumer, twins}
     pyrepo = [s for s in cov["searched"] if s["repo"] == PYREPO]
@@ -251,9 +251,47 @@ def test_coverage_is_complete_when_every_reference_was_attributed(registry, tmp_
     cov = out["coverage"]
     assert out["count"] == 2
     assert cov["complete"] is True
-    assert cov["skipped"] == 0 and cov["unread"] == 0
-    assert cov["unresolved_matching"] == 0 and cov["unmapped_imports"] == []
-    assert cov["searched"][0]["paths"] == {"src": 2, "tests": 1}
+    # nothing to warn about, so nothing but the line: the evidence would be for a settled doubt
+    assert all(cov[f] is None for f in COLLAPSED)
+    assert cov["summary"].startswith("coverage complete — searched")
+    assert f"{repo}@" in cov["summary"] and "(3 file(s))" in cov["summary"]
+    assert (cov["repos"], cov["revisions"], cov["files"]) == (1, 1, 3)
+    full = who(conn, f"{repo}@v1/src/pkg/core.py#greet", registry, detail=True)["coverage"]
+    assert full["skipped"] == 0 and full["unread"] == 0
+    assert full["unresolved_matching"] == 0 and full["unmapped_imports"] == []
+    assert full["searched"][0]["paths"] == {"src": 2, "tests": 1} and full["caveats"]
+    assert full["summary"] == cov["summary"]
+
+
+def test_the_collapse_is_what_the_cli_prints_and_what_coverage_undoes(
+    registry, tmp_path, monkeypatch
+):
+    """A complete answer is one line; `--coverage` buys the evidence back. What collapses is the
+    evidence for a doubt the first line has already settled — never the line itself."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(
+        tmp_path, "collapse", {"pkg/__init__.py": "", "pkg/core.py": GREET, "t.py": USES_GREET}
+    )
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    address = f"{repo}@v1/pkg/core.py#greet"
+
+    short = runner.invoke(app, ["--json", "who", address])
+    full = runner.invoke(app, ["--json", "who", address, "--coverage"])
+    assert short.exit_code == 0 and full.exit_code == 0
+    small, big = json.loads(short.stdout)["coverage"], json.loads(full.stdout)["coverage"]
+    assert small["complete"] is True and big["complete"] is True
+    assert all(small[f] is None for f in COLLAPSED) and all(big[f] is not None for f in COLLAPSED)
+    # the point of the change; the saving grows with the index — one small revision here
+    assert len(json.dumps(small)) * 2 < len(json.dumps(big))
+    assert small["summary"] == big["summary"]
+
+    lines = runner.invoke(app, ["who", address]).output.splitlines()
+    assert not [x for x in lines if x.startswith("searched ")]  # no per-revision block
+    assert lines[-1].startswith("coverage complete — searched")
+    full_lines = runner.invoke(app, ["who", address, "--coverage"]).output.splitlines()
+    assert [x for x in full_lines if x.startswith(f"searched {repo}@")]
 
 
 def test_coverage_counts_a_binary_as_skipped_but_not_as_a_gap(registry, tmp_path, monkeypatch):
@@ -265,7 +303,7 @@ def test_coverage_counts_a_binary_as_skipped_but_not_as_a_gap(registry, tmp_path
     repo = add_remote_repo(tmp_path, "withblob", {"lib.py": GREET, "logo.png": blob})
     add(conn, repo, registry.config)
     crawl(conn, registry)
-    cov = who(conn, f"{repo}@v1/lib.py#greet", registry)["coverage"]
+    cov = who(conn, f"{repo}@v1/lib.py#greet", registry, detail=True)["coverage"]
     assert cov["skipped"] == 1 and cov["unread"] == 0 and cov["complete"] is True
     assert cov["searched"][0]["skipped"] == 1
 
@@ -325,7 +363,7 @@ def test_coverage_flags_unidentified_links_that_name_this_address(registry, tmp_
     cov = who(conn, f"{repo}@v1/pkg/core.py#greet", registry)["coverage"]
     assert cov["unresolved_matching"] > 0 and cov["complete"] is False
     # a definition nothing re-exports is unaffected by the same index's unidentified links
-    other = who(conn, f"{repo}@v1/pkg/__init__.py", registry)["coverage"]
+    other = who(conn, f"{repo}@v1/pkg/__init__.py", registry, detail=True)["coverage"]
     assert other["unresolved_targets"] == cov["unresolved_targets"]
 
 
@@ -343,7 +381,9 @@ def test_coverage_cannot_tell_on_an_index_that_predates_the_skipped_record(
     conn.commit()
     cov = who(conn, f"{repo}@v1/lib.py#greet", registry)["coverage"]
     assert cov["skipped"] is None and cov["unread"] is None and cov["complete"] is None
-    assert runner.invoke(app, ["who", f"{repo}@v1/lib.py#greet"]).output.count("incomplete") == 1
+    assert cov["searched"] and cov["caveats"]  # only a complete answer collapses
+    out = runner.invoke(app, ["who", f"{repo}@v1/lib.py#greet"]).output
+    assert out.count("coverage unknown — searched") == 1 and "crawl --force" in out
 
 
 def test_the_index_migrates_a_table_written_without_the_skipped_column(tmp_path):

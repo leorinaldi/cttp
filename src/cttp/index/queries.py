@@ -367,7 +367,52 @@ def _unresolved_matching(conn: sqlite3.Connection, t: Target) -> int:
     return conn.execute(sql, args).fetchone()[0]
 
 
-def coverage(conn: sqlite3.Connection, t: Target) -> dict:
+def _summary(cov: dict) -> str:
+    """The one line the answer's reader needs: what it is an answer over, and whether it may be
+    trusted. It is what a *complete* answer says and stops at — everything beneath it is evidence
+    for a doubt the first clause has already answered, and a reader who weighs it pays for
+    assurance it was handed at the start."""
+    revs = [f"{s['repo']}@{s['rev']}" for s in cov["searched"]]
+    where = ", ".join(revs[:4]) + (f" and {len(revs) - 4} more" if len(revs) > 4 else "")
+    scope = f"searched {where or 'nothing'} ({cov['files']} file(s)) and no other repository"
+    if cov["complete"]:
+        return (
+            f"coverage complete — {scope}; every reference in them was attributed. "
+            "`--coverage` for the revisions and the standing caveats."
+        )
+    why = []
+    if cov["unresolved_matching"]:
+        why.append(f"{cov['unresolved_matching']} unidentified link(s) name this address")
+    if cov["unread"]:
+        why.append(f"{cov['unread']} file(s) unread")
+    if cov["ignored_links"]:
+        why.append(f"{cov['ignored_links']} link line(s) ignored — they did not parse")
+    if cov["unmapped_imports"]:
+        mods = ", ".join(sorted({u["module"] for u in cov["unmapped_imports"]}))
+        why.append(f"imports never mapped to a file: {mods}")
+    if cov["complete"] is None:
+        return (
+            f"coverage unknown — {scope}; this index predates the record of what a crawl "
+            "skipped: `cttp index crawl --force` fills it."
+        )
+    return f"coverage incomplete — {scope}; " + "; ".join(why)
+
+
+# The fields that exist only to explain a gap. When there is no gap they are evidence for a
+# settled question, so a complete answer collapses them and `summary` carries what was searched.
+COLLAPSED = (
+    "searched",
+    "skipped",
+    "unread",
+    "ignored_links",
+    "unresolved_targets",
+    "unresolved_matching",
+    "unmapped_imports",
+    "caveats",
+)
+
+
+def coverage(conn: sqlite3.Connection, t: Target, *, detail: bool = False) -> dict:
     """What a `who` answer is an answer *over*, so an agent can tell when it may stop.
 
     `who` matches the links the crawl recorded, so it is complete only across the revisions the
@@ -378,7 +423,14 @@ def coverage(conn: sqlite3.Connection, t: Target) -> dict:
     those naming this address — the misses this answer could have); and lists the imports that
     point into a repository but were never mapped to a file (`unmapped_imports`), each of which is
     a reference the crawl never recorded. `complete` is true when this answer has none of those
-    gaps. It says nothing about a repository that was never crawled: `searched` answers that."""
+    gaps. It says nothing about a repository that was never crawled: `searched` answers that.
+
+    `summary` states all of that in one line, and when `complete` is true that line is the whole
+    answer: the gap fields are then `null` and `summary` carries what was searched. `detail` (the
+    CLI's `--coverage`, the MCP tool's `coverage`) keeps them. Evidence for a doubt the first line
+    has settled is weight, not evidence — so the object is paid for only when there is something
+    to warn about. That is an argument about the interface: the benchmark could not resolve the
+    saving (`docs/benchmark.md`)."""
     recorded = all(has_column(conn, "revisions", c) for c in ("skipped", "unmapped"))
     cols = "repo, sha, committed_at, crawled_at, files"
     if recorded:
@@ -457,7 +509,7 @@ def coverage(conn: sqlite3.Connection, t: Target) -> dict:
         complete = None
     else:
         complete = True
-    return {
+    cov = {
         "repos": len({s["repo"] for s in searched}),
         "revisions": len(searched),
         "files": files,
@@ -470,8 +522,13 @@ def coverage(conn: sqlite3.Connection, t: Target) -> dict:
         "unmapped_imports": unmapped,
         "caveats": list(WHO_CAVEATS),
         "complete": complete,
+        "summary": "",
         "origin": "derived",
     }
+    cov["summary"] = _summary(cov)
+    if complete and not detail:
+        cov.update(dict.fromkeys(COLLAPSED))
+    return cov
 
 
 def _count(conn, table: str, repo: str, sha: str) -> int:
@@ -485,11 +542,14 @@ def _count(conn, table: str, repo: str, sha: str) -> int:
 RELATION_ORDER = {"is": 0, "from": 1, "see": 2, "ref": 3}
 
 
-def who(conn: sqlite3.Connection, text: str, registries=None) -> dict:
+def who(conn: sqlite3.Connection, text: str, registries=None, *, detail: bool = False) -> dict:
     """Backlinks: every page linking to the address, by relation and origin, across every crawled
     repository. A link counts when its target identity is one seen at the address, or when it
     names the same place (same name and symbol, or same repository, path and symbol at any rev).
-    A page that links at several crawled revisions is listed once, at the latest."""
+    A page that links at several crawled revisions is listed once, at the latest.
+
+    `detail` keeps the whole `coverage` object even when the answer is complete; without it a
+    complete answer's coverage is its `summary` line and the counts of what was searched."""
     t = target_of(conn, text, registries)
     clauses, args = [], []
     if t.identities:
@@ -564,7 +624,7 @@ def who(conn: sqlite3.Connection, text: str, registries=None) -> dict:
         "backlinks": backlinks,
         "count": len(backlinks),
         "by": by,
-        "coverage": coverage(conn, t),
+        "coverage": coverage(conn, t, detail=detail),
         "origin": {"backlinks": "derived", "relation": "per link: its origin"},
     }
 

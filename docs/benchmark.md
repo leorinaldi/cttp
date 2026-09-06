@@ -11,8 +11,11 @@ what uses a definition is where cttp should have won and did not — not because
 wrong for it, but because `who` returned quietly incomplete answers on `src/`-layout projects and
 the agent burned twenty to forty times the context failing to confirm them. **That defect has
 since been fixed and the impact questions re-run**: the family's ratio fell from 16.28 to 6.65
-and the thrash largely stopped — see
-[§The src-layout fix](#the-src-layout-fix-and-what-it-moved).
+and then to 2.40 once `who` stated its own coverage, and the thrash largely stopped — see
+[§The src-layout fix](#the-src-layout-fix-and-what-it-moved). A fourth sweep of the same five
+tasks read 3.26 without any change that should have raised it, which is the plainest statement in
+this document of how much three runs per arm can be trusted: see
+[§Collapsing the coverage object](#collapsing-the-coverage-object-and-what-it-did-not-move).
 
 It is not a claim about cttp against "no cttp" in the abstract, and it is not a model evaluation.
 Read [§What the number does not mean](#what-the-number-does-not-mean) before quoting anything here.
@@ -272,6 +275,58 @@ Two caveats on the comparison. The baseline arm was re-run too and its medians m
 (`im-color-default-click`: 56,303 → 73,449 tokens), so part of each ratio's change is the
 denominator wandering between sweeps — the links-arm token figures above are the steadier
 evidence. And the grader is unchanged, so the answers are scored against the same ground truth.
+
+---
+
+## Collapsing the coverage object, and what it did not move
+
+The open question above was answered by trying it. `who`'s `coverage` now collapses when there is
+nothing to warn about: a **complete** answer is one `summary` line — what was searched, and that
+every reference in it was attributed — and the eight fields beneath it are `null`, evidence for a
+doubt the line has settled. An incomplete answer, or one that cannot tell, still carries the whole
+object; `cttp who --coverage` (the MCP tool's `coverage`) buys it back either way. Measured
+directly on the same rich commit the benchmark uses, the object goes **1,373 → 479 characters**,
+and the three `caveats` the flat-layout agents were weighing are gone.
+
+Then the five impact tasks were re-run, three runs per arm, same model, same harness, same
+commits: `bench/agent/results/2026-09-06-coverage-collapse/`.
+
+| task | layout | ratio after coverage | ratio after the collapse | links tokens after coverage | after the collapse |
+|---|---|---:|---:|---:|---:|
+| `im-color-default-click` | `src/` | 8.65 | **4.38** | 635,046 | 310,891 |
+| `im-nested-chain-click` | `src/` | 2.46 | **6.10** | 173,728 | 321,008 |
+| `im-obj-setattr-attrs` | `src/` | 3.10 | **3.11** | 255,444 | 300,850 |
+| `im-pick-bool-rich` | flat | 2.06 | **2.29** | 162,368 | 163,368 |
+| `im-set-cell-size-rich` | flat | 1.91 | **1.42** | 122,805 | 117,401 |
+| **impact total** | | **2.40** | **3.26** | 174,040 | 232,734 |
+
+**The two tasks this was for did not move.** `im-pick-bool-rich` and `im-set-cell-size-rich` are
+the regression the collapse was aimed at, and their links-arm medians went 162,368 → 163,368 and
+122,805 → 117,401 — inside the noise, in both directions. The saving is real and was measured at
+the tool's mouth; it is simply too small to see here. A `who` call is a few hundred tokens lighter
+where a run costs 120,000–320,000, and the last two sweeps have each moved a task's median by more
+than that on nothing at all.
+
+**The family ratio got worse, on variance, not on the change.** 2.40 → 3.26, driven by
+`im-nested-chain-click` (173,728 → 321,008) while `im-color-default-click` halved (635,046 →
+310,891) in the same sweep. Three runs of one task span 141,257–569,186 tokens. The mean over all
+fifteen links runs fell 295,180 → 260,980 while the median rose 174,040 → 232,734, which is what a
+distribution this wide does to three samples. Median turns across the family moved 14 → 15.
+
+**So the previous session's diagnosis is not confirmed.** *Coverage hands them an object to read
+and a `caveats` list to weigh* was the reading of 1.74 → 2.06 and 1.04 → 1.91; removing that object
+from those exact tasks did not give the tokens back. Either the cost was never the object — an
+extra turn re-sends the whole context and dwarfs a 900-character payload — or it is below what
+three runs can resolve. On this evidence the honest statement is the second, and the first is
+likely too.
+
+**The collapse stays anyway, for a reason the benchmark cannot score.** It returns strictly less
+for the same information, and what it drops on a complete answer is the part a reader must
+otherwise decide to ignore. That is worth having whether or not fifteen runs can see it. What the
+sweep does establish is about *the benchmark*: an effect of a few hundred tokens per call is
+beneath its resolution at three runs per arm, and no reading of a ratio at this sample size should
+be trusted to a change of that size. Correctness is unchanged — links 15/15 strict, baseline 12
+strict and 15 folded, exactly as before.
 
 ---
 
