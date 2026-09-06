@@ -4,7 +4,8 @@ Every query reads one SQLite file and returns plain data with `origin` on every 
 asserted fact. "Current" means each repository's most recently crawled revision (the last row
 written for it — a `--rev` crawl makes that rev current on purpose); that is what `dups`,
 `rank` and `search` report over. `history` orders revisions by commit time, then crawl order;
-`who` sees every crawled revision.
+`who` sees every crawled revision, and says so: `coverage` reports what it searched and what
+inside it went unattributed, so an agent can tell a complete answer from a partial one.
 """
 
 import json
@@ -13,7 +14,7 @@ from pathlib import Path
 
 from cttp.address import Address
 from cttp.hashing import short
-from cttp.index.schema import IndexingError, default_index_path, open_index
+from cttp.index.schema import IndexingError, default_index_path, has_column, open_index
 
 # --- the identity hook the resolver falls through to -------------------------------------------
 
@@ -311,6 +312,174 @@ def _source_location(conn, ident: str, repo: str, sha: str, file: str) -> dict |
     return _location(conn, row) if row else None
 
 
+# --- coverage: what the answer is an answer over -----------------------------------------------
+
+# The ways `who` is knowingly incomplete inside the files it did read — what no count can express.
+WHO_CAVEATS = (
+    "a re-export is not followed: a name an `__init__.py` binds by importing it passes no "
+    "reference on to the definition, so a user of the public name backlinks the `__init__.py`",
+    "a nested definition is not addressable, so a link or reference inside one is credited to "
+    "the definition that holds it",
+    "references are static and repository-local: a name reached through `getattr`, a plugin "
+    "registry or a string is not a reference, and an import of another repository is not one "
+    "either unless a link says so",
+)
+
+
+def _gaps(skipped: list[str]) -> tuple[int, int]:
+    """Of the crawl's skipped entries, the two that are holes in an answer: files a language
+    extractor would have read and did not (`unread`), and link lines the crawl had to ignore
+    because they did not parse (`ignored_links`). A binary blob is skipped and can hold neither
+    a link nor a reference, so it is no hole — or `complete` would never be true of a real
+    repository, and the field would be worth nothing."""
+    from cttp.extract import language_of
+
+    unread = ignored = 0
+    for entry in skipped:
+        if entry.endswith("the line was ignored"):
+            ignored += 1
+        elif language_of(entry.split(": ", 1)[0]) != "text":
+            unread += 1
+    return unread, ignored
+
+
+def _unresolved_matching(conn: sqlite3.Connection, t: Target) -> int:
+    """Of the links whose target the index cannot identify, the ones that name what was asked
+    about — this answer's possible misses, and the only part of that total `who` need answer for.
+
+    A reference to `click.echo` lands on `src/click/__init__.py#echo`, which only imports the
+    name, so the index cannot tell it means `_termui_impl.echo`. Counting the unidentified links
+    that say `echo` is how `who` admits it might be missing some; zero is how it says it is not."""
+    clauses, args = [], []
+    if t.symbol:
+        leaf = t.symbol.rsplit(".", 1)[-1]
+        clauses.append("(target_symbol = ? OR target_symbol LIKE ?)")
+        args += [leaf, f"%.{leaf}"]
+    if t.name:
+        clauses.append("target_name = ?")
+        args.append(t.name)
+    if t.path and not t.symbol:
+        clauses.append("(target_path = ? AND target_symbol IS NULL)")
+        args.append(t.path)
+    if not clauses:
+        return 0
+    sql = f"SELECT count(*) FROM links WHERE target_identity IS NULL AND ({' OR '.join(clauses)})"
+    return conn.execute(sql, args).fetchone()[0]
+
+
+def coverage(conn: sqlite3.Connection, t: Target) -> dict:
+    """What a `who` answer is an answer *over*, so an agent can tell when it may stop.
+
+    `who` matches the links the crawl recorded, so it is complete only across the revisions the
+    index holds. This names those revisions and the directories each one reached; counts the files
+    it could not read (`skipped`, and `unread` for those of them a language extractor would have
+    read); counts the link lines it had to ignore (`ignored_links`); counts the recorded links
+    whose target the index cannot identify (`unresolved_targets`, and `unresolved_matching` for
+    those naming this address — the misses this answer could have); and lists the imports that
+    point into a repository but were never mapped to a file (`unmapped_imports`), each of which is
+    a reference the crawl never recorded. `complete` is true when this answer has none of those
+    gaps. It says nothing about a repository that was never crawled: `searched` answers that."""
+    recorded = all(has_column(conn, "revisions", c) for c in ("skipped", "unmapped"))
+    cols = "repo, sha, committed_at, crawled_at, files"
+    if recorded:
+        cols += ", skipped, unmapped"
+    searched: list[dict] = []
+    unmapped: list[dict] = []
+    files = 0
+    skipped_total: int | None = 0
+    unread_total: int | None = 0
+    ignored_total: int | None = 0
+    for v in conn.execute(f"SELECT {cols} FROM revisions ORDER BY repo, rowid").fetchall():
+        repo, sha = v["repo"], v["sha"]
+        paths = [
+            r["path"]
+            for r in conn.execute(
+                "SELECT DISTINCT path FROM locations WHERE repo = ? AND sha = ?", (repo, sha)
+            )
+        ]
+        raw = v["skipped"] if recorded else None
+        entries = json.loads(raw) if raw is not None else None
+        skipped = None if entries is None else len(entries)
+        unread, ignored = (None, None) if entries is None else _gaps(entries)
+        if skipped is None or skipped_total is None:
+            skipped_total = None
+        else:
+            skipped_total += skipped
+        if unread is None or unread_total is None:
+            unread_total = None
+        else:
+            unread_total += unread
+        if ignored is None or ignored_total is None:
+            ignored_total = None
+        else:
+            ignored_total += ignored
+        files += v["files"]
+        by_dir: dict[str, int] = {}
+        for p in paths:
+            top = p.split("/")[0] if "/" in p else "."
+            by_dir[top] = by_dir.get(top, 0) + 1
+        searched.append(
+            {
+                "repo": repo,
+                "rev": short(sha),
+                "sha": sha,
+                "current": sha == _current_sha(conn, repo),
+                "committed_at": v["committed_at"],
+                "crawled_at": v["crawled_at"],
+                "files": v["files"],
+                "pages": _count(conn, "locations", repo, sha),
+                "links": _count(conn, "links", repo, sha),
+                "paths": dict(sorted(by_dir.items())),
+                "skipped": skipped,
+                "unread": unread,
+                "ignored_links": ignored,
+                "origin": "derived",
+            }
+        )
+        by_module = json.loads(v["unmapped"] or "{}") if recorded else {}
+        for module, n in sorted(by_module.items()):
+            unmapped.append(
+                {
+                    "repo": repo,
+                    "rev": short(sha),
+                    "module": module,
+                    "files": n,
+                    "origin": "derived",
+                }
+            )
+    unresolved = conn.execute(
+        "SELECT count(*) FROM links WHERE target_identity IS NULL"
+    ).fetchone()[0]
+    matching = _unresolved_matching(conn, t) if unresolved else 0
+    if matching or unmapped or unread_total or ignored_total:
+        complete: bool | None = False
+    elif unread_total is None:  # an index crawled before `skipped` was recorded: cannot tell
+        complete = None
+    else:
+        complete = True
+    return {
+        "repos": len({s["repo"] for s in searched}),
+        "revisions": len(searched),
+        "files": files,
+        "searched": searched,
+        "skipped": skipped_total,
+        "unread": unread_total,
+        "ignored_links": ignored_total,
+        "unresolved_targets": unresolved,
+        "unresolved_matching": matching,
+        "unmapped_imports": unmapped,
+        "caveats": list(WHO_CAVEATS),
+        "complete": complete,
+        "origin": "derived",
+    }
+
+
+def _count(conn, table: str, repo: str, sha: str) -> int:
+    return conn.execute(
+        f"SELECT count(*) FROM {table} WHERE repo = ? AND sha = ?", (repo, sha)
+    ).fetchone()[0]
+
+
 # --- who ---------------------------------------------------------------------------------------
 
 RELATION_ORDER = {"is": 0, "from": 1, "see": 2, "ref": 3}
@@ -395,6 +564,7 @@ def who(conn: sqlite3.Connection, text: str, registries=None) -> dict:
         "backlinks": backlinks,
         "count": len(backlinks),
         "by": by,
+        "coverage": coverage(conn, t),
         "origin": {"backlinks": "derived", "relation": "per link: its origin"},
     }
 

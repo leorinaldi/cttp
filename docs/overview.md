@@ -51,11 +51,13 @@ is complete**: fifteen tasks over `click`, `attrs` and `rich`, ninety runs recor
 cttp is cheaper for cross-repository reuse and the margin grows with the closure's size (0.90
 overall, 0.38 on a two-file closure), costs about twice as much on in-repository fixes while
 passing slightly more often, and cost 19–40x on impact questions over a `src/`-layout project.
-That last was **one defect** — `who` could not resolve a test's import into `src/`, and the agent
-cannot confirm an answer it senses is incomplete. The source-root rule (§4) closed it and the
-five impact tasks were re-run: the family 16.28x → **6.65x**, the `src/` tasks falling 1.7–3.9x
-while the flat ones held still. What remains is that an agent still cannot *tell* a `who` answer
-is complete, so the hardest question still costs 23x.
+That last was **one defect in two halves** — `who` could not resolve a test's import into
+`src/`, and an agent cannot confirm an answer it senses is incomplete. The source-root rule (§4)
+closed the first: the family 16.28x → **6.65x**. **`who`'s `coverage` object** (§4) closed the
+second — it states what the answer is an answer over, and `complete` says when there is no gap —
+and the family fell again to **2.40x** at 14 median turns, the worst question 23.62x → 8.65x. The
+two flat-layout tasks, which were never uncertain, got slightly *worse*: assurance costs on every
+call and repays only where the agent would have doubted. See [`benchmark.md`](benchmark.md).
 
 ## 2. Architecture
 
@@ -152,7 +154,10 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   `cttp_vendor/<module>.py`, stamps the user's link with `vendor=<path>` and puts an import
   beneath it; `check` follows `vendor=` into the module.
 - **Index** (`index/`) — `schema.py`: one SQLite file (default `~/.local/share/cttp/index.db`,
-  `--index`, `CTTP_INDEX`) with `repos`, `revisions`, `definitions` (**identity is the key**),
+  `--index`, `CTTP_INDEX`), `ADDED_COLUMNS` + `migrate()` bringing an older file forward by
+  `ALTER TABLE` (writers only; a reader uses `has_column` and never takes the write lock), with
+  `repos`, `revisions` (each carrying what the crawl `skipped` and the imports it left
+  `unmapped`), `definitions` (**identity is the key**),
   `locations` (one row per place an identity was seen), `links` (the target address as written
   and parsed, its identity when the index can tell, relation, origin), `names` (registry
   snapshot), and an FTS5 shadow for search. `crawl.py`: `add` registers a locator or a local
@@ -164,7 +169,8 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   It never fetches a repository it was not given — a **sparse checkout is crawled as the files
   it has on disk**, since a blobless clone would fetch every other blob. `queries.py`: `target_of` (any address → the
   identities and place the index knows, resolving for real only when it must), `who`, `dups`,
-  `closure`, `search`, `history`, `rank`, `forward` (rule 3), `lookup_identity`, `page_json`.
+  `closure`, `search`, `history`, `rank`, `forward` (rule 3), `lookup_identity`, `page_json`, and
+  `coverage` — what a `who` answer is an answer over (§4).
 - **Server** (`server/app.py`) — FastAPI on **3120**, Jinja2 templates. Serves the contract
   (`/<name>.json`, `/<name>@<version>.json`, `%23<symbol>`) over the configured **local**
   registries only, and the viewer of spec §9 over the index: `/` (names, index status, `?q=`
@@ -308,6 +314,29 @@ token would have broken claims by anyone but Leo.
 - **Derived versus asserted.** `rev`, `identity`, `license` are derived by the tool from the
   repository; `description` is asserted by the entry's author. `to_json()` says which is which
   under `origin`, and the viewer tags them.
+- **An answer states its own coverage.** An answer whose completeness cannot be judged is one its
+  reader must reproduce by hand — and a reader that reproduces the answer has not been helped.
+  `who` therefore returns a `coverage` object beside the backlinks: the revisions searched and the
+  directories each reached; the files the crawl could not read (`skipped`) and which of those a
+  language extractor would have read (`unread`); the link lines it had to ignore
+  (`ignored_links`); the recorded links whose target the index cannot identify
+  (`unresolved_targets`) and how many of those name **this** address (`unresolved_matching`); the
+  imports that point into a repository and were never mapped to a file (`unmapped_imports`); and
+  the `caveats` no count expresses. `complete` is true when this answer has none of those gaps and
+  `null` — never a cheerful zero — when the index predates the record. It is a claim about the
+  files that were read and nothing more; a repository never crawled is answered by `searched`. The
+  CLI prints one line of it, the viewer a note under *who links here*, and neither shows a count
+  without it: a bare `0` is the one number a reader must not take on trust.
+- **`unresolved_matching` is what makes the total bearable.** Click's index holds 1,422 links
+  whose target it cannot identify, nearly all references into an `__init__.py` that re-exports
+  names it does not define. The total is alarming and almost always irrelevant; the count of them
+  that name the address asked about is the one that decides whether this answer may be trusted.
+- **What the crawl could not do is recorded by the crawl, per revision.** `revisions.skipped` and
+  `revisions.unmapped` are written at crawl time. They cannot be derived afterwards from
+  `definitions`, which has one row per identity written by `INSERT OR IGNORE`: that row keeps the
+  **first** crawl's `imports`, so after an extractor change it reports a classification that is no
+  longer true. An earlier version of `coverage` read it and claimed a gap the source-root rule had
+  already closed. Per-place facts belong on the revision, not on the identity.
 - **In the index, identity is the key and a place is a row.** `definitions` has one row per
   identity; `locations` one per (repo, sha, path, symbol). "Two copies of one thing are one
   thing" is therefore a join, not a heuristic — `dups` is `GROUP BY identity`.
@@ -458,6 +487,9 @@ token would have broken claims by anyone but Leo.
 - **Tests never touch the real index.** `config_file` sets `CTTP_INDEX` to `tmp_path`; a test
   that needs an index opens one there. `open_index(create=False)` is what queries use, so a
   query never creates an empty index as a side effect.
+- **A `who` count is never shown without its coverage.** The CLI, the MCP tool and the viewer all
+  carry it; `complete` is `null` when it cannot be told, never `true` by default. Weakening this
+  puts back the thrash the benchmark measured.
 - **`docs/json-schemas.md` is never edited by hand.** `test_schemas.py` diffs it against
   `markdown()`; regenerate with `python -m cttp.schemas`.
 - **The identity of `print("hello world!")` is `75a27070015e…`**, pinned in `test_address.py`.
@@ -592,6 +624,10 @@ token would have broken claims by anyone but Leo.
   stream-json --verbose` from a scratch directory; the `tool_use` blocks in the stream show the
   call. `cttp mcp install --claude-code` is the persistent attach (writes Leo's Claude Code
   config) — offer it, don't run it unasked.
+- **A `--force` re-crawl refreshes locations and links but not a definition row.** `INSERT OR
+  IGNORE` keeps the identity's existing `imports`, `unresolved`, signature and docstring, so the
+  viewer's *third party* line can show a stale classification after an extractor change. The links
+  and the backlinks are correct; the definition row's derived metadata is the first crawl's.
 - **The real index is `~/.local/share/cttp/index.db`.** It holds whatever was crawled by hand —
   including the driver corpus (`github.com/torvalds/linux [v7.3-rc1]`, ~34,000 pages), so
   `dups` and `search` answer at kernel scale; the tests never see it. `cttp index status` says

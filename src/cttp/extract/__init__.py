@@ -54,6 +54,9 @@ class Page:
     imports: tuple[str, ...] = ()  # a definition's import statements for stdlib/third-party names
     unresolved: tuple[str, ...] = ()  # free names: not local, imported, defined here or builtin
     links: tuple[Link, ...] = ()  # asserted: the `# cttp…:` lines found in the page's text
+    parsed: bool = True  # False for a file its language's extractor could not parse: the page
+    # stands (its text is its text) but no reference was read from it, which `who`'s coverage
+    # counts as a hole rather than letting a quietly reference-free file pass for a complete answer
 
 
 def language_of(path: str) -> str:

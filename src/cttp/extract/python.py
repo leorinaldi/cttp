@@ -63,6 +63,7 @@ def extract(source: str, path: str, symbol: str | None = None, files: Iterable[s
             language="python",
             span=(1, text.count("\n")),
             links=tuple(links),
+            parsed=False,  # its links stand; no reference could be read (spec §6, coverage)
         )
     module = Module(tree, text, path, set(files))
     return module.definition(symbol) if symbol else module.script()

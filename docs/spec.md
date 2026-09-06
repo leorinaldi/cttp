@@ -250,7 +250,7 @@ query rather than a heuristic.
 **Queries the index must answer,** each a CLI command and an MCP tool:
 
 - `who <address>` — backlinks: every definition linking here, by relation and origin, across every
-  crawled repository.
+  crawled repository, **with the coverage of that answer beside it**.
 - `dups [--shape]` — groups of definitions sharing an identity, or a shape, with their locations.
 - `closure <address>…` — the transitive set of definitions the given ones reference, in dependency
   order, for handing to an agent as the context of a task.
@@ -261,6 +261,17 @@ query rather than a heuristic.
 **Decision — crawling is explicit.** `cttp index add <repo-or-path>` and `cttp index crawl` walk a
 list you gave it. There is no background daemon and nothing crawls the world by default. A public
 index that has crawled a large corpus is a service someone may run, using this same code.
+
+**Decision — `who` states its own coverage.** An answer whose completeness cannot be judged is one
+its reader must reproduce by hand, and a reader that reproduces the answer has not been helped.
+So `who` returns, beside the backlinks, what the answer is an answer *over*: the revisions
+searched and the directories each reached; the files the crawl could not read, and which of those
+could have held a reference at all; the recorded links whose target the index cannot identify, and
+how many of those name *this* address; the imports that point into a repository and were never
+mapped to a file; and the ways `who` is knowingly incomplete that no count expresses. `complete` is
+true when this answer has none of those gaps — the reader may stop. It is a claim about the files
+that were read and nothing more: a repository never crawled is answered by the list of those that
+were. The same duty falls on any later query whose zero could be mistaken for an absence.
 
 ## 7. The materializer
 

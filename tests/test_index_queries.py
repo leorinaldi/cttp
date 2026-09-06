@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 from cttp.cli import app
 from cttp.closure import closure as live_closure
 from cttp.expand import expand_file
-from cttp.index.crawl import add, crawl
+from cttp.index.crawl import MAX_FILE_BYTES, add, crawl
 from cttp.index.queries import closure, dups, history, rank, search, who
 from cttp.index.schema import IndexingError, open_index
 from cttp.resolve import resolve
@@ -18,6 +18,8 @@ from cttp.resolve import resolve
 runner = CliRunner()
 PYREPO = "github.com/leorinaldi/pyrepo"
 GREET = 'def greet(name: str) -> str:\n    """Say hello."""\n    return f"hi {name}"\n'
+PROSE = 'def d():\n    """A link line reads\n\n    # cttp: <address> [key=value]\n    """\n'
+USES_GREET = 'from pkg.core import greet\n\n\ndef t():\n    return greet("a")\n'
 SALUTE = (
     'def salute(name: str) -> str:\n    """A greeting for a friend."""\n    return f"yo {name}"\n'
 )
@@ -212,3 +214,171 @@ def test_who_sees_a_src_layouts_tests(registry, tmp_path, monkeypatch):
     script, fn = out["backlinks"]
     assert script["source"]["path"] == "tests/test_core.py" and script["source"]["symbol"] is None
     assert fn["source"]["symbol"] == "test_greet" and fn["name"] == "greet"
+
+
+# --- coverage: what a `who` answer is an answer over (the P8-T3 follow-up) ----------------------
+
+
+def test_coverage_names_the_revisions_and_the_directories_reached(world, registry):
+    """`who` says what it searched, so an agent can see whether the question was in scope."""
+    conn, consumer, twins = world
+    cov = who(conn, f"{PYREPO}@v1/lib.py#deep", registry)["coverage"]
+    assert cov["repos"] == 3 and cov["revisions"] == 4  # pyrepo twice, consumer and twins once
+    assert {s["repo"] for s in cov["searched"]} == {PYREPO, consumer, twins}
+    pyrepo = [s for s in cov["searched"] if s["repo"] == PYREPO]
+    assert [s["current"] for s in pyrepo] == [False, True]  # the edit is the current revision
+    assert all(s["paths"] == {".": s["pages"] and s["paths"].get(".")} for s in pyrepo)
+    assert cov["origin"] == "derived" and cov["caveats"]
+
+
+def test_coverage_is_complete_when_every_reference_was_attributed(registry, tmp_path, monkeypatch):
+    """The src-layout `who` now gets right: nothing skipped, nothing unmapped, no unidentified
+    link naming `greet`. `complete` is how an agent knows not to corroborate by hand."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(
+        tmp_path,
+        "srccomplete",
+        {
+            "src/pkg/__init__.py": "",
+            "src/pkg/core.py": GREET,
+            "tests/test_core.py": USES_GREET,
+        },
+    )
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    out = who(conn, f"{repo}@v1/src/pkg/core.py#greet", registry)
+    cov = out["coverage"]
+    assert out["count"] == 2
+    assert cov["complete"] is True
+    assert cov["skipped"] == 0 and cov["unread"] == 0
+    assert cov["unresolved_matching"] == 0 and cov["unmapped_imports"] == []
+    assert cov["searched"][0]["paths"] == {"src": 2, "tests": 1}
+
+
+def test_coverage_counts_a_binary_as_skipped_but_not_as_a_gap(registry, tmp_path, monkeypatch):
+    """A file the crawl could not read is reported; one that could hold neither a link nor a
+    reference is not a hole, or `complete` would never be true of a real repository."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    blob = "x" * (MAX_FILE_BYTES + 1)  # the crawl's other reason to skip a file it cannot read
+    repo = add_remote_repo(tmp_path, "withblob", {"lib.py": GREET, "logo.png": blob})
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    cov = who(conn, f"{repo}@v1/lib.py#greet", registry)["coverage"]
+    assert cov["skipped"] == 1 and cov["unread"] == 0 and cov["complete"] is True
+    assert cov["searched"][0]["skipped"] == 1
+
+
+def test_coverage_counts_an_unparsable_python_file_as_unread(registry, tmp_path, monkeypatch):
+    """A Python file the crawl could not parse could have referenced anything: the answer has a
+    hole, and says so."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(tmp_path, "broken", {"lib.py": GREET, "bad.py": "def (:\n"})
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    cov = who(conn, f"{repo}@v1/lib.py#greet", registry)["coverage"]
+    assert cov["skipped"] == 1 and cov["unread"] == 1 and cov["complete"] is False
+
+
+def test_coverage_reports_an_import_it_could_not_map(registry, tmp_path, monkeypatch):
+    """`pkg` lives under `lib/`, which is no source root, so `from pkg.core import greet` maps to
+    nothing and the reference is never recorded. `who` answers 0 — and admits why."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(
+        tmp_path,
+        "otherroot",
+        {
+            "lib/pkg/__init__.py": "",
+            "lib/pkg/core.py": GREET,
+            "tests/test_core.py": USES_GREET,
+        },
+    )
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    out = who(conn, f"{repo}@v1/lib/pkg/core.py#greet", registry)
+    cov = out["coverage"]
+    assert out["count"] == 0  # the reference the extractor could not resolve
+    assert cov["complete"] is False
+    assert [(u["module"], u["files"]) for u in cov["unmapped_imports"]] == [("pkg", 1)]
+
+
+def test_coverage_flags_unidentified_links_that_name_this_address(registry, tmp_path, monkeypatch):
+    """A re-export: `from pkg import greet` reaches `__init__.py`, which only imports the name, so
+    the index cannot tell the reference means `core.greet`. A `who` of 0 that did not say so is
+    the answer an agent cannot trust."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(
+        tmp_path,
+        "reexport",
+        {
+            "pkg/__init__.py": "from pkg.core import greet\n",
+            "pkg/core.py": GREET,
+            "user.py": 'from pkg import greet\n\n\ndef t():\n    return greet("a")\n',
+        },
+    )
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    cov = who(conn, f"{repo}@v1/pkg/core.py#greet", registry)["coverage"]
+    assert cov["unresolved_matching"] > 0 and cov["complete"] is False
+    # a definition nothing re-exports is unaffected by the same index's unidentified links
+    other = who(conn, f"{repo}@v1/pkg/__init__.py", registry)["coverage"]
+    assert other["unresolved_targets"] == cov["unresolved_targets"]
+
+
+def test_coverage_cannot_tell_on_an_index_that_predates_the_skipped_record(
+    registry, tmp_path, monkeypatch
+):
+    """An index crawled by an older cttp has no record of what it could not read. `null`, and
+    `complete` null with it — never a cheerful `0`."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(tmp_path, "older", {"lib.py": GREET})
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    conn.execute("UPDATE revisions SET skipped = NULL")
+    conn.commit()
+    cov = who(conn, f"{repo}@v1/lib.py#greet", registry)["coverage"]
+    assert cov["skipped"] is None and cov["unread"] is None and cov["complete"] is None
+    assert runner.invoke(app, ["who", f"{repo}@v1/lib.py#greet"]).output.count("incomplete") == 1
+
+
+def test_the_index_migrates_a_table_written_without_the_skipped_column(tmp_path):
+    """`CREATE TABLE IF NOT EXISTS` leaves an existing table alone, so a column added later needs
+    its own `ALTER TABLE`; a reader tolerates its absence instead of taking the write lock."""
+    from cttp.index.schema import has_column
+
+    path = tmp_path / "old.db"
+    conn = open_index(path)
+    conn.execute("DROP TABLE revisions")
+    conn.execute(
+        "CREATE TABLE revisions (repo TEXT NOT NULL REFERENCES repos(locator), sha TEXT NOT NULL,"
+        " committed_at INTEGER, license TEXT, crawled_at TEXT NOT NULL, files INTEGER NOT NULL,"
+        " PRIMARY KEY (repo, sha))"
+    )
+    conn.commit()
+    conn.close()
+    assert not has_column(open_index(path, create=False), "revisions", "skipped")
+    assert has_column(open_index(path), "revisions", "skipped")  # a writer migrates it
+
+
+def test_coverage_counts_a_link_line_the_crawl_had_to_ignore(registry, tmp_path, monkeypatch):
+    """Prose that looks like a link costs the line, not the file — but an asserted link may be
+    what was lost, so it is a hole in the answer and not a silent one."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(
+        tmp_path,
+        "prose",
+        {"lib.py": GREET, "doc.py": PROSE},
+    )
+    add(conn, repo, registry.config)
+    crawl(conn, registry)
+    cov = who(conn, f"{repo}@v1/lib.py#greet", registry)["coverage"]
+    assert cov["ignored_links"] == 1 and cov["unread"] == 0
+    assert cov["complete"] is False
+    out = runner.invoke(app, ["who", f"{repo}@v1/lib.py#greet"]).output
+    assert "1 link line(s) ignored" in out

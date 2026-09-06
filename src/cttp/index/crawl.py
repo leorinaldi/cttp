@@ -129,6 +129,8 @@ class Crawled:
     definitions: int = 0  # identities the index had not seen before
     links: int = 0
     skipped: list[str] | None = None  # files that could not be read or parsed, with the reason
+    unmapped: dict[str, int] | None = None  # module → files: an import naming a module this
+    # repository provides that no source root reached, so no reference was recorded for it
 
     def to_json(self) -> dict:
         return {
@@ -140,6 +142,7 @@ class Crawled:
             "definitions": self.definitions,
             "links": self.links,
             "skipped": list(self.skipped or []),
+            "unmapped": dict(self.unmapped or {}),
         }
 
 
@@ -234,9 +237,10 @@ def _crawl_repo(
         "VALUES (?, ?, ?, ?, ?, ?)",
         (locator, sha, committed, gitcache.license_of(repo, sha), now(), len(files)),
     )
-    out = Crawled(locator, sha, "crawled", files=len(files), skipped=[])
+    out = Crawled(locator, sha, "crawled", files=len(files), skipped=[], unmapped={})
     writer = _Writer(conn, locator, sha, out)
     py_files = [f for f in files if language_of(f) == "python"]
+    writer.provides = _provided_modules(py_files)
     for path in files:
         try:
             text = gitcache.show(repo, sha, path)
@@ -255,6 +259,11 @@ def _crawl_repo(
                 writer.other_file(path, text)
         except (LinkError, ExtractError, SyntaxError) as e:
             out.skipped.append(f"{path}: {e}")
+    # what was not read is part of the answer: `who`'s coverage reports it (spec §6)
+    conn.execute(
+        "UPDATE revisions SET skipped = ?, unmapped = ? WHERE repo = ? AND sha = ?",
+        (json.dumps(out.skipped), json.dumps(out.unmapped), locator, sha),
+    )
     conn.commit()
     return out
 
@@ -276,16 +285,46 @@ def neutralize_bad_links(text: str) -> tuple[str, list[str]]:
     return ("\n".join(lines), notes) if notes else (text, notes)
 
 
+def _provided_modules(paths: list[str]) -> set[str]:
+    """The modules this repository could satisfy an absolute import with: every package directory
+    (`<name>/__init__.py`) at any depth, and every Python file at the repository root.
+
+    Deliberately wider than the extractor's roots and no wider. A package under a directory that
+    is no source root — `lib/pkg/` — is named here though no import can be rooted at it, which is
+    the point: an import that named it went unmapped, and the reference behind it was never
+    recorded. A module file *inside* a package is not, since nothing puts its directory on the
+    path. Computed once per revision, where the file list is the one the extractor saw."""
+    out: set[str] = set()
+    for p in paths:
+        if p.endswith("/__init__.py"):
+            out.add(p[: -len("/__init__.py")].rsplit("/", 1)[-1])
+        elif p.endswith(".py") and "/" not in p:
+            out.add(p[: -len(".py")])
+    return out
+
+
 class _Writer:
     """Writes one revision's pages and links."""
 
     def __init__(self, conn, repo: str, sha: str, out: Crawled):
         self.conn, self.repo, self.sha, self.out = conn, repo, sha, out
         self.rev12 = short(sha)
+        self.provides: set[str] = set()
 
     def code_file(self, path: str, text: str, files: list[str]) -> None:
         """A file with an extractor: the file page, one page per definition, every link."""
         whole = extract(path, text, None, files)
+        # an import naming a module this repository provides that the extractor could not map to a
+        # file: no reference was recorded for it, and `who`'s coverage owns up to that. Counted
+        # here rather than from `definitions.imports`, which is one row per identity and keeps the
+        # first crawl's reading — a stale one after an extractor change (spec §6)
+        for module in whole.third_party:
+            if module in self.provides:
+                self.out.unmapped[module] = self.out.unmapped.get(module, 0) + 1
+        if not whole.parsed:
+            # the page stands, but no definition and no reference came out of it: a hole in every
+            # `who` over this revision, and `coverage` counts it as one
+            self.out.skipped.append(f"{path}: no reference read — the file did not parse")
         defs: list[tuple[str, Page]] = []
         for sym in definitions(path, text):
             try:

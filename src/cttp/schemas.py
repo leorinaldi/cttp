@@ -17,11 +17,12 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 FINGERPRINTS = {
     1: "95c46a2dbc0766c1",
     2: "14c8b9e5c6d17b96",
     3: "b4d308f6b63419e7",
+    4: "41ec61e8a59e6c78",  # `who` gained `coverage`
 }  # schema version → fingerprint(); a schema change bumps both
 
 # --- the schema language -----------------------------------------------------------------------
@@ -338,6 +339,56 @@ DEFS["by"] = mapping(
     'counts by relation, then by origin: `{"is": {"asserted": 2}, "ref": {"derived": 1}}`',
 )
 
+DEFS["searched_revision"] = obj(
+    "one crawled revision the answer covers",
+    {
+        "repo": string("host/owner/repo"),
+        "rev": string("the commit, 12 hex").derived(),
+        "sha": string("the full commit SHA").derived(),
+        "current": boolean("whether this is the repository's most recently crawled revision — what `dups`, `rank` and `search` report over"),
+        "committed_at": integer("the commit's own unix timestamp").null().derived(),
+        "crawled_at": string().derived(),
+        "files": integer("files the crawl looked at").derived(),
+        "pages": integer("pages recorded: every Python file and each of its definitions, plus any other file carrying a link").derived(),
+        "links": integer("link and reference rows recorded from this revision").derived(),
+        "paths": mapping(integer(), "top-level directory → files under it that produced a page (`.` for the repository root); a directory absent here holds no page, as in a sparse checkout").derived(),
+        "skipped": integer("files the crawl could not read or parse; `null` for a revision crawled before this was recorded — `cttp index crawl --force` fills it").null().derived(),
+        "unread": integer("of those, the files a language extractor would have read and did not — a hole anything could have been referenced through. A binary blob is skipped and is no hole").null().derived(),
+        "ignored_links": integer("link lines the crawl had to ignore because they did not parse — usually prose in a docstring that looks like a link, but the crawl cannot tell").null().derived(),
+        "origin": DERIVED,
+    },
+)  # fmt: skip
+
+DEFS["unmapped_import"] = obj(
+    "an import naming a module the repository itself provides that the extractor could not map to a file — a layout no source root reaches, or a namespace package with no `__init__.py`",
+    {
+        "repo": string(),
+        "rev": string("the commit, 12 hex").derived(),
+        "module": string("the top-level module named").derived(),
+        "files": integer("files importing it").derived(),
+        "origin": DERIVED,
+    },
+)  # fmt: skip
+
+DEFS["coverage"] = obj(
+    "what the answer is an answer over: an agent that wants to stop reads this instead of corroborating by hand",
+    {
+        "repos": integer("repositories searched"),
+        "revisions": integer("crawled revisions searched — `who` sees every one of them"),
+        "files": integer("files looked at across them"),
+        "searched": arr(ref("searched_revision"), "by repository, then crawl order").derived(),
+        "skipped": integer("files not read, across every revision; `null` when any revision predates the record").null().derived(),
+        "unread": integer("of those, the files a language extractor would have read and did not").null().derived(),
+        "ignored_links": integer("link lines the crawl had to ignore because they did not parse; an asserted link may be missing for each").null().derived(),
+        "unresolved_targets": integer("recorded links whose target identity the index cannot tell; `who` matches those by name or place only, so a match can be missed. Mostly re-exports: a reference to `click.echo` lands on the `__init__.py` that imports the name, which defines nothing").derived(),
+        "unresolved_matching": integer("of those, the ones naming *this* address — the misses this answer could have. Zero is `who` saying the total does not concern the question asked").derived(),
+        "unmapped_imports": arr(ref("unmapped_import"), "each one is a reference the crawl did not record, and so a backlink `who` cannot see").derived(),
+        "caveats": arr(string(), "the ways `who` is knowingly incomplete inside the files it did read; no count expresses these"),
+        "complete": boolean("true when this answer has no gap: no file went unread, no link line was ignored, no unidentified link names this address, no import into a repository went unmapped. The answer then needs no corroboration beyond `caveats`. It says nothing about a repository never crawled: `searched` answers that. `null` when `unread` is unknown").null().derived(),
+        "origin": DERIVED,
+    },
+)  # fmt: skip
+
 DEFS["dup_group"] = obj(
     "pages that are the same code (by identity) or the same structure (by shape), in more than one place",
     {
@@ -433,6 +484,7 @@ DEFS["crawled"] = obj(
         "definitions": integer("identities the index had not seen before"),
         "links": integer(),
         "skipped": arr(string(), "files that could not be read or parsed, with the reason"),
+        "unmapped": mapping(integer(), "module → files: an import naming a module this repository provides that no source root reached, so no reference was recorded for it; `who`'s coverage reports these").derived(),
     },
 )  # fmt: skip
 
@@ -719,6 +771,7 @@ COMMANDS: dict[str, Command] = {
                 ).derived(),
                 "count": integer(),
                 "by": ref("by"),
+                "coverage": ref("coverage"),
                 "origin": obj(
                     "", {"backlinks": DERIVED, "relation": string("`per link: its origin`")}
                 ),
@@ -728,6 +781,10 @@ COMMANDS: dict[str, Command] = {
         (
             "Matches by identity; by place or name only for links whose target identity the index "
             "could not tell.",
+            "Read `coverage` before trusting the count: it names the revisions searched and what "
+            "went unattributed inside them. `coverage.complete` true means every reference in the "
+            "files read was attributed — the answer needs no corroboration, except for the "
+            "`caveats`. It cannot speak for a repository that was never crawled.",
         ),
     ),
     "dups": Command(

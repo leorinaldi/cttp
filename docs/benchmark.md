@@ -215,6 +215,66 @@ comparable to the sweep rather than being graded against a new standard.
 
 ---
 
+## Coverage, and what it moved
+
+The section above ends on a diagnosis: completeness was necessary and not sufficient, because the
+agent had no way to *know* `who` was complete. So `who` was made to say so. Its object carries a
+**`coverage`** block: the revisions searched and the directories each reached; the files the crawl
+could not read, and which of those a language extractor would have read; the link lines it had to
+ignore; the recorded links whose target the index cannot identify, and **how many of those name
+the address asked about**; the imports that point into a repository and were never mapped to a
+file; and the ways `who` is knowingly incomplete that no count expresses. `complete` is true when
+this answer has none of those gaps.
+
+The last of those counts is what does the work. Click's index holds 1,422 links whose target it
+cannot identify — nearly all of them references into `src/click/__init__.py`, which re-exports
+names it does not define. That total is alarming and almost always irrelevant: **0** of them name
+`strip_ansi`, so a `who` of `strip_ansi` is complete. Ask instead about `utils.py#echo`, which
+`__init__.py` does re-export, and 259 of them do — and `coverage` says so. A `count: 0` gets the
+same treatment: `core.py#Group.get_command` has no backlinks and four unidentified links naming
+it, which is the difference between *nothing uses this* and *I cannot see what uses this*.
+
+The five impact tasks were re-run again, three runs per arm, same model, same harness, same
+commits: `bench/agent/results/2026-09-05-who-coverage/`.
+
+| task | layout | ratio after src-roots | ratio after coverage | turns before | turns after |
+|---|---|---:|---:|---:|---:|
+| `im-color-default-click` | `src/` | 23.62 | **8.65** | 43 | 24 |
+| `im-nested-chain-click` | `src/` | 8.06 | **2.46** | 27 | 14 |
+| `im-obj-setattr-attrs` | `src/` | 5.84 | **3.10** | 26 | 18 |
+| `im-pick-bool-rich` | flat | 1.74 | 2.06 | 13 | 13 |
+| `im-set-cell-size-rich` | flat | 1.04 | 1.91 | 9 | 14 |
+| **impact total** | | **6.65** | **2.40** | 25 | 14 |
+
+Three things to read from this.
+
+**The corroboration stopped.** Median turns across the family fell 25 → 14, and the links arm's
+own token cost — the number the ratio's denominator cannot move — fell with it on the three tasks
+that were thrashing: 1,329,911 → 635,046 on `im-color-default-click`, 653,777 → 173,728 on
+`im-nested-chain-click`, 530,465 → 255,444 on `im-obj-setattr-attrs`. The worst question in the
+benchmark went from 23.62x at 43 turns to 8.65x at 24. It is still the worst question.
+
+**The two flat tasks got slightly worse, and that is the honest cost.** `im-pick-bool-rich` and
+`im-set-cell-size-rich` rise 1.74 → 2.06 and 1.04 → 1.91, their links-arm tokens up from 105,738
+and 86,216 to 162,368 and 122,805. Those agents were never uncertain — rich is flat, `who` was
+already complete, and they stopped at 13 and 9 turns before the change. Coverage hands them an
+object to read and a `caveats` list to weigh for an assurance they did not need. **Telling an
+agent how far it can trust an answer costs something on every call and repays it only where the
+agent would otherwise have doubted.** The control that made the src-layout attribution safe is
+here measuring a real regression, not noise; whether the object should shrink when there is
+nothing to warn about is an open question.
+
+**Correctness improved.** The links arm now passes 15/15 strict where it passed 14/15, and the
+baseline is unchanged at 12 strict, 15 folded. The recovered run is `im-obj-setattr-attrs`, whose
+links arm previously lost one run to non-convergence.
+
+Two caveats on the comparison. The baseline arm was re-run too and its medians moved
+(`im-color-default-click`: 56,303 → 73,449 tokens), so part of each ratio's change is the
+denominator wandering between sweeps — the links-arm token figures above are the steadier
+evidence. And the grader is unchanged, so the answers are scored against the same ground truth.
+
+---
+
 ## What the number does not mean
 
 Seven things a reader should hold against any ratio in the table.

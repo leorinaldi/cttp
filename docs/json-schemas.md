@@ -2,7 +2,7 @@
 
 **Generated from `src/cttp/schemas.py` — do not edit.** `python -m cttp.schemas` rewrites it; `tests/test_schemas.py` fails when it is stale.
 
-Schema version **3**, fingerprint `b4d308f6b63419e7`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
+Schema version **4**, fingerprint `41ec61e8a59e6c78`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
 
 ## Conventions
 
@@ -313,6 +313,7 @@ Backlinks: every indexed page linking to the address, by relation and origin.
 **When:** To find who uses a definition before changing it, or where a copy came from.
 
 - Matches by identity; by place or name only for links whose target identity the index could not tell.
+- Read `coverage` before trusting the count: it names the revisions searched and what went unattributed inside them. `coverage.complete` true means every reference in the files read was attributed — the answer needs no corroboration, except for the `caveats`. It cannot speak for a repository that was never crawled.
 
 | Field | Type | Origin | Meaning |
 |---|---|---|---|
@@ -326,6 +327,7 @@ Backlinks: every indexed page linking to the address, by relation and origin.
 | `backlinks` | [→ [backlink](#backlink)] | derived | sorted `is`, `from`, `see`, `ref`; asserted before derived |
 | `count` | integer |  |  |
 | `by` | → [by](#by) |  |  |
+| `coverage` | → [coverage](#coverage) |  |  |
 | `origin` | object |  |  |
 | `origin.backlinks` | `derived` |  | computed by the tool from the repository |
 | `origin.relation` | string |  | `per link: its origin` |
@@ -743,6 +745,59 @@ counts by relation, then by origin: `{"is": {"asserted": 2}, "ref": {"derived": 
 | Field | Type | Origin | Meaning |
 |---|---|---|---|
 
+### searched_revision
+
+one crawled revision the answer covers
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `repo` | string |  | host/owner/repo |
+| `rev` | string | derived | the commit, 12 hex |
+| `sha` | string | derived | the full commit SHA |
+| `current` | boolean |  | whether this is the repository's most recently crawled revision — what `dups`, `rank` and `search` report over |
+| `committed_at` | integer? | derived | the commit's own unix timestamp |
+| `crawled_at` | string | derived |  |
+| `files` | integer | derived | files the crawl looked at |
+| `pages` | integer | derived | pages recorded: every Python file and each of its definitions, plus any other file carrying a link |
+| `links` | integer | derived | link and reference rows recorded from this revision |
+| `paths` | {string: integer} | derived | top-level directory → files under it that produced a page (`.` for the repository root); a directory absent here holds no page, as in a sparse checkout |
+| `skipped` | integer? | derived | files the crawl could not read or parse; `null` for a revision crawled before this was recorded — `cttp index crawl --force` fills it |
+| `unread` | integer? | derived | of those, the files a language extractor would have read and did not — a hole anything could have been referenced through. A binary blob is skipped and is no hole |
+| `ignored_links` | integer? | derived | link lines the crawl had to ignore because they did not parse — usually prose in a docstring that looks like a link, but the crawl cannot tell |
+| `origin` | `derived` |  | computed by the tool from the repository |
+
+### unmapped_import
+
+an import naming a module the repository itself provides that the extractor could not map to a file — a layout no source root reaches, or a namespace package with no `__init__.py`
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `repo` | string |  |  |
+| `rev` | string | derived | the commit, 12 hex |
+| `module` | string | derived | the top-level module named |
+| `files` | integer | derived | files importing it |
+| `origin` | `derived` |  | computed by the tool from the repository |
+
+### coverage
+
+what the answer is an answer over: an agent that wants to stop reads this instead of corroborating by hand
+
+| Field | Type | Origin | Meaning |
+|---|---|---|---|
+| `repos` | integer |  | repositories searched |
+| `revisions` | integer |  | crawled revisions searched — `who` sees every one of them |
+| `files` | integer |  | files looked at across them |
+| `searched` | [→ [searched_revision](#searched_revision)] | derived | by repository, then crawl order |
+| `skipped` | integer? | derived | files not read, across every revision; `null` when any revision predates the record |
+| `unread` | integer? | derived | of those, the files a language extractor would have read and did not |
+| `ignored_links` | integer? | derived | link lines the crawl had to ignore because they did not parse; an asserted link may be missing for each |
+| `unresolved_targets` | integer | derived | recorded links whose target identity the index cannot tell; `who` matches those by name or place only, so a match can be missed. Mostly re-exports: a reference to `click.echo` lands on the `__init__.py` that imports the name, which defines nothing |
+| `unresolved_matching` | integer | derived | of those, the ones naming *this* address — the misses this answer could have. Zero is `who` saying the total does not concern the question asked |
+| `unmapped_imports` | [→ [unmapped_import](#unmapped_import)] | derived | each one is a reference the crawl did not record, and so a backlink `who` cannot see |
+| `caveats` | [string] |  | the ways `who` is knowingly incomplete inside the files it did read; no count expresses these |
+| `complete` | boolean? | derived | true when this answer has no gap: no file went unread, no link line was ignored, no unidentified link names this address, no import into a repository went unmapped. The answer then needs no corroboration beyond `caveats`. It says nothing about a repository never crawled: `searched` answers that. `null` when `unread` is unknown |
+| `origin` | `derived` |  | computed by the tool from the repository |
+
 ### dup_group
 
 pages that are the same code (by identity) or the same structure (by shape), in more than one place
@@ -832,6 +887,7 @@ one repository crawled at one revision
 | `definitions` | integer |  | identities the index had not seen before |
 | `links` | integer |  |  |
 | `skipped` | [string] |  | files that could not be read or parsed, with the reason |
+| `unmapped` | {string: integer} | derived | module → files: an import naming a module this repository provides that no source root reached, so no reference was recorded for it; `who`'s coverage reports these |
 
 ### repo_status
 

@@ -4,7 +4,8 @@ One SQLite file per index; the default is global (`~/.local/share/cttp/index.db`
 or `CTTP_INDEX` to choose another). Six tables, by grain:
 
 - `repos` — one git remote: its locator, default branch, and the local path it was added from.
-- `revisions` — one crawled commit of one repo: sha, commit time, license at that rev, crawled-at.
+- `revisions` — one crawled commit of one repo: sha, commit time, license at that rev, crawled-at,
+  the files looked at and the ones skipped (what `who`'s coverage reports as not read).
 - `definitions` — one **identity**: shape, language, kind, name, signature, docstring, source,
   imports, free names. Identity is the key, so the same code seen in three places is one row.
 - `locations` — one place an identity was seen: (repo, sha, path, symbol) and its span. Three
@@ -21,7 +22,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -43,6 +44,9 @@ CREATE TABLE IF NOT EXISTS revisions (
     license      TEXT,                 -- SPDX id at this rev; NULL when not available
     crawled_at   TEXT NOT NULL,
     files        INTEGER NOT NULL,     -- files looked at
+    skipped      TEXT,                 -- JSON list of "path: reason"; NULL when never recorded
+    unmapped     TEXT,                 -- JSON {module: files}: imports into this repo the
+                                       -- extractor could not map; NULL when never recorded
     PRIMARY KEY (repo, sha)
 );
 
@@ -150,11 +154,31 @@ def open_index(path: Path | str | None = None, create: bool = True) -> sqlite3.C
         # a reader must not run the schema script: `CREATE TABLE IF NOT EXISTS` takes the write
         # lock, and a crawl holds it for minutes — the viewer would answer 500 the whole while
         conn.executescript(SCHEMA)
+        migrate(conn)
         conn.execute(
             "INSERT OR IGNORE INTO meta(key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),)
         )
         conn.commit()
     return conn
+
+
+# columns added after an index version: (table, column, declaration). `CREATE TABLE IF NOT EXISTS`
+# leaves an existing table alone, so a column added later needs its own `ALTER TABLE`.
+ADDED_COLUMNS = (("revisions", "skipped", "TEXT"), ("revisions", "unmapped", "TEXT"))
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Add the columns an index made by an older cttp lacks. Writers only — a reader tolerates a
+    missing column through `has_column` instead, so it never takes the write lock."""
+    for table, column, decl in ADDED_COLUMNS:
+        if not has_column(conn, table, column):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+    conn.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),))
+
+
+def has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    """Whether an index has a column — false for one written before it was added."""
+    return any(r["name"] == column for r in conn.execute(f"PRAGMA table_info({table})"))
 
 
 def counts(conn: sqlite3.Connection) -> dict[str, int]:

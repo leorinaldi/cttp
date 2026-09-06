@@ -10,6 +10,23 @@
 <a href="/r/{{ locator }}"><code>{{ locator }}</code></a>
 {%- endmacro %}
 
+{# What the backlinks are an answer over. A bare count — a zero above all — is the one number a
+   reader must not take on trust, so it never appears without this beside it. #}
+{% macro coverage_note(cov) -%}
+{% if cov %}
+<p class="notice">Searched {% for s in cov.searched %}<code>{{ s.repo }}@{{ s.rev }}</code>{{ ", " if not loop.last }}{% endfor %}
+— {{ cov.revisions }} revision(s), {{ cov.files }} file(s).
+{% if cov.complete %}<strong>Complete</strong>: every reference in the files read was attributed.
+{% elif cov.complete is none %}<strong>Coverage unknown</strong>: this index predates the record of what a crawl skipped — <code>cttp index crawl --force</code> fills it.
+{% else %}<strong>Incomplete</strong>:
+{% if cov.unresolved_matching %}{{ cov.unresolved_matching }} link(s) naming this address have a target the index cannot identify.{% endif %}
+{% if cov.unread %}{{ cov.unread }} file(s) a language extractor would have read went unread.{% endif %}
+{% if cov.ignored_links %}{{ cov.ignored_links }} link line(s) did not parse and were ignored.{% endif %}
+{% if cov.unmapped_imports %}imports never mapped to a file: {% for m in cov.unmapped_imports|map(attribute="module")|unique|sort %}<code>{{ m }}</code>{{ ", " if not loop.last }}{% endfor %}.{% endif %}
+{% endif %}</p>
+{% endif %}
+{%- endmacro %}
+
 {# Who links here: one row per backlink; the relation and its origin are what the link asserts
    (or the tool derived); the source identity is always derived. #}
 {% macro backlinks(out) -%}
@@ -17,7 +34,9 @@
 <p class="notice">Not indexed: nothing crawled links here, or the index has not seen this address.</p>
 {% elif out.count == 0 %}
 <p class="notice">Nothing crawled links here.</p>
+{{ coverage_note(out.coverage) }}
 {% else %}
+{{ coverage_note(out.coverage) }}
 <div class="wrap"><table>
 <tr><th>relation</th><th>from</th><th>identity</th><th>license</th><th>as written</th></tr>
 {% for b in out.backlinks %}

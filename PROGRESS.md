@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). THE BENCHMARK'S HEADLINE DEFECT IS FIXED AND RE-MEASURED.** Phase 0
+**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). THE BENCHMARK'S HEADLINE DEFECT IS CLOSED IN BOTH HALVES AND RE-MEASURED TWICE: THE IMPACT FAMILY 16.28x → 6.65x → 2.40x.** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -51,41 +51,47 @@ five cross-repository reuses graded by hidden tests plus a link check, five impa
 graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). **405 fast tests
 green plus 17 `slow`** (the corpus, and the graders' acceptance over the real clones), ruff clean.
 
-_Last updated: 2026-09-05, session end (the src-layout source-root rule in `extract/python.py`, and the five impact tasks re-run: the family's ratio 16.28 → 6.65)._
+_Last updated: 2026-09-05, session end (`who` states its own coverage — schema version 4 — and the five impact tasks re-run: the family's ratio 6.65 → 2.40, median turns 25 → 14)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**P8 is complete and its headline defect is closed.** `extract/python.py` now resolves an
-absolute import against the repository's source roots, `who` is complete on `src/`-layout
-projects, and the five impact tasks were re-run to measure it: the family's ratio fell 16.28 →
-**6.65**, the three `src/` tasks by 1.7x / 3.9x / 3.3x while the two flat rich tasks barely
-moved. `docs/benchmark.md` carries the before/after table and its reading;
-`bench/agent/results/2026-09-05-impact-srcroots/` carries the thirty records.
+**`who` now states its own coverage, and it moved the number twice over.** The impact family went
+16.28x (the sweep) → 6.65x (the source-root rule) → **2.40x**, median turns 25 → 14, and the links
+arm passes 15/15 where it passed 14/15. The worst question in the benchmark,
+`im-color-default-click`, fell 23.62x at 43 turns → **8.65x at 24**. Records in
+`bench/agent/results/2026-09-05-who-coverage/`; the reading is in
+[`docs/benchmark.md`](docs/benchmark.md) under *Coverage, and what it moved*.
 
-The plan has no task after P8-T3, so the next session picks from what the re-run found. In
-priority order:
+**The honest cost, and the next question it raises.** The two flat-layout rich tasks got *worse* —
+1.74 → 2.06 and 1.04 → 1.91 — because their agents were never uncertain and coverage hands them an
+object to read and three caveats to weigh for an assurance they did not need. In priority order:
 
-1. **Let `who` state its own coverage.** The re-run's finding: completeness was necessary and
-   not sufficient. `im-color-default-click` still costs 23x at 43 turns because the agent has no
-   way to *know* the answer is complete, so it corroborates by hand — and the links arm has no
-   `grep` with which to do that cheaply. A `who` object that said what the index holds (which
-   revisions, which paths crawled) and what it could not resolve (imports the extractor gave up
-   on, links whose target identity is NULL) would let an agent stop. Schema change → bump
-   `SCHEMA_VERSION` and the fingerprint. **Re-run the impact tasks afterwards**, as this session
-   did — it is the cheap direct measurement (30 runs, ~25 min at `--jobs 3`).
-2. **`who` does not follow a re-export.** `from attr import fields` in `tests/` now reaches
-   `src/attr/__init__.py#fields`, which only imports the name, so the definition in
-   `src/attr/_funcs.py` still gains no backlink. A re-export rule (an `__init__.py` binding that
-   is an import of a sibling definition forwards the reference) would close the last of the
-   original defect. Smaller than item 1, and it makes `who` right on attrs' public API.
-3. **The closure keeps a function-local relative import** (`click.formatting.wrap_text` does
+1. **Shrink the coverage object when there is nothing to warn about.** The measured regression on
+   the two rich tasks is the whole of it: `complete: true` with a single crawled repository could
+   collapse to a line, keeping `searched` and the caveats behind a flag or only when
+   `complete` is false or null. This is a schema change → bump `SCHEMA_VERSION` (now 4) and the
+   fingerprint, then re-run the five impact tasks (30 runs, ~35 min at `--jobs 3`) — the cheap
+   direct measurement, twice proven.
+2. **`who` does not follow a re-export.** Unchanged and now *measured*: click's index holds 1,422
+   links whose target it cannot identify, nearly all references into `src/click/__init__.py`,
+   which re-exports names it does not define. `who` on `utils.py#echo` therefore answers 31
+   backlinks and `complete: false` with 259 matching. A re-export rule (an `__init__.py` binding
+   that is an import of a sibling definition forwards the reference) would close it and would turn
+   a large class of `complete: false` into `true`.
+3. **A definition row keeps the first crawl's derived metadata.** `INSERT OR IGNORE` means
+   `--force` refreshes locations and links but not `imports`, `unresolved`, signature or
+   docstring, so the viewer's *third party* line can show a classification the extractor no longer
+   makes. Found this session — an early `coverage` read that column and claimed a gap the
+   source-root rule had already closed. The fix moved to crawl time; the stale row is still there.
+   Properly, `imports`/`unresolved` are per-place and belong on `locations`.
+4. **The closure keeps a function-local relative import** (`click.formatting.wrap_text` does
    `from ._textwrap import TextWrapper` in its body; `expand` inlines the definition and leaves
    the line, which fails at run time). Found in P8-T2, still open; spec §3's refusal list grows
    one line.
-4. **Publish the benchmark.** Leo asked whether the results could be seen on a page. Nothing
+5. **Publish the benchmark.** Leo asked whether the results could be seen on a page. Nothing
    benchmark-related is in the viewer's index by design (each run indexes into its own throwaway
    directory), so this would be a page of its own, not a viewer route.
 
@@ -97,10 +103,6 @@ repos/leorinaldi/cttp-registry/pages -f https_enforced=true`, then compare
 `curl -s https://cttp.ai/hello-world.json` with `localhost:3120/hello-world.json`. Also pending
 Leo: whether `bench/drivers/corpus-preserved/` (13 MB, reproduced byte for byte by `fetch.sh`)
 can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by killed runs can go.
-
-The **real index** (`~/.local/share/cttp/index.db`) still holds `github.com/leorinaldi/cttp`
-crawled under the old rule; `cttp index crawl --force` re-reads it so the viewer shows the
-backlinks the fix adds.
 
 ## Current state — working & verified
 
@@ -313,7 +315,8 @@ backlinks the fix adds.
 - `index/schema.py` — **P4-T1.** One SQLite file, default `~/.local/share/cttp/index.db`
   (`--index <path>`, `CTTP_INDEX`; `XDG_DATA_HOME` honoured). Six tables: `repos` (locator,
   default branch, the local path it was added from), `revisions` (repo, sha, commit time,
-  license at that rev, crawled-at, file count), `definitions` (**identity is the key**: shape,
+  license at that rev, crawled-at, file count, `skipped` JSON and `unmapped` JSON — what the
+  crawl could not read and the imports it could not map, which `who`'s coverage reports), `definitions` (**identity is the key**: shape,
   language, kind, name, signature, docstring, lines, source, imports JSON, unresolved JSON),
   `locations` (identity at (repo, sha, path, symbol) with its span — three places are three
   rows against one definition), `links` (source identity and where it was; the target address
@@ -321,7 +324,9 @@ backlinks the fix adds.
   when the index can tell; relation `is`/`from`/`see`/`ref`; origin; description, derived flag,
   fields JSON, indent; a derived ref's `name`), `names` (registry entries snapshotted at crawl),
   plus `definitions_fts` (FTS5, porter stemming) for search. `open_index(path, create=False)`
-  raises `IndexingError` for a missing file — a query never creates an empty index.
+  raises `IndexingError` for a missing file — a query never creates an empty index. **Migration:**
+  `ADDED_COLUMNS` + `migrate()` bring an older file forward by `ALTER TABLE`, run by writers only;
+  a reader calls `has_column()` and reports `null` rather than taking the write lock.
 - `index/crawl.py` — **P4-T1.** `add()` registers `host/owner/repo`, or a local path whose
   `origin` remote names one — the URL is reversed through `[remotes]` first (so the tests' bare
   repositories map back to their locators), else parsed as https / ssh / scp-style. A registered
@@ -361,7 +366,13 @@ backlinks the fix adds.
   every revision of its repository, ordered by commit time then crawl order (`rowid` breaks
   same-second ties), `changed` and `absent` flags. **`rank`**: distinct linking pages
   (identity, repo, file) per target — a verbatim copy linking back counts; a definition's derived
-  reference to itself does not. **`forward()`** is `--latest`'s rule 3 (P4-T3).
+  reference to itself does not. **`forward()`** is `--latest`'s rule 3 (P4-T3). **`coverage(conn, target)`** is what a `who`
+  answer is an answer over (spec §6): `searched` (every crawled revision — current or not, its
+  files, pages, links and the top-level directories that produced pages), `skipped` / `unread` /
+  `ignored_links` from the revision's own record, `unresolved_targets` with
+  `unresolved_matching` (those naming *this* address — the only part of the total that concerns
+  the question), `unmapped_imports` read from `revisions.unmapped`, the static `WHO_CAVEATS`, and
+  `complete` — true when this answer has no gap, `null` when the index predates the record.
 - `schemas.py` — **P5-T1.** The one definition of every command's `--json` output: a small
   schema language (`S` nodes: object, array, map, string, integer, number, boolean, enum, ref;
   `.null()`, `.derived()`, `.asserted()`, `.about()`), shared objects in `DEFS` (`page` — the
@@ -804,8 +815,10 @@ trigger that would schedule it.
   9 backlinks → 21, the twelve new ones all in `tests/`
 - **`who` does not follow a re-export**: `from attr import fields` in `tests/` reaches
   `src/attr/__init__.py#fields`, which only imports the name, so `src/attr/_funcs.py#fields`
-  gains no backlink. The other half of the original defect, and the last of it → **next
-  session**, second item; trigger: wanting `who` right on a package's public API
+  gains no backlink. The last of the original defect, and now **measured** — 1,422 of click's
+  3,196 recorded links have a target the index cannot identify, nearly all of them this; `who` on
+  `click/utils.py#echo` answers `complete: false` with 259 matching → **next session**, second
+  item; trigger: wanting `who` right on a package's public API
 - **`expand` writes hoisted imports without a blank line after preceding code** when the link
   is at the end of the file, and before whatever `--at` points at (`import os` ends up after
   the expanded function when the link is inserted above it) — valid Python, untidy →
@@ -823,12 +836,28 @@ trigger that would schedule it.
   2026-09-05 and **re-measured**: the impact family fell 16.28x → 6.65x, the three `src/` tasks
   by 1.7x / 3.9x / 3.3x, the two flat rich ones unmoved (the control). Records in
   `results/2026-09-05-impact-srcroots/`
-- **An agent cannot tell that a `who` answer is complete**, so it corroborates by hand:
-  `im-color-default-click` still costs 23x at 43 turns *after* the fix, and the links arm has no
-  `grep` to check with cheaply. Completeness was necessary and not sufficient. A `who` that
-  stated its own coverage — revisions and paths crawled, imports the extractor gave up on, links
-  whose target identity is NULL — is the answer → **next session**, first item; it is a schema
-  change (`SCHEMA_VERSION` and the fingerprint)
+- ~~An agent cannot tell that a `who` answer is complete~~ — closed 2026-09-05 and
+  **re-measured**: `who` returns `coverage` (schema version 4). The impact family fell
+  6.65x → **2.40x**, median turns 25 → 14, `im-color-default-click` 23.62 → 8.65 at 43 → 24
+  turns. Records in `results/2026-09-05-who-coverage/`
+- **Coverage costs where it is not needed.** The two flat-layout rich tasks — the control — got
+  worse (1.74 → 2.06, 1.04 → 1.91): their agents were never uncertain, and the object plus its
+  three caveats is context they read for nothing. Shrinking it when `complete` is true, or
+  putting `searched` and `caveats` behind a flag, is the obvious lever → **next session**, first
+  item; it is a schema change
+- **A definition row keeps the first crawl's derived metadata.** `INSERT OR IGNORE` on
+  `definitions` means a `--force` re-crawl refreshes locations and links but not `imports`,
+  `unresolved`, signature or docstring; the viewer's *third party* line shows the stale
+  classification. The first `unmapped_imports` read that column and reported a gap the
+  source-root rule had closed, which is how it was found; the computation moved to crawl time
+  (`revisions.unmapped`). Properly, `imports` and `unresolved` are per-place and belong on
+  `locations` → **next session**, third item; trigger: the next extractor change, which will make
+  every existing row stale again
+- **`coverage` reports the whole index, not the repository asked about.** `searched` lists every
+  crawled revision and `unresolved_targets` counts index-wide, so a `who` against a large shared
+  index carries a long `searched` list. `unresolved_matching` is the scoped number and the one
+  that decides `complete` → **unscheduled**; trigger: a `who` over an index with many
+  repositories where the list is the bulk of the answer
 - **The impact grader's naming convention favours the links arm.** `who` cannot address a nested
   function, so it credits the enclosing method and the reference answers inherit that; an agent
   reading source names the nested one and is marked wrong. `report.fold_nested` prints a folded
@@ -846,6 +875,43 @@ trigger that would schedule it.
 
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
+
+- **2026-09-05 (twenty-first session) — `who` states its own coverage; the impact family
+  6.65x → 2.40x.** Last session's re-run found that completeness was necessary and not
+  sufficient: `who` was right and the agent could not *tell*, so on the hardest question it
+  corroborated by hand for 43 turns. **The fix** is a `coverage` object on `who`'s answer (spec
+  §6, a new decision there): the revisions searched and the directories each reached; `skipped`
+  files, split into `unread` (a file a language extractor would have read — a real hole) and
+  `ignored_links` (link lines that did not parse); `unresolved_targets` with
+  **`unresolved_matching`**, those naming *this* address; `unmapped_imports`; three static
+  `caveats`; and `complete`, true only when this answer has no gap and **`null`, never a cheerful
+  zero**, when the index predates the record. Schema version **3 → 4**, new fingerprint,
+  `docs/json-schemas.md` regenerated; surfaced in all three places — `--json`/MCP, a line of CLI
+  text, and a note in the viewer directly under *who links here*, because a bare `count: 0` is
+  the one number a reader must not take on trust.
+  **`unresolved_matching` is what makes it usable.** Click's index holds 1,422 unidentifiable
+  link targets, nearly all references into the `__init__.py` that re-exports names it does not
+  define. That total is alarming and almost always irrelevant: 0 of them name `strip_ansi`, so
+  that answer is complete; 259 name `utils.py#echo`, so that one is not; and
+  `core.py#Group.get_command` — zero backlinks, four matching — is flagged instead of trusted.
+  **Two defects found and fixed on the way.** An unparsable Python file became a script page with
+  no references and said nothing about it (`Page.parsed`, now recorded as a gap). And the first
+  version of `unmapped_imports` read `definitions.imports`, one row per identity written by
+  `INSERT OR IGNORE` — it keeps the *first* crawl's classification, so it claimed a gap on cttp's
+  own repository that the source-root rule had already closed. Moved to crawl time
+  (`revisions.unmapped`, beside `revisions.skipped`), which is where a per-place fact belongs;
+  the index gained `ADDED_COLUMNS` + `migrate()` for it, writers only, readers using `has_column`
+  so no reader takes the write lock. The stale definition row itself is a follow-up.
+  **Measured, not asserted:** the five impact tasks re-run, 30 records in
+  `results/2026-09-05-who-coverage/`. Family 6.65 → **2.40**, median turns 25 → 14, links arm
+  15/15 strict where it was 14/15; `im-color-default-click` 23.62 → 8.65 at 43 → 24 turns, and
+  the links arm's own tokens 1,329,911 → 635,046. The two flat rich tasks — the control — got
+  **worse** (1.74 → 2.06, 1.04 → 1.91): those agents were never uncertain, and assurance costs on
+  every call while repaying only where the agent would have doubted. Stated plainly in
+  `docs/benchmark.md` rather than buried; shrinking the object when there is nothing to warn
+  about is the next session's first item. The fix landed *after* the sweep finished so every run
+  saw identical code, and the five coverage verdicts were re-checked against a fresh index
+  afterwards — unchanged, so the numbers stand. 424 tests green (11 new), ruff clean.
 
 - **2026-09-05 (twentieth session) — the src-layout source-root rule, and the impact tasks
   re-run to measure it.** The benchmark's worst number was one defect: `extract/python.py`
@@ -971,44 +1037,6 @@ is the archive, and a bloated history taxes every future session start.
   clones into a temporary sibling and renames. `tests/test_bench_agent.py` (10 tests, one a
   replay of each committed record) and a concurrent-clone test. `pythonpath = ["."]` in
   `pyproject.toml`. The plan's P8-T1 entry carries the amendment.
-
-- **2026-09-05 (sixteenth session) — Phase 7 built: P7-T1 `name show` and `name claim`,
-  P7-T2 `name verify` and federation, P7-T3 `serve --export` and the cttp.ai default.** Three
-  commits, plus two on an unpushed `p7` branch of the registry clone. Decisions: the target's
-  declaration is `name = "x"` as spec §8 says, plus `names = […]` for a repository that is the
-  target of several (the registry repo itself: its own `name` is `cttp-registry`, and it hosts
-  `hello-world`), written into the spec; the **owner is derived from the locator**
-  (`host/owner`), never an option, because "the account that proved control of the target" is
-  exactly that; a claim opens its PR from a **temporary worktree** so the registry clone's
-  checkout is never dirtied and a merged PR pulls cleanly (an uncommitted `names/<name>.toml` in
-  the working tree would have collided with the merge); `--no-pr` writes into the working tree
-  on purpose, since `LocalRegistry` reads it and the name works at once; a same-owner re-claim
-  is `updated`, not refused. The schema went to **3** once and was re-pinned as commands were
-  added within the session. Found on the way: a `git fetch` subprocess in a test reached GitHub
-  — the socket guard covers Python only — so `conftest.py` sets `GIT_ALLOW_PROTOCOL=file`;
-  `serve --registry` leaked `CTTP_REGISTRY` into the process, invisible while `serve` ran
-  forever, visible the moment `--export` returned. The export goes through the ASGI app with
-  the test client so "identical to the live responses" is by construction, not by a second
-  renderer; the running dev server, started last session, printed `schema_version: 2` against
-  the export's 3 — restarted. The workflows first installed cttp from the private repo with a
-  token secret; a fork's PR gets no secrets, which would have broken every outside claim, so
-  **`cttp` was made public** (history scanned for secrets first) and the token dropped.
-  `pages.yml` writes `CNAME` and `.nojekyll` itself so the export stays host-neutral.
-  The outward-facing steps were done on Leo's word later the same session: the registry's
-  `main` pushed, Pages enabled from Actions with the `cttp.ai` domain, and the P7-T2 acceptance
-  run for real — PR #1 opened by the tool itself passed `verify` (the `resolves` check ran a real
-  resolution in CI); PR #2, a hand-written undeclared name, failed on `declaration` and was
-  closed, then #1 merged and the fixture re-synced (one test asserted the old aligned file
-  format — fixed). The fresh-machine half of the P7-T3 acceptance ran clean with cttp.ai
-  missing and localhost answering. The DNS is Leo's and blocks nothing. Last: on Leo's
-  question about API cost, the **P8 harness was re-planned onto Claude Code headless (`claude
-  -p --output-format json`) under his subscription login** instead of the Anthropic SDK —
-  checked against the current docs, which say ordinary individual use of Claude Code and the
-  Agent SDK is what the login is for; `plan.md`'s decision table, pinned stack, P8-T1 and P8-T3
-  record it, with the caveat that both arms then run inside Claude Code's harness. The
-  session-end run caught a flake — `test_definition_repo_dups_and_search_pages`, one run in
-  about five — traced to git's one-second commit timestamps deciding which of two places a
-  search hit shows; the test now asserts the identity (follow-up filed on the query).
 
 ## How to run
 
