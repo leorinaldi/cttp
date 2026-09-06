@@ -294,12 +294,16 @@ token would have broken claims by anyone but Leo.
   `Ref` only when the longest module prefix names a file at that rev; anything else is a
   stdlib or third-party top-level module, decided by `sys.stdlib_module_names`. A parameter
   shadows a module-level import.
-- **An absolute import is rooted at the file's ancestors, then at the repository's source
-  roots.** A src-layout puts its packages under a directory that is on no importing file's path,
-  so `from click._compat import strip_ansi` in `tests/` would otherwise reach nothing.
-  `SOURCE_ROOTS` in `extract/python.py` is `("src",)`; a root counts only when the repository
-  actually has that directory, and it is tried **last**, so a flat layout and a nearer ancestor
-  both keep winning. This is what makes `who` complete on click and attrs.
+- **An absolute import is rooted where Python would root it: at the file's ancestors that are
+  not packages, then at the repository's source roots.** Two rules, in `extract/python.py`. A
+  src-layout puts its packages under a directory that is on no importing file's path, so `from
+  click._compat import strip_ansi` in `tests/` would otherwise reach nothing: `SOURCE_ROOTS` is
+  `("src",)`, counts only when the repository has that directory, and is tried **last**, so a
+  nearer ancestor keeps winning. And a package's own directory is never on `sys.path`, so an
+  ancestor holding an `__init__.py` is **not** a root (`_import_roots`): `from types import
+  TracebackType` inside `src/click/` is the stdlib, not `src/click/types.py`. A directory without
+  an `__init__.py` stays a root — that is the flat layout and the `tests/` that is not a package.
+  Together they are what makes `who` complete on click and attrs.
 - **A `#symbol` travels the HTTP contract as `%23` in the existing route.** The contract grew
   no route; spec §8's table lists it, and the resolver's object beneath the table.
 - **The block beneath a link is recorded, never guessed.** It begins after the link's *stack*
@@ -364,11 +368,13 @@ token would have broken claims by anyone but Leo.
   and in the resolver, so the live closure inlines the definition and `closure --indexed` agrees
   with it. Over fresh indexes of the benchmark's repositories: click forwards 1,372 references and
   its unidentified links fall 1,422 → 50; attrs 1,549 and 1,582 → 38; rich, a flat layout, 15.
-- **`unresolved_matching` is what makes the total bearable.** What the re-export rule leaves
-  unidentified is small but real — a sibling module shadowing a stdlib name (click's `types.py`,
-  rich's `abc.py`; §8), a member no definition has, a lazily bound name. The total is alarming
-  and almost always irrelevant; the count of them that name the address asked about is the one
-  that decides whether this answer may be trusted.
+  The package rule above then took click 50 → **31**, rich 100 → **46** and cttp itself 38 → **15**,
+  purely by subtraction: every row it removed was a file reaching *itself* under a stdlib name.
+- **`unresolved_matching` is what makes the total bearable.** What the two rules leave
+  unidentified is small but real — a member no definition has, a lazily bound name, a package
+  whose `__init__` binds by other means. The total is alarming and almost always irrelevant; the
+  count of them that name the address asked about is the one that decides whether this answer may
+  be trusted.
 - **What the crawl could not do is recorded by the crawl, per revision.** `revisions.skipped` and
   `revisions.unmapped` are written at crawl time. They cannot be derived afterwards from
   `definitions`, which has one row per identity written by `INSERT OR IGNORE`: that row keeps the
@@ -634,13 +640,6 @@ token would have broken claims by anyone but Leo.
   task repositories' test-time needs (`hypothesis`, `pygments`, `markdown-it-py`). `click` and
   `attrs` are importable in the venv for other reasons (`typer`, `hypothesis`); the cross-repo
   hidden tests check the agent did not import them.
-- **A sibling module shadows a stdlib name.** An absolute import is rooted at the file's own
-  ancestors first, so `from types import TracebackType` inside `src/click/` resolves to
-  `src/click/types.py` and `from abc import ABC` inside `rich/` to `rich/abc.py` — a reference
-  the index then cannot identify (the file defines no such name). Python itself would import the
-  stdlib there. This is most of what the re-export rule (§4) leaves unidentified in click and
-  rich; the ancestor rule exists for flat layouts whose directory is on `sys.path`, so a fix has to
-  tell the two apart (a follow-up in `PROGRESS.md`).
 - **The real index shows the re-export rule only after a `--force` re-crawl.** A derived
   reference is recorded at crawl time; an index crawled before the rule keeps the old rows, and
   `who` over it still answers `complete: false` with the old counts.

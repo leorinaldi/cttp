@@ -9,7 +9,9 @@ A whole file addressed without a symbol is a script.
 same repository (given its file list) become `Ref`s, and the top-level modules a page needs from
 outside the repository are split into stdlib (`sys.stdlib_module_names`) and third party. A
 definition's references are the names it actually uses — import bindings and sibling definitions
-in its own file; a script's are every import it makes.
+in its own file; a script's are every import it makes. An absolute import is rooted where Python
+would root it: at the file's ancestor directories that are not themselves packages, then at the
+repository's source roots (`_import_roots`, `_source_roots`).
 
 **Re-exports.** A reference lands where the import resolves: `from click import echo` on
 `src/click/__init__.py#echo`. That file defines no `echo` — it imports the name from `.utils` —
@@ -93,6 +95,7 @@ class Module:
         self.path = path
         self.files = files
         self.source_roots = _source_roots(files)
+        self.import_roots = _import_roots(path, files, self.source_roots)
         self.defs: dict[str, Definition] = {}
         self.nested: dict[str, str] = {}  # a nested def → the definition it is nested in
         self._collect(tree.body, prefix="")
@@ -225,14 +228,12 @@ class Module:
         """The repository file for the longest module prefix of `parts`, and what is left over.
 
         A relative import starts at the file's package (`level` dots up); an absolute one is
-        tried against every ancestor directory of the file, nearest first, then the root, then
-        the repository's source roots — the `src/` a src-layout puts its packages under, which is
-        on no importing file's path.
+        tried against the file's import roots — the ancestor directories that are not themselves
+        packages, nearest first, then the repository's source roots (`_import_roots`).
         """
         here = PurePosixPath(self.path).parent
         if level == 0:
-            bases = [here, *here.parents]
-            bases += [root for root in self.source_roots if root not in bases]
+            bases = list(self.import_roots)
         elif level == 1:
             bases = [here]
         elif level - 2 < len(here.parents):
@@ -434,6 +435,22 @@ def _source_roots(files: set[str]) -> tuple[PurePosixPath, ...]:
     return tuple(
         PurePosixPath(name) for name in SOURCE_ROOTS if any(f.startswith(f"{name}/") for f in files)
     )
+
+
+def _import_roots(
+    path: str, files: set[str], source_roots: tuple[PurePosixPath, ...]
+) -> tuple[PurePosixPath, ...]:
+    """The directories an absolute import from `path` may be rooted at, nearest first.
+
+    Python resolves an absolute import against `sys.path`, and a package's own directory is never
+    on it: `from types import TracebackType` inside `src/click/` means the stdlib, not
+    `src/click/types.py`. A directory holding an `__init__.py` is therefore a package and not a
+    root; what remains is the directory its package chain hangs off — a repository root, a
+    `tests/` that is not a package — and then the source roots, which are on no file's path.
+    """
+    here = PurePosixPath(path).parent
+    bases = [d for d in (here, *here.parents) if _join(d, ("__init__",)) + ".py" not in files]
+    return tuple(bases) + tuple(root for root in source_roots if root not in bases)
 
 
 def _join(base: PurePosixPath, parts: tuple[str, ...]) -> str:

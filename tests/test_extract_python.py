@@ -263,6 +263,34 @@ def test_an_absolute_import_reaches_a_src_layouts_package():
     assert _source_roots({"pkg/core.py", "srcs/x.py"}) == ()
 
 
+def test_a_sibling_module_does_not_shadow_a_stdlib_name_inside_a_package():
+    """`from types import TracebackType` inside `src/click/` means the stdlib: a package's own
+    directory is never on `sys.path`, so `src/click/types.py` is not what Python would import.
+    A directory holding an `__init__.py` is a package and not an import root; one without is."""
+    src = "from types import TracebackType\n\n\ndef t(x: TracebackType):\n    return x\n"
+    pkg = {"src/pkg/__init__.py", "src/pkg/types.py", "src/pkg/core.py"}
+    page = extract("src/pkg/core.py", src, "t", pkg)
+    assert page.refs == () and page.stdlib == ("types",)
+    # the same file in a directory that is not a package: the directory is a root, as before
+    flat = {"pkg/types.py", "pkg/core.py"}
+    assert extract("pkg/core.py", src, "t", flat).refs == (
+        Ref("pkg/types.py", "TracebackType", "TracebackType"),
+    )
+    # a package still reaches its own siblings — by the source root above it, under their package
+    qualified = "from pkg.types import TracebackType\n\n\ndef t(x: TracebackType):\n    return x\n"
+    assert extract("src/pkg/core.py", qualified, "t", pkg).refs == (
+        Ref("src/pkg/types.py", "TracebackType", "TracebackType"),
+    )
+    # a relative import is unaffected — it starts at the file's package, root or not
+    rel = "from .types import TracebackType\n\n\ndef t(x: TracebackType):\n    return x\n"
+    assert extract("src/pkg/core.py", rel, "t", pkg).refs == (
+        Ref("src/pkg/types.py", "TracebackType", "TracebackType"),
+    )
+    # and a `tests/` that is a package reaches its src-layout through the source root, not itself
+    tests = {"tests/__init__.py", "tests/types.py", "tests/test_core.py", *pkg}
+    assert extract("tests/test_core.py", src, "t", tests).refs == ()
+
+
 def test_a_reference_is_forwarded_through_re_exports_to_the_definition():
     """`from pkg import greet` lands on `pkg/__init__.py#greet`, a file that only imports the
     name: the reference means the definition the import names. The rule follows imports, aliases
