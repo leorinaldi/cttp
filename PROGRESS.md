@@ -48,7 +48,7 @@ tool calls and grades, a `--replay` dry run, and the smoke task passing in both 
 task set** (2026-09-05) — fifteen tasks over `click`, `attrs` and `rich` (cloned by
 `bench/agent/fetch.sh`): five real merged fixes with the commit's tests as the hidden grader,
 five cross-repository reuses graded by hidden tests plus a link check, five impact questions
-graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). **405 fast tests
+graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). **424 fast tests
 green plus 17 `slow`** (the corpus, and the graders' acceptance over the real clones), ruff clean.
 
 _Last updated: 2026-09-05, session end (`who` states its own coverage — schema version 4 — and the five impact tasks re-run: the family's ratio 6.65 → 2.40, median turns 25 → 14)._
@@ -378,17 +378,20 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   `.null()`, `.derived()`, `.asserted()`, `.about()`), shared objects in `DEFS` (`page` — the
   contract object; `location`, `ref`, `link`, `imports`, `node`, `missing`, `expand_report`,
   `check_report`, `update_report`, `fold_entry`, `backlink`, `by`, `dup_group`, `hit`,
-  `revision`, `ranked`, `crawled`, `repo_status`, `closure`), and `COMMANDS` — 24 entries
+  `revision`, `ranked`, `crawled`, `repo_status`, `closure`, and P8's `coverage`,
+  `searched_revision`, `unmapped_import`), and `COMMANDS` — 24 entries
   (`version`, `config`, `resolve`, `resolve --latest`, `closure`, `expand`, `add`, `check`,
   `update`, `fold`, `run` (no object: the program's output), `cache status|clear`, `index
   add|crawl|status`, `who`, `dups`, `search`, `history`, `rank`, `mcp install`, `error`), each
-  with usage, summary, *when*, notes and schema. `stamp()` puts `schema_version` (1) first on
+  with usage, summary, *when*, notes and schema. `stamp()` puts `schema_version` (now 4) first on
   every object — `cli.emit()`, `cli.fail()` and the server's `/<name>.json` all go through it.
   `validate()` is strict (missing, extra, type, enum, null); `json_schema()` renders draft
   2020-12 (inline, or with `$defs`); `markdown()` renders `docs/json-schemas.md`;
-  `fingerprint()` digests every schema and `FINGERPRINTS` pins it — **version 2 since P6-T1**
-  (`14c8b9e5c6d17b96`): `language` is `python | c | text`, `kind` gained `type` and `macro`,
-  the `signature`/`docstring` field notes say what they are for C.
+  `fingerprint()` digests every schema and `FINGERPRINTS` pins it. **Version 2** (P6-T1,
+  `14c8b9e5c6d17b96`): `language` is `python | c | text`, `kind` gained `type` and `macro`, the
+  `signature`/`docstring` field notes say what they are for C. **Version 3** (P7,
+  `b4d308f6b63419e7`). **Version 4** (2026-09-05, `41ec61e8a59e6c78`): `who` gained `coverage`,
+  and `index crawl` gained `unmapped` beside `skipped`.
   **Shapes frozen this session (deliberate, first version):** `expand`, `add` and `fold` wrap
   their per-file map in `files`; `index crawl` wraps its list in `crawled`; `closure` gained
   `source` (`repository` | `index`), `roots` and `missing` (empty for the live walk) so the live
@@ -412,7 +415,10 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   (names, index status, `?q=` search), `/d/<identity>` (derived and asserted columns, every
   location with the current ones marked, source, who links here), `/r/<host>/<owner>/<repo>`
   (revisions crawled, pages at the current revision), `/dups[?shape=1]`, and the name page with
-  history and *who links here*. **`base.html` chooses the derived/asserted layout once**: two
+  history and *who links here* — the backlink table (or *Nothing crawled links here*) is
+  **always followed by `_macros.html`'s `coverage_note`**, which names the revisions searched and
+  says Complete / Incomplete / Coverage unknown with the reason. **`base.html` chooses the
+  derived/asserted layout once**: two
   labelled, tinted columns that stack under 44rem; inline facts keep their tag; tables become
   stacked cards on a phone. Every page says plainly when there is no index. Looked at in headless
   Chrome at 1200px and 390px against the real index.
@@ -435,7 +441,9 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   object is stamped with `schema_version` (P5-T1). `closure` with several addresses, or `--indexed`, reads the index; one
   address without the flag is the live walk. `update` takes files and addresses mixed; exit 2
   when a change waited for a confirmation it did not get. `_interactive()` wraps the tty check
-  so tests can drive the prompts. `resolve`'s text form prints the signature and docstring on a
+  so tests can drive the prompts. `who`'s text form prints one `searched <repo>@<rev>` line per crawled
+  revision with the directories it reached, then `_coverage_line()` — `coverage: complete` or
+  `coverage: incomplete — <reasons>`. `resolve`'s text form prints the signature and docstring on a
   `#` line, `# seen:` lines when an identity came from a cache (`cache` or `index`), and `from →
   to` with the rule (`via index` when the index found it) under `--latest`.
 - `bench/drivers/` — **P6-T2, P6-T3.** `fetch.sh` (the corpus: a sparse, blobless clone of
@@ -483,7 +491,7 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   verifies every pinned commit; `--list` marks an unfetched task and a run refuses to start
   without the clones. `pyproject.toml`: a `bench` dependency group (hypothesis, pygments,
   markdown-it-py) installed by default; `bench/agent/tasks` and `repos` excluded from ruff.
-- Tests: 358 fast + 17 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
+- Tests: 424 fast + 17 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
   config,links,gitcache,resolve,objects,latest,closure,expand,check,update,fold,run,package,
   server,cli,index_crawl,index_queries,acceptance_move,acceptance_provenance,
   acceptance_drivers,schemas,mcp,name,registry_federation,export,bench_agent}.py`.
@@ -525,7 +533,14 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   definitions, an identity resolved from the index, a local clone added through its origin, a
   malformed link line costing the line not the file, `--force`); `test_index_queries.py` P4-T2
   (`who` on `deep` — the copy asserted, the sibling derived; `dups` and `--shape` over `twins`;
-  `search greet`; `history` over two revs; `rank`; the indexed closure equal to the live one);
+  `search greet`; `history` over two revs; `rank`; the indexed closure equal to the live one;
+  and **eight `coverage` tests** — the revisions and directories named; `complete` true over a
+  src-layout where every reference was attributed; a binary counted as `skipped` but not as a
+  gap; an unparsable Python file counted as `unread`; a link line the crawl ignored counted as
+  `ignored_links`; an import into a package under no source root reported as `unmapped`; a
+  re-export making `unresolved_matching` non-zero while another address in the same index stays
+  clear; and an index with the record stripped answering `null`, not `0` — plus one for the
+  `ALTER TABLE` migration of a `revisions` table written without the columns);
   `test_acceptance_move.py` spec §12 test 2 (a renamed move found by its `from` link, a plain
   move by identity once B is crawled, the no-index message, rules 1 and 2 still first);
   `test_acceptance_provenance.py` test 3 (`cttp add` in a cloned consumer, `cttp index add
