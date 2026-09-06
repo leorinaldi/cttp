@@ -626,6 +626,7 @@ def index_crawl(
             lines.append(
                 f"{r.repo}@{r.sha[:12]}: {r.files} file(s), {r.pages} page(s), "
                 f"{r.definitions} new identity(ies), {r.links} link(s)"
+                + (f", {r.forwarded} forwarded" if r.forwarded else "")
                 + (f", {len(r.skipped)} skipped" if r.skipped else "")
             )
             lines += [f"  skipped {x}" for x in r.skipped]

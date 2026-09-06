@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 from cttp.cli import app
 from cttp.expand import check_file, expand_file
 from cttp.extract import ExtractError, Ref, extract
-from cttp.extract.python import _source_roots
+from cttp.extract.python import Forwarder, _source_roots
 from cttp.resolve import ResolveError, resolve
 from cttp.server.app import app as server
 
@@ -261,3 +261,65 @@ def test_an_absolute_import_reaches_a_src_layouts_package():
     )
     # a repository with no `src/` gains no source root
     assert _source_roots({"pkg/core.py", "srcs/x.py"}) == ()
+
+
+def test_a_reference_is_forwarded_through_re_exports_to_the_definition():
+    """`from pkg import greet` lands on `pkg/__init__.py#greet`, a file that only imports the
+    name: the reference means the definition the import names. The rule follows imports, aliases
+    of them and star imports; it never follows a name bound some other way, and never guesses."""
+    texts = {
+        "pkg/__init__.py": (
+            "from .core import greet as greet\n"
+            "try:\n    from .core import Box\nexcept ImportError:\n    Box = None\n"
+            "from .extra import *\n"
+            "from .sub import deep\n"
+            "s = shout = greet\n"  # attrs' way: `s = attributes = attrs`
+            "also = greet\n"  # one target: a constant definition of the module (spec §3)
+        ),
+        "pkg/core.py": (
+            "def greet(n):\n    return n\n\n\nclass Box:\n    def open(self):\n        pass\n"
+        ),
+        "pkg/extra.py": (
+            "__all__ = ['shown']\n\n\ndef shown():\n    pass\n\n\n"
+            "def hidden():\n    pass\n\n\ndef _private():\n    pass\n"
+        ),
+        "pkg/sub/__init__.py": "from .impl import deep\n",
+        "pkg/sub/impl.py": "def deep():\n    pass\n",
+        "pkg/lazy/__init__.py": (
+            "def __getattr__(name):\n    from . import impl\n    return getattr(impl, name)\n"
+        ),
+        "pkg/lazy/impl.py": "def late():\n    pass\n",
+        "pkg/loop/__init__.py": "from .a import x\n",
+        "pkg/loop/a.py": "from .b import x\n",
+        "pkg/loop/b.py": "from .a import x\n",
+        "pkg/broken.py": "def (:\n",
+    }
+    fw = Forwarder(texts, texts.get)
+
+    def f(path, symbol, name=None):
+        return fw.forward(Ref(path, symbol, name or symbol))
+
+    assert f("pkg/__init__.py", "greet") == Ref("pkg/core.py", "greet", "greet")
+    # an import under a top-level `try` binds the name too; a member path follows its head
+    assert f("pkg/__init__.py", "Box.open") == Ref("pkg/core.py", "Box.open", "Box.open")
+    # chained through a second package's `__init__`
+    assert f("pkg/__init__.py", "deep") == Ref("pkg/sub/impl.py", "deep", "deep")
+    # a star import binds what its module's `__all__` lists, and never a private name
+    assert f("pkg/__init__.py", "shown") == Ref("pkg/extra.py", "shown", "shown")
+    assert f("pkg/__init__.py", "hidden") == Ref("pkg/__init__.py", "hidden", "hidden")
+    assert f("pkg/__init__.py", "_private") == Ref("pkg/__init__.py", "_private", "_private")
+    # a multi-target alias of an import is an export; the name the page reached it by is kept
+    assert f("pkg/__init__.py", "s", "pkg.s") == Ref("pkg/core.py", "greet", "pkg.s")
+    assert f("pkg/__init__.py", "shout") == Ref("pkg/core.py", "greet", "shout")
+    # a single-target alias is a definition of the module; a definition is where a reference stops
+    assert f("pkg/__init__.py", "also") == Ref("pkg/__init__.py", "also", "also")
+    assert f("pkg/core.py", "greet") == Ref("pkg/core.py", "greet", "greet")
+    # bound some other way (`__getattr__`): not followed, not guessed
+    assert f("pkg/lazy/__init__.py", "late") == Ref("pkg/lazy/__init__.py", "late", "late")
+    # a cycle of re-exports ends, on the cycle
+    assert f("pkg/loop/__init__.py", "x") == Ref("pkg/loop/a.py", "x", "x")
+    # a file that does not parse, or is not in the repository, forwards nothing
+    assert f("pkg/broken.py", "x") == Ref("pkg/broken.py", "x", "x")
+    assert f("pkg/missing.py", "x") == Ref("pkg/missing.py", "x", "x")
+    # a module reference has no symbol to follow
+    assert f("pkg/__init__.py", None, "pkg") == Ref("pkg/__init__.py", None, "pkg")

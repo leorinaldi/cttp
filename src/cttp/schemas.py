@@ -17,13 +17,14 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 FINGERPRINTS = {
     1: "95c46a2dbc0766c1",
     2: "14c8b9e5c6d17b96",
     3: "b4d308f6b63419e7",
     4: "41ec61e8a59e6c78",  # `who` gained `coverage`
     5: "3af030a09bd6e1d9",  # `coverage` gained `summary` and collapses when there is nothing to warn about
+    6: "6905ca99be0e617c",  # `index crawl` reports `forwarded` (references followed through re-exports)
 }  # schema version → fingerprint(); a schema change bumps both
 
 # --- the schema language -----------------------------------------------------------------------
@@ -382,7 +383,7 @@ DEFS["coverage"] = obj(
         "skipped": integer("files not read, across every revision; `null` when any revision predates the record, or on a collapsed complete answer").null().derived(),
         "unread": integer("of those, the files a language extractor would have read and did not").null().derived(),
         "ignored_links": integer("link lines the crawl had to ignore because they did not parse; an asserted link may be missing for each").null().derived(),
-        "unresolved_targets": integer("recorded links whose target identity the index cannot tell; `who` matches those by name or place only, so a match can be missed. Mostly re-exports: a reference to `click.echo` lands on the `__init__.py` that imports the name, which defines nothing").null().derived(),
+        "unresolved_targets": integer("recorded links whose target identity the index cannot tell; `who` matches those by name or place only, so a match can be missed. A re-export is followed to its definition; what remains is a name a module binds some other way (`__getattr__`, a call), a member no definition has, or a stamp the index has not seen").null().derived(),
         "unresolved_matching": integer("of those, the ones naming *this* address — the misses this answer could have. Zero is `who` saying the total does not concern the question asked, which is what a collapsed complete answer says by being collapsed").null().derived(),
         "unmapped_imports": arr(ref("unmapped_import"), "each one is a reference the crawl did not record, and so a backlink `who` cannot see").null().derived(),
         "caveats": arr(string(), "the ways `who` is knowingly incomplete inside the files it did read; no count expresses these. `null` on a collapsed complete answer: they are standing limits of the query, not findings about this one").null(),
@@ -487,6 +488,7 @@ DEFS["crawled"] = obj(
         "links": integer(),
         "skipped": arr(string(), "files that could not be read or parsed, with the reason"),
         "unmapped": mapping(integer(), "module → files: an import naming a module this repository provides that no source root reached, so no reference was recorded for it; `who`'s coverage reports these").derived(),
+        "forwarded": integer("references recorded against the definition a re-export reaches rather than the module that re-exports it: `from click import echo` is a reference to `utils.py#echo`, not to `__init__.py`").derived(),
     },
 )  # fmt: skip
 

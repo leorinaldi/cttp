@@ -7,7 +7,9 @@ commit (its default branch's head, or the rev asked for) every file in the tree 
 definition, each hashed and recorded once per identity and once per place; any other file yields
 a page only when it carries a link line. Every asserted link `links.py` finds is recorded against
 the innermost page whose span holds its line; every derived reference against the page that made
-it. Target identities are filled in afterwards from what the index knows — a stamp's `id=`, a
+it, forwarded through re-exports to the definition it means (`python.Forwarder`: `from click
+import echo` is a reference to `utils.py#echo`, not to the `__init__.py` that imports it). Target
+identities are filled in afterwards from what the index knows — a stamp's `id=`, a
 pinned locator seen at that rev, a name whose snapshot points at a crawled file — and left NULL
 otherwise; the crawl never fetches a repository it was not given. The tool never executes what it
 reads.
@@ -25,6 +27,7 @@ from cttp import gitcache
 from cttp.address import Address, AddressError, parse
 from cttp.config import Config
 from cttp.extract import ExtractError, Page, definitions, extract, language_of
+from cttp.extract.python import Forwarder
 from cttp.hashing import ShapeError, identity, normalize, shape, short
 from cttp.index.schema import IndexingError, counts
 from cttp.links import LINK_RE, LinkError, find_links, parse_link
@@ -131,6 +134,7 @@ class Crawled:
     skipped: list[str] | None = None  # files that could not be read or parsed, with the reason
     unmapped: dict[str, int] | None = None  # module → files: an import naming a module this
     # repository provides that no source root reached, so no reference was recorded for it
+    forwarded: int = 0  # references recorded against the definition a re-export reaches
 
     def to_json(self) -> dict:
         return {
@@ -143,6 +147,7 @@ class Crawled:
             "links": self.links,
             "skipped": list(self.skipped or []),
             "unmapped": dict(self.unmapped or {}),
+            "forwarded": self.forwarded,
         }
 
 
@@ -241,12 +246,14 @@ def _crawl_repo(
     writer = _Writer(conn, locator, sha, out)
     py_files = [f for f in files if language_of(f) == "python"]
     writer.provides = _provided_modules(py_files)
+    writer.forwarder = Forwarder(py_files, _reader(repo, sha))
     for path in files:
         try:
             text = gitcache.show(repo, sha, path)
         except (gitcache.GitError, UnicodeDecodeError) as e:
             out.skipped.append(f"{path}: {e}")
             continue
+        writer.forwarder.remember(path, text)
         if len(text) > MAX_FILE_BYTES:
             out.skipped.append(f"{path}: larger than {MAX_FILE_BYTES} bytes")
             continue
@@ -266,6 +273,19 @@ def _crawl_repo(
     )
     conn.commit()
     return out
+
+
+def _reader(repo: Path, sha: str):
+    """A file's text at `sha`, or None — how the forwarder reads a module a reference passes
+    through before the crawl has reached it."""
+
+    def read(path: str) -> str | None:
+        try:
+            return gitcache.show(repo, sha, path)
+        except (gitcache.GitError, UnicodeDecodeError):
+            return None
+
+    return read
 
 
 def neutralize_bad_links(text: str) -> tuple[str, list[str]]:
@@ -310,6 +330,7 @@ class _Writer:
         self.conn, self.repo, self.sha, self.out = conn, repo, sha, out
         self.rev12 = short(sha)
         self.provides: set[str] = set()
+        self.forwarder = Forwarder((), lambda path: None)
 
     def code_file(self, path: str, text: str, files: list[str]) -> None:
         """A file with an extractor: the file page, one page per definition, every link."""
@@ -347,7 +368,11 @@ class _Writer:
             self.link(ids[owner], path, line, k)
         for sym, page in ((None, whole), *defs):
             for r in page.refs:
-                self.ref(ids[sym], path, page.span[0], r)
+                # a reference means the definition, not the `__init__` that re-exports it
+                meant = self.forwarder.forward(r)
+                if meant != r:
+                    self.out.forwarded += 1
+                self.ref(ids[sym], path, page.span[0], meant)
 
     def other_file(self, path: str, text: str) -> None:
         links = find_links(normalize(text).split("\n"))

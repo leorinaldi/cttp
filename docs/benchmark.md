@@ -236,6 +236,11 @@ names it does not define. That total is alarming and almost always irrelevant: *
 `__init__.py` does re-export, and 259 of them do — and `coverage` says so. A `count: 0` gets the
 same treatment: `core.py#Group.get_command` has no backlinks and four unidentified links naming
 it, which is the difference between *nothing uses this* and *I cannot see what uses this*.
+(Since 2026-09-06 a derived reference is followed through the re-export to the definition —
+`who` on `echo` answers 290 backlinks, complete, and click's unidentified links are 50, not
+1,422. The counts above are what the runs in this section saw. The five impact targets are not
+reached through a re-export, so their reference answers did not change; the rule has not been
+measured by the benchmark.)
 
 The five impact tasks were re-run again, three runs per arm, same model, same harness, same
 commits: `bench/agent/results/2026-09-05-who-coverage/`.
@@ -374,9 +379,10 @@ Seven things a reader should hold against any ratio in the table.
 
 7. **The impact grader is the extractor's notion of a use.** `cttp who` is the derived reference
    graph of `extract/python.py`: a use inside a nested function is attributed to the enclosing
-   addressable definition, a name reached through a re-export is not a backlink, and in a `src/`
-   layout the tests' absolute imports do not resolve into `src/`, so click's and attrs' tests are
-   backlinks of nothing. The five targets were picked so that `grep` agrees with `who` on each,
+   addressable definition, and — when the runs were made — a name reached through a re-export was
+   not a backlink and in a `src/` layout the tests' absolute imports did not resolve into `src/`,
+   so click's and attrs' tests were backlinks of nothing (both since fixed; neither changes the
+   five targets' answers). The five targets were picked so that `grep` agrees with `who` on each,
    but the grader is still `who`: an agent that reads the code differently loses even where it is
    arguably right.
 

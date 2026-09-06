@@ -2,7 +2,7 @@
 
 **Generated from `src/cttp/schemas.py` — do not edit.** `python -m cttp.schemas` rewrites it; `tests/test_schemas.py` fails when it is stale.
 
-Schema version **5**, fingerprint `3af030a09bd6e1d9`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
+Schema version **6**, fingerprint `6905ca99be0e617c`. A change to any schema is a deliberate act: the fingerprint test fails until `SCHEMA_VERSION` is bumped and the change noted in `PROGRESS.md`.
 
 ## Conventions
 
@@ -792,7 +792,7 @@ what the answer is an answer over: an agent that wants to stop reads this instea
 | `skipped` | integer? | derived | files not read, across every revision; `null` when any revision predates the record, or on a collapsed complete answer |
 | `unread` | integer? | derived | of those, the files a language extractor would have read and did not |
 | `ignored_links` | integer? | derived | link lines the crawl had to ignore because they did not parse; an asserted link may be missing for each |
-| `unresolved_targets` | integer? | derived | recorded links whose target identity the index cannot tell; `who` matches those by name or place only, so a match can be missed. Mostly re-exports: a reference to `click.echo` lands on the `__init__.py` that imports the name, which defines nothing |
+| `unresolved_targets` | integer? | derived | recorded links whose target identity the index cannot tell; `who` matches those by name or place only, so a match can be missed. A re-export is followed to its definition; what remains is a name a module binds some other way (`__getattr__`, a call), a member no definition has, or a stamp the index has not seen |
 | `unresolved_matching` | integer? | derived | of those, the ones naming *this* address — the misses this answer could have. Zero is `who` saying the total does not concern the question asked, which is what a collapsed complete answer says by being collapsed |
 | `unmapped_imports` | [→ [unmapped_import](#unmapped_import)]? | derived | each one is a reference the crawl did not record, and so a backlink `who` cannot see |
 | `caveats` | [string]? |  | the ways `who` is knowingly incomplete inside the files it did read; no count expresses these. `null` on a collapsed complete answer: they are standing limits of the query, not findings about this one |
@@ -889,6 +889,7 @@ one repository crawled at one revision
 | `links` | integer |  |  |
 | `skipped` | [string] |  | files that could not be read or parsed, with the reason |
 | `unmapped` | {string: integer} | derived | module → files: an import naming a module this repository provides that no source root reached, so no reference was recorded for it; `who`'s coverage reports these |
+| `forwarded` | integer | derived | references recorded against the definition a re-export reaches rather than the module that re-exports it: `from click import echo` is a reference to `utils.py#echo`, not to `__init__.py` |
 
 ### repo_status
 

@@ -119,8 +119,12 @@ it gets a precise extractor and a link convention of its own.
 
 **Derived references.** The Python extractor also records ordinary references — imports and
 attribute access it can resolve statically within the repository — as *derived* links, so that an
-un-annotated repository still yields a usable graph. Precision beyond the standard library
-(resolution through a type checker) is welcome later and is not required by this spec.
+un-annotated repository still yields a usable graph. A derived reference names the **definition**,
+not the module that re-exports it: `from click import echo` is a reference to `utils.py#echo`,
+followed through the `__init__.py` that imports the name (and through an alias of that import, or
+a star import whose module defines it). A name a module binds any other way — `__getattr__`, a
+call — is not followed, and the index says so rather than guess. Precision beyond the standard
+library (resolution through a type checker) is welcome later and is not required by this spec.
 
 ## 4. The link convention in Python source
 

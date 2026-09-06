@@ -218,10 +218,12 @@ the report can show how close a failing answer was. The reference `impact.txt` f
 generated from `who` the same way; `--check-graders` confirms they still match.
 
 Two caveats the report must carry. `who` is the derived reference graph of the Python extractor:
-a use inside a nested function is attributed to the enclosing addressable definition, a name
-reached through a re-export (`attr.fields`) is not a backlink of the definition, and **in a
-`src/` layout the tests' absolute imports (`from click._compat import …`) do not resolve to
-`src/click/`**, so tests are not backlinks of anything in click or attrs. The five targets were
+a use inside a nested function is attributed to the enclosing addressable definition, and when
+the ninety runs were made a name reached through a re-export (`attr.fields`) was not a backlink
+of the definition and **in a `src/` layout the tests' absolute imports (`from click._compat
+import …`) did not resolve to `src/click/`**, so tests were not backlinks of anything in click
+or attrs (both since fixed — the source-root rule and the re-export rule; the five targets'
+answers are unchanged, `--check-graders` confirms). The five targets were
 chosen so that none of this changes the answer (grep agrees with `who` for each), but the
 grader is `who`, so an agent that reads the code differently from the extractor loses even when
 it is arguably right. And the prompt's format rules are what make exact grading possible; both

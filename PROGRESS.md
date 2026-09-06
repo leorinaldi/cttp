@@ -4,7 +4,7 @@ cttp — *code text transfer protocol* — is a protocol that sits on top of exi
 and lets code point at code: every definition gets an address, references are links rather than imports,
 and an index answers who links where. Rationale: [`docs/vision.md`](docs/vision.md).
 
-**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). THE BENCHMARK'S HEADLINE DEFECT IS CLOSED IN BOTH HALVES AND RE-MEASURED TWICE: THE IMPACT FAMILY 16.28x → 6.65x → 2.40x. A FOURTH SWEEP READ 3.26x WITH NOTHING THAT SHOULD HAVE RAISED IT — AT THREE RUNS PER ARM THE BENCHMARK CANNOT RESOLVE A CHANGE OF THIS SIZE.** Phase 0
+**Status: PHASES 0 TO 8 COMPLETE — THE PLAN IS DONE (the `cttp.ai` DNS is Leo's; localhost stands in until then). THE BENCHMARK'S HEADLINE DEFECT IS CLOSED IN BOTH HALVES AND RE-MEASURED TWICE: THE IMPACT FAMILY 16.28x → 6.65x → 2.40x. A FOURTH SWEEP READ 3.26x WITH NOTHING THAT SHOULD HAVE RAISED IT — AT THREE RUNS PER ARM THE BENCHMARK CANNOT RESOLVE A CHANGE OF THIS SIZE. `WHO` NOW FOLLOWS A RE-EXPORT TO ITS DEFINITION (2026-09-06): CLICK'S UNIDENTIFIED LINKS 1,422 → 50, `ECHO` 31 → 290 BACKLINKS AND COMPLETE; `ATTR.S` 22 → 348.** Phase 0
 (2026-09-04): the spike, the public registry `github.com/leorinaldi/cttp-registry` tagged `v1`,
 the config with an ordered registry list and `[remotes]`, the registry as an **HTTP contract**,
 `run` asking before the first run. Phase 1 (2026-09-04/05): the **full address grammar**,
@@ -48,44 +48,54 @@ tool calls and grades, a `--replay` dry run, and the smoke task passing in both 
 task set** (2026-09-05) — fifteen tasks over `click`, `attrs` and `rich` (cloned by
 `bench/agent/fetch.sh`): five real merged fixes with the commit's tests as the hidden grader,
 five cross-repository reuses graded by hidden tests plus a link check, five impact questions
-graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). **436 fast tests
+graded exactly against `who`; `--check-graders` passes all sixteen (~2½ min). **439 fast tests
 green plus 17 `slow`** (the corpus, and the graders' acceptance over the real clones), ruff clean.
 
-_Last updated: 2026-09-06, session end (the coverage object collapses on a complete answer — schema version 5 — and the five impact tasks re-run: 1,373 → 479 characters at the tool's mouth, and no effect the benchmark could resolve)._
+_Last updated: 2026-09-06, session end (a derived reference is followed through re-exports to the definition — `python.Forwarder`, schema version 6 — in the crawl and the resolver; click's unidentified links 1,422 → 50, attrs' 1,582 → 38; the five impact answers unchanged, so the benchmark was not re-run)._
 
 > **Read [`docs/overview.md`](docs/overview.md) first** — it is the lay of the land. This file is
 > only *where we are*: state, next steps, follow-ups and recent history.
 
 ## Next session — suggested next steps
 
-**The coverage object now collapses when there is nothing to warn about — and the benchmark could
-not see it.** A complete `who` answer is one `summary` line and eight `null` fields; incomplete or
-unknown answers carry the whole object; `cttp who --coverage` (the MCP tool's `coverage`) buys it
-back. Measured at the tool's mouth on rich at the benchmark's own commit: **1,373 → 479
-characters**. Measured by the benchmark: nothing. The two rich tasks the change was *for* went
-162,368 → 163,368 and 122,805 → 117,401 tokens, and the family ratio moved 2.40 → **3.26** on
-variance — `im-nested-chain-click` alone spanned 141,257–569,186 over three runs while
-`im-color-default-click` halved. Records in `bench/agent/results/2026-09-06-coverage-collapse/`;
-the reading is in [`docs/benchmark.md`](docs/benchmark.md) under *Collapsing the coverage object*.
-**Last session's diagnosis is therefore not confirmed**, and the docs no longer claim it: the
-collapse is justified as an interface decision, not as a measured saving.
+**`who` now follows a re-export to the definition it means.** `from click import echo` used to be
+recorded as a reference to `src/click/__init__.py#echo`, a file that defines no `echo`; the
+crawl and the resolver now forward it through what the `__init__` binds by importing — an
+explicit import, an alias of one (`s = attributes = attrs`), a star import whose module defines
+the name — to `utils.py#echo` (`python.Forwarder`, overview §4). Over fresh indexes of the three
+benchmark repositories at their task commits: click forwards 1,372 references and its
+unidentified links fall **1,422 → 50**; `who` on `utils.py#echo` goes **31 → 290** backlinks
+and `complete: true`, `core.py#Context` 90 → 140, `termui.py#style` 7 → 23. Attrs forwards 1,549
+(1,582 → 38): `_make.py#attrs` 22 → 348, `attrib` 45 → 437, `fields` 30 → 106 — and before the
+rule, coverage counted only **3** misses for `attrs`, because the public name is `attr.s` and the
+leaf-name match could not see 326 uses of it. Rich (flat layout) forwards 15. What is left
+unidentified is a sibling module shadowing a stdlib name (item 2), a member no definition has,
+or a lazily bound name. **The five impact tasks' answers did not change** (`--check-graders`
+passes; none of the five targets is reached through a re-export), so nothing was re-measured and
+the benchmark's table stands as it was. Schema **5 → 6**: `index crawl` reports `forwarded`.
+**The real index needs no `--force`** (decided 2026-09-06): it holds the kernel corpus (C, no
+derived references), the registry (no Python) and cttp itself, which forwards nothing — a scratch
+crawl of the head reported no forwarded references. It was given a plain crawl at this session's
+commit instead, so its current cttp revision is this one.
 
 In priority order:
 
-1. **Decide what the benchmark can actually resolve, before spending on it again.** This sweep is
-   the third piece of evidence that three runs per arm cannot separate an effect from noise, and
-   it is now the limiting factor on every question the benchmark is asked. Options, cheapest
-   first: report the mean beside the median (the mean *fell* 295,180 → 260,980 in the same sweep
-   the median rose); raise `--runs` for the impact family alone and see where the spread settles;
-   or add a paired statistic per task rather than a ratio of medians. Until one of these lands, no
-   change under ~20 % should be argued from a ratio here.
-2. **`who` does not follow a re-export.** Unchanged and still the largest real defect: click's
-   index holds 1,422 links whose target it cannot identify, nearly all references into
-   `src/click/__init__.py`, which re-exports names it does not define. `who` on `utils.py#echo`
-   answers 31 backlinks and `complete: false` with 259 matching. A re-export rule (an `__init__.py`
-   binding that is an import of a sibling definition forwards the reference) would close it and
-   turn a large class of `complete: false` into `true` — and unlike the collapse, it changes
-   *answers*, not payload size, so the benchmark could see it.
+1. **Decide what the benchmark can actually resolve, before spending on it again.** Unchanged
+   from last session and still the limiting factor: three runs per arm cannot separate an
+   effect from noise (`im-nested-chain-click` spanned 141k–569k tokens; the family ratio moved
+   2.40 → 3.26 on nothing). Cheapest first: report the mean beside the median; raise `--runs`
+   for the impact family alone and see where the spread settles; or a paired statistic per
+   task. Until one lands, no change under ~20 % should be argued from a ratio here. If the
+   re-export rule is ever to be measured, it needs an impact task whose target *is* reached
+   through a package's public name (`click.echo`, `attr.s`) — none of the five is.
+2. **A sibling module shadows a stdlib name.** An absolute import is rooted at the file's own
+   ancestors first, so `from types import TracebackType` inside `src/click/` resolves to
+   `src/click/types.py` and `from abc import ABC` inside `rich/` to `rich/abc.py` — Python
+   would import the stdlib. This is now most of what stays unidentified (click: 19 of 50 name
+   `types.py`; rich: 34 of 100 name `abc.py`). The ancestor rule exists for flat layouts and
+   `tests/` directories that are on `sys.path`; a fix must tell "this file is inside a package"
+   (an `__init__.py` beside it) from "this directory is a root", and prefer the stdlib in the
+   first case. Small, exact, and it changes answers.
 3. **A definition row keeps the first crawl's derived metadata.** `INSERT OR IGNORE` means
    `--force` refreshes locations and links but not `imports`, `unresolved`, signature or
    docstring, so the viewer's *third party* line can show a classification the extractor no longer
@@ -152,7 +162,12 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   repository has that directory and tried last, so a src-layout's `tests/` reach their package
   while flat layouts and nearer ancestors are unaffected; longest module prefix wins), plus
   sibling definitions in the same file; a parameter shadows a module-level import. A script's references are every import it makes; a definition's are the
-  names it uses. **P3-T1:** `Ref.name` is the text the page reaches a reference by (`REG_BITS`,
+  names it uses. **2026-09-06: `Forwarder(files, read)`** follows a reference through
+  re-exports to the definition it means (`exports()` lists what a module binds at its top level
+  by importing, aliases of those, star imports and a literal `__all__`; `forward(ref)` walks
+  them, stops at the first file defining the symbol's head, keeps a member path, never follows
+  `__getattr__` or a call, ends a cycle); `extract.forwarded(page, files, read)` applies it to a
+  page's refs. The resolver calls it in `_fetch_page` and `_page_at`, the crawl per ref. **P3-T1:** `Ref.name` is the text the page reaches a reference by (`REG_BITS`,
   `decode.STEP_MILLICELSIUS`, `r2m`); `Page.imports` is a definition's module-level import
   statements for the stdlib/third-party names it uses (`import struct`, `from asyncio import
   sleep`); `Page.unresolved` its free names (not local, imported, defined in the file or builtin;
@@ -341,7 +356,9 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   identity and **the definition's view wins the row** (kind, name, signature). Asserted links go
   against **the page they stand for** — the definition whose span starts at the block, else the
   innermost definition holding the line, else the file; derived refs against the page that made
-  them. A **malformed link line** (prose like `# cttp: <address> [key=value]`) becomes a bare
+  them, **each forwarded through re-exports first** (`Forwarder` over the revision's Python
+  files with a memoized `git cat-file` reader, primed with every file the crawl reads;
+  `Crawled.forwarded` counts them and the CLI prints `N forwarded`). A **malformed link line** (prose like `# cttp: <address> [key=value]`) becomes a bare
   comment and a skip note names it — the file's definitions are still indexed. Then the local
   registries' names are snapshotted and `resolve_targets()` fills every `target_identity` it
   can: a stamp's `id=` (one match), a pinned locator seen at that rev, a name whose snapshot
@@ -396,7 +413,9 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   `b4d308f6b63419e7`). **Version 4** (2026-09-05, `41ec61e8a59e6c78`): `who` gained `coverage`,
   and `index crawl` gained `unmapped` beside `skipped`. **Version 5** (2026-09-06,
   `3af030a09bd6e1d9`): `coverage` gained `summary` and the eight gap fields became nullable —
-  they collapse to `null` on a complete answer unless `--coverage` asks for them.
+  they collapse to `null` on a complete answer unless `--coverage` asks for them. **Version 6**
+  (2026-09-06, `6905ca99be0e617c`): `index crawl`'s `crawled` gained `forwarded`, and
+  `unresolved_targets`' note no longer blames re-exports.
   **Shapes frozen this session (deliberate, first version):** `expand`, `add` and `fold` wrap
   their per-file map in `files`; `index crawl` wraps its list in `crawled`; `closure` gained
   `source` (`repository` | `index`), `roots` and `missing` (empty for the live walk) so the live
@@ -497,7 +516,7 @@ can be deleted, and whether the stale `/tmp/cttp-bench-*` directories left by ki
   verifies every pinned commit; `--list` marks an unfetched task and a run refuses to start
   without the clones. `pyproject.toml`: a `bench` dependency group (hypothesis, pygments,
   markdown-it-py) installed by default; `bench/agent/tasks` and `repos` excluded from ruff.
-- Tests: 436 fast + 17 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
+- Tests: 439 fast + 17 `slow` in `tests/` — `test_{address,hashing,extract_python,extract_c,
   config,links,gitcache,resolve,objects,latest,closure,expand,check,update,fold,run,package,
   server,cli,index_crawl,index_queries,acceptance_move,acceptance_provenance,
   acceptance_drivers,schemas,mcp,name,registry_federation,export,bench_agent}.py`.
@@ -836,12 +855,30 @@ trigger that would schedule it.
 - ~~`who` misses a `src/` layout's tests~~ — closed 2026-09-05: `SOURCE_ROOTS = ("src",)` in
   `extract/python.py`, tried after the file's ancestors. `who` on click's `strip_ansi` went
   9 backlinks → 21, the twelve new ones all in `tests/`
-- **`who` does not follow a re-export**: `from attr import fields` in `tests/` reaches
-  `src/attr/__init__.py#fields`, which only imports the name, so `src/attr/_funcs.py#fields`
-  gains no backlink. The last of the original defect, and now **measured** — 1,422 of click's
-  3,196 recorded links have a target the index cannot identify, nearly all of them this; `who` on
-  `click/utils.py#echo` answers `complete: false` with 259 matching → **next session**, second
-  item; trigger: wanting `who` right on a package's public API
+- ~~`who` does not follow a re-export~~ — closed 2026-09-06: `python.Forwarder`, applied in the
+  crawl and the resolver. Click's unidentified links 1,422 → 50, `echo` 31 → 290 backlinks and
+  complete; attrs' 1,582 → 38, `attr.s` 22 → 348. The five impact answers are unchanged, so it
+  was not re-measured
+- **A sibling module shadows a stdlib name** (`src/click/types.py` for `from types import …`,
+  `rich/abc.py` for `from abc import …`): the ancestor rule roots an absolute import at the
+  file's own directory, which Python does not do inside a package. Most of what the re-export
+  rule leaves unidentified → **next session**, second item; trigger: wanting those last
+  counts to zero (or a `who` on a definition that shares a stdlib module's name)
+- **A single-target alias in an `__init__` is a constant definition** (`s = attrs` would be
+  `__init__.py#s`, a page of its own, and references to `attr.s` would stop there; attrs
+  happens to write `s = attributes = attrs`, which is no definition and forwards). The
+  extractor's P1-T3 rule and the forwarder agree by construction — a definition is where a
+  reference stops — but a package that aliases its API one name at a time keeps its users on
+  the alias → **unscheduled**; trigger: a real package doing that
+- **`unresolved_matching` matches by the leaf of the symbol**, so a reference that reaches a
+  definition under another name (`attr.s` for `attrs`) was never counted as a possible miss —
+  the rule closed the case that mattered, but a lazily bound alias would still hide → **standing**;
+  the honest fix is per-module: an `__init__` with a `__getattr__` marks every reference into
+  it as unidentifiable-for-any-name (`caveats` could say so)
+- ~~The real index predates the re-export rule~~ — decided 2026-09-06: no `--force`. Nothing in
+  it can forward (the corpus is C, the registry has no Python, cttp forwards zero); a plain
+  crawl at this session's commit added the head. A `--force` becomes worth it only if a Python
+  package with re-exports is ever added to the real index
 - **`expand` writes hoisted imports without a blank line after preceding code** when the link
   is at the end of the file, and before whatever `--at` points at (`import os` ends up after
   the expanded function when the link is inserted above it) — valid Python, untidy →
@@ -908,6 +945,42 @@ trigger that would schedule it.
 Keep only the **five most recent** session entries. Older ones get deleted, not archived — `git log`
 is the archive, and a bloated history taxes every future session start.
 
+- **2026-09-06 (twenty-third session) — a derived reference names the definition, not the
+  module that re-exports it.** Last session's second item, the largest real defect left.
+  `from click import echo` resolved to `src/click/__init__.py#echo`, a file that defines no
+  `echo`, so the index recorded a reference it could never identify — 1,422 of click's 3,196
+  links — and `who` on the package's public API was wrong by hundreds. **`python.Forwarder`**:
+  `exports(source, path, files)` lists what a module binds at its top level by importing from
+  a repository file (statements under a top-level `if`/`try` included, never inside a def),
+  the bare-name aliases of those that are not themselves definitions (`s = attributes = attrs`,
+  attrs' way), its star imports and a literal `__all__`; `forward(ref)` walks a reference
+  through them — stopping at the first file that defines the symbol's head, keeping a member
+  path, refusing a private name through a star, ending a cycle where it started — and leaves a
+  name bound any other way (`__getattr__`, a call) where it landed, unidentified, for coverage
+  to report. **Where it runs:** the extractor sees only one file's text and the repository's
+  file names, so `extract.forwarded(page, files, read)` is a separate step — the crawl applies
+  it per ref with one `Forwarder` over the revision (memoized reads, primed with every file the
+  crawl reads; `Crawled.forwarded`, printed as `N forwarded`), the resolver in `_fetch_page`
+  and `_page_at`, so the live closure inlines the definition (a page binds `greet` by its own
+  name, and the expansion runs) and `closure --indexed` agrees with it. Schema **5 → 6**
+  (`6905ca99be0e617c`): `forwarded` on `crawled`; the `unresolved_targets` note reworded.
+  Spec §3's derived-references paragraph states the rule. **Measured** over fresh indexes of
+  the three task repositories at their commits: click forwards 1,372, unidentified 1,422 → 50,
+  `echo` 31 → 290 (complete), `Context` 90 → 140, `style` 7 → 23; attrs forwards 1,549,
+  1,582 → 38, `attrs` 22 → 348, `attrib` 45 → 437, `fields` 30 → 106 — and the alias rule was
+  added on seeing that `attr.s` and `attr.ib` were 730 of the 768 attrs left after the import
+  rule alone, with coverage counting only 3 misses for `attrs` because it matches by leaf name;
+  rich (flat) forwards 15 and keeps 100, mostly `rich/abc.py` shadowing `abc`, the sibling-
+  shadows-stdlib defect now second on the list. **Not re-measured:** `--check-graders` passes
+  all sixteen, meaning none of the five impact targets' reference answers changed — the rule
+  cannot show in the benchmark without a task whose target is reached through a public name.
+  Tests: the forwarder's every branch on an in-memory repository, the live closure through a
+  re-export, `who` following one (and the CLI's `3 forwarded`), and the old coverage test
+  rewritten over a `__getattr__` package, which is the case the rule declines. **439** fast
+  tests green (3 new), 17 slow, ruff clean, the sixteen graders pass. Docs: overview §2, §4
+  (the decision, with numbers), §8 (the shadowing trap; the real index needs `--force`);
+  benchmark.md and the bench README date their re-export caveat. The real index was not
+  force-crawled — nothing in it can forward — and got a plain crawl at the commit.
 - **2026-09-06 (twenty-second session) — the coverage object collapses; the benchmark could not
   resolve it.** Last session's first item, done and honestly reported. `who`'s `coverage` gains
   **`summary`** — one line, always present: what was searched, whether the count may be trusted,
@@ -1033,48 +1106,6 @@ is the archive, and a bloated history taxes every future session start.
   and attrs (`src/` layout, where `who` silently omits tests) cost 19–40x, rich (flat) 1.4–1.9x.
   Streams committed gzipped (5.4 MB for the ninety; `resolve_stream` reads either form).
   393 tests green, ruff clean.
-
-- **2026-09-05 (eighteenth session) — P8-T2 built: the task set, with the graders it needed.**
-  The three repositories: `click` (12.7k lines, BSD-3), `attrs` (6.4k, MIT), `rich` (26.6k, MIT)
-  — `tomli-w` is too small to have anything to search, `httpx` needs a network stack to test;
-  full clones under the gitignored `bench/agent/repos/` by `fetch.sh`, their test-time needs
-  (`hypothesis`, `pygments`, `markdown-it-py`) a default-installed `bench` dependency group.
-  **In-repo:** twenty candidate fix commits since 2024 were probed (the commit's test file on the
-  parent and on the commit, under this venv's Python 3.12 and pytest); five chosen across the
-  three repos where the fix is small and the place must be found (`write_usage` empty args,
-  `Choice` metavar with `show_choices=False`, the slotted `__getattr__` and `cached_property`,
-  `add_row` columns and `highlight`, pretty-printing an unset dataclass field). The checkout is
-  the parent, the grader and solution are the commit's files taken from the clone (`commit` +
-  `paths` overlays) — no licensed code copied; the prompt is the bug report without the file
-  name. **Cross-repo:** the consumer is a small project of the task; the dependency clone sits at
-  `../deps/<name>` so both arms can reach it and is indexed with the checkout; the prompt names
-  the definition, repository and commit, not the file, and asks for `# cttp:` links. Targets
-  were probed with `cttp closure` for an inlinable closure: `TextWrapper` (5 defs across two
-  files; the hidden tests use ANSI widths, which stdlib `textwrap` gets wrong), `join_options`
-  (+`_split_opt`), `decimal`, `escape`, `to_bool`. The reference solutions were written with
-  `cttp add`, so they carry real stamps. **Decision — the link check accepts an unstamped
-  link** whose address resolves to the target and fails a wrong `id=`: the identity hash is
-  obtainable only through the links arm's `resolve`, so requiring it would grade tool
-  availability, not context; `stamped` is recorded. **Impact:** targets with `who` answers of
-  2–12 definitions across files, each verified against `grep`; **decision — the answer is
-  compared with `who`'s innermost definitions** (a class whose member is listed is dropped,
-  since the class page's refs include its methods'; file pages left out), exact as a set,
-  `missing`/`extra` recorded; the reference `impact.txt` is generated from `who`. Found on the
-  way: `who` misses `src/`-layout tests (absolute imports resolve against ancestors only) and
-  re-exports — so click/attrs targets were chosen that no test references; and `wrap_text`'s
-  function-local `from ._textwrap import TextWrapper` survives expansion and fails at run time
-  (the closure neither refuses nor drops it) — a cttp bug, logged, task switched to
-  `TextWrapper`. `graders.py`/`harness.py` grew deps, commit overlays, the two checks, an
-  optional command (impact tasks run nothing; `Bash` stays a tool for the baseline's search),
-  `Task.fetched`; `prepare_index` moved to graders and indexes every clone, for the links arm and
-  for any task whose grader reads the index. `--check-graders`: 16 ok in 2m20s. Tests: 8 new
-  offline tests (thermo/pyrepo fixtures) plus a `slow` parametrized acceptance over the real
-  clones. **First runs**, one task per family, both arms (README §The first runs): all six pass;
-  links/baseline tokens 77k/33k (in-repo), 71k/46k (cross-repo, the links arm stamped, the
-  baseline did not), 189k/68k (impact) — the links arm reaches for `grep` first and learns of
-  its tools from the denial, gets whole JSON pages back where `grep -A` returned lines, and on
-  the impact task read every definition `who` listed before answering. The five-hour window
-  went ~0.25 → 0.41 over the six runs (~480k tokens).
 
 ## How to run
 

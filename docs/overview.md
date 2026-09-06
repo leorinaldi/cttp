@@ -117,7 +117,10 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   with the `name` the page reaches it by), the stdlib / third-party modules it needs and the
   **import statements** that bind them, its **free names** (`unresolved`), and the **link
   lines** found in its text (`links`, asserted). The Python extractor is exact, via `ast`.
-  **`treesitter.py`** is every other language's read side: `queries/<language>.scm` names the
+  **`python.Forwarder`** follows a derived reference through re-exports to the definition it
+  means (`from click import echo` → `utils.py#echo`, not `__init__.py#echo`); it needs the
+  other files' text, so `extract.forwarded(page, files, read)` is a separate step the crawl and
+  the resolver take after extraction (§4). **`treesitter.py`** is every other language's read side: `queries/<language>.scm` names the
   definition node types (`@definition.<kind>`) and the name node (`@name`); the extractor keeps
   file-scope definitions, descends declarator chains for a function's or variable's name, and
   gives a page its kind (`function`, `constant`, `type`, `macro`), span, own text, signature (the
@@ -170,7 +173,8 @@ link line ──parse──▶ address ──resolve──▶ registry ──ent
   registered repository at one commit through `git` — a Python file is a **file page plus one
   page per definition**, another file a page only if it carries a link — records pages once per
   identity and once per place, asserted links against the page they stand for, derived refs
-  against the page that made them, then fills target identities from what the index knows.
+  against the page that made them — each forwarded through re-exports first, and the crawl
+  reports how many were (`forwarded`) — then fills target identities from what the index knows.
   It never fetches a repository it was not given — a **sparse checkout is crawled as the files
   it has on disk**, since a blobless clone would fetch every other blob. `queries.py`: `target_of` (any address → the
   identities and place the index knows, resolving for real only when it must), `who`, `dups`,
@@ -343,10 +347,28 @@ token would have broken claims by anyone but Leo.
   a person reading a page has room. `queries.COLLAPSED` is the list of fields that collapse. The
   justification is the interface, **not** a measured saving — the benchmark could not resolve the
   difference and the family's ratio moved the wrong way on noise; see [`benchmark.md`](benchmark.md).
-- **`unresolved_matching` is what makes the total bearable.** Click's index holds 1,422 links
-  whose target it cannot identify, nearly all references into an `__init__.py` that re-exports
-  names it does not define. The total is alarming and almost always irrelevant; the count of them
-  that name the address asked about is the one that decides whether this answer may be trusted.
+- **A derived reference names the definition, not the module that re-exports it.** `from click
+  import echo` resolves to `src/click/__init__.py#echo`, and that file defines no `echo`: it
+  imports the name from `.utils`. Recording the reference where it landed made `who` on a
+  package's public API wrong by hundreds (click's `echo`: 31 backlinks, 259 unidentified links
+  naming it) and, worse, *quietly* wrong where the public name differs from the definition's
+  (`attr.s` is `_make.py#attrs`; coverage matched by leaf name, so it counted 3 misses and
+  hid 326). `Forwarder` (§2) follows the reference through what the module binds at its top
+  level by importing — an explicit `from … import name [as alias]`, chained through as many
+  modules as it takes; a bare-name alias of such a binding that is not itself a definition
+  (`s = attributes = attrs`); the first `from … import *` whose module defines the name,
+  honouring a literal `__all__` and never a private name — and stops at the first file that
+  defines the head of the symbol, keeping any member path (`Context.invoke` follows `Context`).
+  A name bound any other way (`__getattr__`, a call) is not followed and not guessed: the
+  reference stays on the module, unidentified, and coverage says so. The rule runs in the crawl
+  and in the resolver, so the live closure inlines the definition and `closure --indexed` agrees
+  with it. Over fresh indexes of the benchmark's repositories: click forwards 1,372 references and
+  its unidentified links fall 1,422 → 50; attrs 1,549 and 1,582 → 38; rich, a flat layout, 15.
+- **`unresolved_matching` is what makes the total bearable.** What the re-export rule leaves
+  unidentified is small but real — a sibling module shadowing a stdlib name (click's `types.py`,
+  rich's `abc.py`; §8), a member no definition has, a lazily bound name. The total is alarming
+  and almost always irrelevant; the count of them that name the address asked about is the one
+  that decides whether this answer may be trusted.
 - **What the crawl could not do is recorded by the crawl, per revision.** `revisions.skipped` and
   `revisions.unmapped` are written at crawl time. They cannot be derived afterwards from
   `definitions`, which has one row per identity written by `INSERT OR IGNORE`: that row keeps the
@@ -612,10 +634,16 @@ token would have broken claims by anyone but Leo.
   task repositories' test-time needs (`hypothesis`, `pygments`, `markdown-it-py`). `click` and
   `attrs` are importable in the venv for other reasons (`typer`, `hypothesis`); the cross-repo
   hidden tests check the agent did not import them.
-- **`who` does not follow a re-export.** `from attr import fields` in `tests/` reaches
-  `src/attr/__init__.py`, which only *imports* the name, so the definition in `src/attr/_funcs.py`
-  gains no backlink from that test. A `src/` layout's tests are otherwise seen — that is the
-  source-root rule in §4.
+- **A sibling module shadows a stdlib name.** An absolute import is rooted at the file's own
+  ancestors first, so `from types import TracebackType` inside `src/click/` resolves to
+  `src/click/types.py` and `from abc import ABC` inside `rich/` to `rich/abc.py` — a reference
+  the index then cannot identify (the file defines no such name). Python itself would import the
+  stdlib there. This is most of what the re-export rule (§4) leaves unidentified in click and
+  rich; the ancestor rule exists for flat layouts whose directory is on `sys.path`, so a fix has to
+  tell the two apart (a follow-up in `PROGRESS.md`).
+- **The real index shows the re-export rule only after a `--force` re-crawl.** A derived
+  reference is recorded at crawl time; an index crawled before the rule keeps the old rows, and
+  `who` over it still answers `complete: false` with the old counts.
 - **The closure keeps a function-local relative import.** `click.formatting.wrap_text` does
   `from ._textwrap import TextWrapper` inside its body; `expand` inlines `TextWrapper` and leaves
   the import line, which fails at run time. Pick definitions without local imports until this is

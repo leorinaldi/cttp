@@ -343,25 +343,66 @@ def test_coverage_reports_an_import_it_could_not_map(registry, tmp_path, monkeyp
     assert [(u["module"], u["files"]) for u in cov["unmapped_imports"]] == [("pkg", 1)]
 
 
-def test_coverage_flags_unidentified_links_that_name_this_address(registry, tmp_path, monkeypatch):
-    """A re-export: `from pkg import greet` reaches `__init__.py`, which only imports the name, so
-    the index cannot tell the reference means `core.greet`. A `who` of 0 that did not say so is
-    the answer an agent cannot trust."""
+def test_who_follows_a_re_export_to_the_definition(registry, tmp_path, monkeypatch):
+    """`from pkg import greet` reaches `__init__.py`, which only imports the name. The crawl
+    records the reference against `core.py#greet` — the definition the re-export means — so `who`
+    on the definition lists its users and the answer is complete."""
     monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
     conn = open_index(tmp_path / "index.db")
     repo = add_remote_repo(
         tmp_path,
         "reexport",
         {
-            "pkg/__init__.py": "from pkg.core import greet\n",
+            "pkg/__init__.py": "from pkg.core import greet\ns = salute = greet\n",
             "pkg/core.py": GREET,
+            "user.py": (
+                'import pkg\nfrom pkg import greet\n\n\ndef t():\n    return greet("a")\n\n\n'
+                'def u():\n    return pkg.s("b")\n'
+            ),
+        },
+    )
+    add(conn, repo, registry.config)
+    (out,) = crawl(conn, registry)
+    # user.py's file page and `t` reach `greet`, `u` reaches `pkg.s`; the `__init__`'s own
+    # import names the definition directly
+    assert out.forwarded == 3
+    res = who(conn, f"{repo}@v1/pkg/core.py#greet", registry)
+    assert [(b["source"]["path"], b["source"]["symbol"], b["name"]) for b in res["backlinks"]] == [
+        ("pkg/__init__.py", None, "greet"),
+        ("user.py", None, "greet"),
+        ("user.py", "t", "greet"),
+        ("user.py", "u", "pkg.s"),
+    ]
+    assert all(b["target"].endswith("/pkg/core.py#greet") for b in res["backlinks"])
+    assert res["coverage"]["complete"] is True
+    # the CLI says how many references the crawl forwarded
+    out = runner.invoke(app, ["index", "crawl", "--force"])
+    assert out.exit_code == 0 and "3 forwarded" in out.output
+
+
+def test_coverage_flags_unidentified_links_that_name_this_address(registry, tmp_path, monkeypatch):
+    """A name a package binds some way the extractor cannot follow — a lazy `__getattr__` — leaves
+    `from pkg import greet` on `__init__.py#greet`, which the index cannot identify. A `who` of 0
+    that did not say so is the answer an agent cannot trust."""
+    monkeypatch.setenv("CTTP_INDEX", str(tmp_path / "index.db"))
+    conn = open_index(tmp_path / "index.db")
+    repo = add_remote_repo(
+        tmp_path,
+        "lazy",
+        {
+            "pkg/__init__.py": (
+                "def __getattr__(name):\n    from . import core\n    return getattr(core, name)\n"
+            ),
+            "pkg/core.py": GREET + "\n\n" + SALUTE,  # two definitions: the file page is its own
             "user.py": 'from pkg import greet\n\n\ndef t():\n    return greet("a")\n',
         },
     )
     add(conn, repo, registry.config)
     crawl(conn, registry)
-    cov = who(conn, f"{repo}@v1/pkg/core.py#greet", registry)["coverage"]
-    assert cov["unresolved_matching"] > 0 and cov["complete"] is False
+    out = who(conn, f"{repo}@v1/pkg/core.py#greet", registry)
+    cov = out["coverage"]
+    assert out["count"] == 0
+    assert cov["unresolved_matching"] == 2 and cov["complete"] is False  # the file page and `t`
     # a definition nothing re-exports is unaffected by the same index's unidentified links
     other = who(conn, f"{repo}@v1/pkg/__init__.py", registry, detail=True)["coverage"]
     assert other["unresolved_targets"] == cov["unresolved_targets"]

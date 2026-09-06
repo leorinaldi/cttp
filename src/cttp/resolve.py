@@ -18,7 +18,7 @@ from pathlib import Path
 
 from cttp import gitcache, objects
 from cttp.address import Address, parse
-from cttp.extract import ExtractError, Page, definitions, extract, language_of
+from cttp.extract import ExtractError, Page, definitions, extract, forwarded, language_of
 from cttp.hashing import ShapeError, identity, shape, short
 from cttp.registry import Entry, HttpRegistry, Registries, RegistryError, ref_for, split_target
 
@@ -330,7 +330,21 @@ def _fetch_page(locator: str, ref: str, path: str, symbol: str | None, registrie
         page = extract(path, text_at_rev, symbol, files)
     except ExtractError as e:
         raise ResolveError(f"{locator}@{short(sha)}: {e}") from e
+    page = forwarded(page, files, _reader(repo, sha))
     return sha, page, gitcache.license_of(repo, sha)
+
+
+def _reader(repo, sha: str):
+    """A file's text at `sha`, or None when git has no such blob — what re-export forwarding reads
+    the modules a reference passes through with."""
+
+    def read(path: str) -> str | None:
+        try:
+            return gitcache.show(repo, sha, path)
+        except (gitcache.GitError, UnicodeDecodeError):
+            return None
+
+    return read
 
 
 # --- forward: `resolve --latest` --------------------------------------------------------------
@@ -466,9 +480,10 @@ def _page_at(repo, sha: str, locator: str, path: str, symbol: str | None) -> Pag
         raise ResolveError(f"{path!r} is not in {locator} at {short(sha)}") from e
     files = gitcache.ls_tree(repo, sha) if language_of(path) == "python" else ()
     try:
-        return extract(path, text_at_rev, symbol, files)
+        page = extract(path, text_at_rev, symbol, files)
     except ExtractError as e:
         raise ResolveError(str(e)) from e
+    return forwarded(page, files, _reader(repo, sha))
 
 
 def _same_identity_at(repo, sha: str, locator: str, pinned: Resolved):

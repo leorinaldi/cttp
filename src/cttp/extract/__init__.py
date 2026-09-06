@@ -9,10 +9,14 @@ A page's `source` is its **own text**. For a script page the link lines inside i
 beneath any stamped `is` link, which is another page's code — are taken out and reported as the
 page's `links`; what remains is what the identity hashes and what expansion writes beneath a stamp,
 so an expanded block always hashes to its page. A definition's text is its span, verbatim.
+
+A derived reference names the definition, not the module that re-exports it: `forwarded()` follows
+each of a page's references through `__init__.py`-style re-exports (`python.Forwarder`), which
+needs the other files' text — so it is a separate step the crawl and the resolver take.
 """
 
-from collections.abc import Iterable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 
 from cttp.hashing import normalize
@@ -100,3 +104,15 @@ def extract(path: str, source: str, symbol: str | None = None, files: Iterable[s
         span=(1, full.count("\n")),
         links=tuple(links),
     )
+
+
+def forwarded(page: Page, files: Iterable[str], read: Callable[[str], str | None]) -> Page:
+    """`page` with each derived reference forwarded through re-exports to the definition it means
+    (Python's rule; another language's page is returned as it is). `read(path)` gives a file's
+    text at the same revision, or None."""
+    if page.language != "python" or not page.refs:
+        return page
+    from cttp.extract.python import Forwarder
+
+    forwarder = Forwarder(files, read)
+    return replace(page, refs=tuple(forwarder.forward(r) for r in page.refs))

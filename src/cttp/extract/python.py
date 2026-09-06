@@ -10,11 +10,17 @@ same repository (given its file list) become `Ref`s, and the top-level modules a
 outside the repository are split into stdlib (`sys.stdlib_module_names`) and third party. A
 definition's references are the names it actually uses — import bindings and sibling definitions
 in its own file; a script's are every import it makes.
+
+**Re-exports.** A reference lands where the import resolves: `from click import echo` on
+`src/click/__init__.py#echo`. That file defines no `echo` — it imports the name from `.utils` —
+so the reference *means* `src/click/utils.py#echo`. `Forwarder` follows a reference through such
+re-exports to the definition, reading the files it passes through; the crawl and the resolver
+apply it, since the extractor alone sees only a file's text and the repository's file names.
 """
 
 import ast
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -244,6 +250,174 @@ class Module:
             if init in self.files:
                 return init, []
         return None
+
+
+# -- re-exports ---------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Exports:
+    """What a module binds in its own namespace by importing from a file of the repository."""
+
+    names: dict[str, Ref]  # local name → the file, and the definition in it, the name stands for
+    stars: tuple[str, ...]  # files bound wholesale by `from … import *`, in order
+    all: tuple[str, ...] | None = None  # the module's literal `__all__`, when it has one
+
+
+def exports(source: str, path: str, files: Iterable[str]) -> Exports:
+    """The names a module binds in its namespace to something in the repository: its top-level
+    import bindings that reach a file, and the bare-name aliases of those (`s = attributes =
+    attrs`, attrs' way of exporting `attr.s`) or of the module's own definitions.
+
+    Statements at the top level count, including those under an `if` or a `try` there; an import
+    inside a function or a class binds nothing the module exports. An alias with a single target
+    is a constant definition of the module (spec §3) and is not listed here — a reference to it
+    stops at that definition. A file that does not parse exports nothing."""
+    try:
+        tree = ast.parse(normalize(source))
+    except SyntaxError:
+        return Exports({}, ())
+    module = Module(tree, "", path, set(files))
+    names: dict[str, Ref] = {}
+    stars: list[str] = []
+    aliases: dict[str, str] = {}  # target → the bare name assigned to it
+    listed: tuple[str, ...] | None = None
+    for node in _namespace_statements(tree.body):
+        if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
+            parts = tuple(node.module.split(".")) if node.module else ()
+            found = module._module_file(node.level, parts)
+            if found and not found[1] and found[0] not in stars:
+                stars.append(found[0])
+        for name, b in _import_bindings(node).items():
+            found = module._module_file(b.level, b.parts)
+            if found:
+                file, rest = found
+                names[name] = Ref(file, ".".join(rest) or None, name)
+        if _assigned_name(node) == "__all__":
+            listed = _string_tuple(node.value)
+        elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Name):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id not in module.defs:
+                    aliases[target.id] = node.value.id
+    for target, value in aliases.items():
+        seen = {target}
+        while value in aliases and value not in seen and value not in names:
+            seen.add(value)
+            value = aliases[value]
+        if value in names:
+            names[target] = Ref(names[value].path, names[value].symbol, target)
+        elif value in module.defs:
+            names[target] = Ref(path, value, target)
+    return Exports(names, tuple(stars), listed)
+
+
+class Forwarder:
+    """Follows a reference through re-exports to the definition it means.
+
+    `from click import echo` resolves to `src/click/__init__.py#echo`; that file defines no
+    `echo` but imports it from `.utils`, so the reference means `src/click/utils.py#echo` — a
+    package's public API is whatever its `__init__` re-exports. The rule follows what a file
+    binds at its top level by importing: an explicit `from … import name [as alias]`, chained
+    through as many modules as it takes, a bare-name alias of such a binding that is not itself
+    a definition (`s = attributes = attrs`), else the first `from … import *` whose module
+    defines (or itself re-exports) the name, respecting that module's literal `__all__` and
+    never a private name. A name bound any other way — `__getattr__`, `globals()`, a call — is
+    not followed: the reference stays on the module it landed on, where the index reports it as
+    one it cannot identify rather than guessing. `read(path)` gives a file's text, or None."""
+
+    def __init__(self, files: Iterable[str], read: Callable[[str], str | None]):
+        self.files = set(files)
+        self._read = read
+        self._texts: dict[str, str | None] = {}
+        self._defs: dict[str, set[str]] = {}
+        self._exports: dict[str, Exports] = {}
+
+    def remember(self, path: str, text: str) -> None:
+        """A text the caller already has, so it is not read again."""
+        self._texts[path] = text
+
+    def forward(self, ref: Ref) -> Ref:
+        """The reference `ref` means: itself when its file defines the symbol (or the file is not
+        one the repository has, or nothing forwards the name), else the definition the file's
+        re-export reaches, keeping any member path (`Context.invoke` follows `Context`)."""
+        seen: set[tuple[str, str]] = set()
+        while ref.symbol and ref.path in self.files and (ref.path, ref.symbol) not in seen:
+            seen.add((ref.path, ref.symbol))
+            head, _, tail = ref.symbol.partition(".")
+            if head in self._definitions(ref.path):
+                return ref
+            found = self._exported(ref.path, head, set())
+            if found is None:
+                return ref
+            symbol = ".".join(part for part in (found.symbol, tail) if part) or None
+            ref = Ref(found.path, symbol, ref.name)
+        return ref
+
+    def _exported(self, path: str, name: str, visiting: set[str]) -> Ref | None:
+        ex = self._exports_of(path)
+        if name in ex.names:
+            return ex.names[name]
+        if name.startswith("_"):
+            return None  # a star import never binds a private name
+        for star in ex.stars:
+            if star in visiting:
+                continue
+            visiting.add(star)
+            listed = self._exports_of(star).all
+            if listed is not None and name not in listed:
+                continue
+            if name in self._definitions(star):
+                return Ref(star, name, name)
+            through = self._exported(star, name, visiting)
+            if through is not None:
+                return through
+        return None
+
+    def _text(self, path: str) -> str | None:
+        if path not in self._texts:
+            self._texts[path] = self._read(path)
+        return self._texts[path]
+
+    def _definitions(self, path: str) -> set[str]:
+        if path not in self._defs:
+            text = self._text(path)
+            self._defs[path] = set(definitions(text)) if text is not None else set()
+        return self._defs[path]
+
+    def _exports_of(self, path: str) -> Exports:
+        if path not in self._exports:
+            text = self._text(path)
+            self._exports[path] = (
+                exports(text, path, self.files) if text is not None else Exports({}, ())
+            )
+        return self._exports[path]
+
+
+def _namespace_statements(body: list[ast.stmt]):
+    """The statements that run in a module's namespace: its body, descending into `if`, `try`,
+    `with`, `for` and `while` blocks at that level, never into a function or a class."""
+    for node in body:
+        if isinstance(node, Function | ast.ClassDef):
+            continue
+        yield node
+        for field in ("body", "orelse", "finalbody"):
+            inner = getattr(node, field, None)
+            if isinstance(inner, list):
+                yield from _namespace_statements(inner)
+        for handler in getattr(node, "handlers", []):
+            yield from _namespace_statements(handler.body)
+
+
+def _string_tuple(node: ast.expr) -> tuple[str, ...] | None:
+    """A literal list or tuple of strings, else None."""
+    if not isinstance(node, ast.List | ast.Tuple):
+        return None
+    out = []
+    for elt in node.elts:
+        if not (isinstance(elt, ast.Constant) and isinstance(elt.value, str)):
+            return None
+        out.append(elt.value)
+    return tuple(out)
 
 
 # -- helpers -----------------------------------------------------------------------------------

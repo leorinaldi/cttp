@@ -185,3 +185,27 @@ def test_an_unresolvable_inner_link_names_the_line(registry, tmp_path):
     add_to_registry(tmp_path, "dangling", "# cttp: no-such-name\nprint(1)\n")
     with pytest.raises(ClosureError, match="the link at line 1 of dangling@.* does not resolve"):
         closure("dangling", registry)
+
+
+def test_a_reference_through_a_re_export_reaches_the_definition(registry, tmp_path):
+    """`from pkg import greet` names `pkg/__init__.py#greet`, which only imports it; the resolver
+    forwards the reference to `pkg/core.py#greet` and the closure inlines that definition — the
+    page binds `greet` by its own name, so the expansion runs."""
+    locator = add_remote_repo(
+        tmp_path,
+        "reexport",
+        {
+            "pkg/__init__.py": "from .core import greet as greet\n",
+            "pkg/core.py": "def greet(n):\n    return f'hi {n}'\n",
+            "app.py": "from pkg import greet\n\n\ndef main():\n    return greet('x')\n",
+        },
+    )
+    page = resolve(f"{locator}@main/app.py#main", registry)
+    assert [(r["address"].split("/", 3)[-1], r["name"]) for r in page.refs] == [
+        ("pkg/core.py#greet", "greet")
+    ]
+    j = closure_json(f"{locator}@main/app.py#main")
+    assert [(d["address"].split("/", 3)[-1], d["via"]) for d in j["definitions"]] == [
+        ("pkg/core.py#greet", "ref"),
+        ("app.py#main", "root"),
+    ]
